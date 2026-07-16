@@ -184,7 +184,14 @@
   /* ---------- TITLE OVERLAY ---------- */
   #title-overlay{
     position:fixed;inset:0;z-index:50;
-    background:radial-gradient(ellipse at 50% 40%, #1a2418 0%, #0a0c08 75%);
+    background:
+      radial-gradient(ellipse 70% 45% at 50% 8%, rgba(231,162,61,0.10) 0%, rgba(231,162,61,0) 60%),
+      radial-gradient(ellipse 90% 60% at 50% 25%, rgba(90,110,55,0.28) 0%, rgba(90,110,55,0) 60%),
+      radial-gradient(ellipse 120% 70% at 50% 100%, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0) 55%),
+      repeating-linear-gradient(115deg, rgba(255,255,255,0.025) 0px, rgba(255,255,255,0.025) 1px, transparent 1px, transparent 5px),
+      repeating-linear-gradient(25deg, rgba(0,0,0,0.12) 0px, rgba(0,0,0,0.12) 1px, transparent 1px, transparent 4px),
+      linear-gradient(165deg, #212b18 0%, #141a0e 45%, #0a0c08 100%);
+    box-shadow:inset 0 0 140px 40px rgba(0,0,0,0.65);
     display:flex;align-items:flex-start;justify-content:center;
     padding:max(20px, env(safe-area-inset-top,0px)) 20px max(20px, env(safe-area-inset-bottom,0px));
     overflow-y:auto; -webkit-overflow-scrolling:touch;
@@ -305,7 +312,7 @@
           <button data-val="merchant">💰 Merchant</button>
         </span>
       </div>
-      <div class="diff-row" id="mode-desc" style="font-size:12px;opacity:0.8;margin-top:-4px;margin-bottom:10px;">The classic Oakenfall experience — seasons, wolves, bandits, and bounties.</div>
+      <div class="diff-row" id="mode-desc" style="font-size:12.5px;line-height:1.45;color:var(--parchment-dim);opacity:0.95;margin-top:4px;margin-bottom:16px;">The classic Oakenfall experience — seasons, wolves, bandits, and bounties.</div>
       <div class="diff-row"><span class="diff-label">Map Size</span>
         <div class="diff-opts" data-group="mapSize">
           <button data-val="26">Small</button><button data-val="36" class="sel">Normal</button><button data-val="46">Large</button>
@@ -627,7 +634,7 @@ let eventTimer = 140; // world-seconds until the next random event roll
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.10.0';
+const GAME_VERSION = '1.10.1';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -636,6 +643,7 @@ const GAME_VERSION = '1.10.0';
 const REPO_URL = 'https://github.com/OfficialSyntaxx/oakenfall';
 const FEEDBACK_ENDPOINT = '/.netlify/functions/submit-feedback';
 const CHANGELOG = [
+  ['1.10.1', 'Fixed cramped/overlapping Game Mode description on the start screen; richer, less flat start-screen background.'],
   ['1.10.0', 'Bug reports & suggestions now file to GitHub automatically — no GitHub account or manual submit needed.'],
   ['1.9.0', 'GitHub pipeline live: bug reports and suggestions file directly to the project repo as issues.'],
   ['1.8.0', 'Feedback system: report bugs & suggest features from the Goals sheet. Knight guards, meat-hauling hunters, raid explosions, fisher splashes, resource-fly effects.'],

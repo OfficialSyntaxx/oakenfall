@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.10.1
+Fixed the Game Mode description on the start screen being cramped against
+the Map Size row below it (reported as issue #1). Start-screen background
+reworked from a flat radial gradient into a layered, textured background
+(still pure CSS, no new assets) so it reads less flat/simple.
+
 ## 1.10.0
 Bug reports & suggestions now file to GitHub automatically via a Netlify
 Function (`/.netlify/functions/submit-feedback`) — players no longer need a
