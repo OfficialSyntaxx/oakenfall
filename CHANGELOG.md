@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.10.0
+Bug reports & suggestions now file to GitHub automatically via a Netlify
+Function (`/.netlify/functions/submit-feedback`) — players no longer need a
+GitHub account or to click "submit" themselves. Falls back to the old
+copy-to-clipboard / manual-issue flow if the server is unreachable.
+
 ## 1.9.0
 GitHub pipeline live: in-game bug reports and suggestions file directly to
 the project repo as issues, with full game diagnostics attached.

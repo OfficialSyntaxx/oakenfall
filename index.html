@@ -627,12 +627,16 @@ let eventTimer = 140; // world-seconds until the next random event roll
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.9.0';
-// Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') to make
-// the in-game Report/Suggest buttons open pre-filled GitHub Issues — the ticket
-// board for the Claude Code pipeline. Empty = copy-to-clipboard fallback.
+const GAME_VERSION = '1.10.0';
+// Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
+// only as a fallback link if the auto-file backend is unreachable. Reports now
+// POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
+// server-side so players never need a GitHub account. Empty REPO_URL = plain
+// copy-to-clipboard fallback.
 const REPO_URL = 'https://github.com/OfficialSyntaxx/oakenfall';
+const FEEDBACK_ENDPOINT = '/.netlify/functions/submit-feedback';
 const CHANGELOG = [
+  ['1.10.0', 'Bug reports & suggestions now file to GitHub automatically — no GitHub account or manual submit needed.'],
   ['1.9.0', 'GitHub pipeline live: bug reports and suggestions file directly to the project repo as issues.'],
   ['1.8.0', 'Feedback system: report bugs & suggest features from the Goals sheet. Knight guards, meat-hauling hunters, raid explosions, fisher splashes, resource-fly effects.'],
   ['1.7.0', 'Kenney terrain & stone roads, Tiny Swords buildings & animated villagers, swaying ancient oaks, drifting clouds, farm crops & fences.'],
@@ -698,25 +702,42 @@ function renderFeedbackSheet(kind){
       <button class="action-btn" id="fb-back">Back</button>
     </div>
     <div class="sheet-sub" id="fb-status" style="margin-top:6px;"></div>
-    <div class="sheet-sub" style="margin-top:4px;opacity:0.7;">v${GAME_VERSION} · The copied block includes your hold's state so fixes land faster.</div>
+    <div class="sheet-sub" style="margin-top:4px;opacity:0.7;">v${GAME_VERSION} · Files straight to the dev's GitHub — your hold's state is attached automatically so fixes land faster.</div>
   `;
   openSheet();
   document.getElementById('fb-back').addEventListener('click', renderQuestSheet);
   document.getElementById('fb-copy').addEventListener('click', async ()=>{
     const text = document.getElementById('fb-text').value;
-    if(REPO_URL){
-      const head = kind==='bug' ? '[Bug] ' : '[Suggestion] ';
-      const title = encodeURIComponent(head + (text.trim().split('\n')[0] || 'from in-game report').slice(0, 70));
-      const body = encodeURIComponent((text.trim()||'(no description)') + '\n\n' + buildDiagnostics());
-      window.open(REPO_URL.replace(/\/$/,'') + '/issues/new?title=' + title + '&body=' + body, '_blank');
-      document.getElementById('fb-status').textContent = '✅ Opening GitHub — submit the issue there.';
-      return;
+    const statusEl = document.getElementById('fb-status');
+    const btn = document.getElementById('fb-copy');
+    const head = kind==='bug' ? '[Bug] ' : '[Suggestion] ';
+    const title = (head + (text.trim().split('\n')[0] || 'from in-game report')).slice(0, 70);
+    const bodyMd = (kind==='bug' ? '### BUG REPORT' : '### FEATURE SUGGESTION') + '\n'
+      + (text.trim() || '(no description given)') + '\n\n' + buildDiagnostics();
+
+    btn.disabled = true;
+    statusEl.textContent = '⏳ Filing it now...';
+    try {
+      const res = await fetch(FEEDBACK_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind, title, body: bodyMd })
+      });
+      const data = await res.json().catch(()=>({}));
+      if(!res.ok || !data.ok) throw new Error(data.error || ('status ' + res.status));
+      statusEl.innerHTML = '✅ Filed as <a href="' + data.url + '" target="_blank" rel="noopener">issue #' + data.number + '</a> — thank you!';
+      document.getElementById('fb-text').value = '';
+      sfx('coin');
+    } catch(e){
+      logError('feedback-submit', e && e.message || e);
+      const ok = await copyFeedback(kind, text);
+      statusEl.innerHTML = ok
+        ? '⚠️ Couldn\'t auto-file (offline or server issue). Copied instead — paste it into the Claude chat or ' +
+          '<a href="' + REPO_URL.replace(/\/$/,'') + '/issues/new" target="_blank" rel="noopener">open a GitHub issue</a> manually.'
+        : '⚠️ Couldn\'t auto-file or reach the clipboard — long-press the text above to copy manually.';
+    } finally {
+      btn.disabled = false;
     }
-    const ok = await copyFeedback(kind, text);
-    document.getElementById('fb-status').innerHTML = ok
-      ? '✅ Copied! Paste it into the Claude chat to ${isBug ? "get it fixed" : "get it built"}.'
-      : '⚠️ Couldn\'t reach the clipboard — long-press the text above to copy manually.';
-    if(ok) sfx('coin');
   });
 }
 

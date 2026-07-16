@@ -34,8 +34,12 @@ no external network requests at runtime. All art is base64-embedded.
   derives MAP_SIZE from saved grid. Uses window.storage (host KV), NOT
   localStorage.
 - Feedback: GAME_VERSION + CHANGELOG + errorLog ring buffer +
-  `buildDiagnostics`; REPO_URL makes report buttons open prefilled issues
-  (already set to this repo — https://github.com/OfficialSyntaxx/oakenfall).
+  `buildDiagnostics`; report/suggest buttons POST to FEEDBACK_ENDPOINT
+  (`/.netlify/functions/submit-feedback`), a Netlify Function that files the
+  GitHub issue server-side via a repo-scoped token (`GITHUB_ISSUE_TOKEN` env
+  var) — players never need a GitHub account. REPO_URL is only used as a
+  manual fallback link if the function is unreachable. Function source:
+  `netlify/functions/submit-feedback.js`.
 
 ## Verification workflow (run before every commit)
 1. Extract script and syntax-check:
