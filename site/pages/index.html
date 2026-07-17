@@ -1,0 +1,448 @@
+<!-- title: Oakenfall — Raise a Hold. Keep it Alive. -->
+<!-- desc: Oakenfall is a dark-medieval isometric city-builder that runs in a single file. Build, survive the seasons, and keep your villagers alive — free, in your browser, made for touch. -->
+<!-- slug: home -->
+
+<section class="hero">
+  <div class="hero-scene" aria-hidden="true">
+    <svg class="hero-svg-land" viewBox="0 0 800 450" preserveAspectRatio="xMidYMax slice">
+      <defs>
+        <linearGradient id="skyN" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#080d18"/><stop offset=".45" stop-color="#111a2c"/>
+          <stop offset=".78" stop-color="#232838"/><stop offset="1" stop-color="#33302a"/>
+        </linearGradient>
+        <linearGradient id="skyD" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#2e3c48"/><stop offset=".5" stop-color="#5d5844"/>
+          <stop offset=".8" stop-color="#8a6f3f"/><stop offset="1" stop-color="#3d341c"/>
+        </linearGradient>
+        <radialGradient id="moonHalo"><stop offset="0" stop-color="#c8d2e2" stop-opacity=".5"/><stop offset=".4" stop-color="#8fa5c4" stop-opacity=".14"/><stop offset="1" stop-color="#8fa5c4" stop-opacity="0"/></radialGradient>
+        <radialGradient id="sunHalo"><stop offset="0" stop-color="#f2c069" stop-opacity=".6"/><stop offset=".4" stop-color="#e8a13c" stop-opacity=".16"/><stop offset="1" stop-color="#e8a13c" stop-opacity="0"/></radialGradient>
+        <radialGradient id="torchPool"><stop offset="0" stop-color="#e8a13c" stop-opacity=".5"/><stop offset=".5" stop-color="#c98a34" stop-opacity=".15"/><stop offset="1" stop-color="#c98a34" stop-opacity="0"/></radialGradient>
+        <radialGradient id="gateLight"><stop offset="0" stop-color="#f2b45c" stop-opacity=".65"/><stop offset=".55" stop-color="#e8a13c" stop-opacity=".2"/><stop offset="1" stop-color="#e8a13c" stop-opacity="0"/></radialGradient>
+        <linearGradient id="stoneL" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4b3f28"/><stop offset="1" stop-color="#2e2718"/></linearGradient>
+        <linearGradient id="stoneR" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3c331f"/><stop offset="1" stop-color="#241e12"/></linearGradient>
+        <linearGradient id="wallG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#43371f"/><stop offset=".6" stop-color="#332a17"/><stop offset="1" stop-color="#211b0f"/></linearGradient>
+        <linearGradient id="roofG" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5d4126"/><stop offset="1" stop-color="#332313"/></linearGradient>
+        <linearGradient id="ridgeFar" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c1a1c"/><stop offset="1" stop-color="#14120f"/></linearGradient>
+        <linearGradient id="ridgeNear" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#201b12"/><stop offset="1" stop-color="#15110b"/></linearGradient>
+        <radialGradient id="oakG" cx=".4" cy=".3" r=".9"><stop offset="0" stop-color="#4c5e34"/><stop offset=".6" stop-color="#36452a"/><stop offset="1" stop-color="#24301c"/></radialGradient>
+        <filter id="blur2"><feGaussianBlur stdDeviation="2"/></filter>
+        <filter id="blur6"><feGaussianBlur stdDeviation="6"/></filter>
+        <filter id="grain">
+          <feTurbulence type="fractalNoise" baseFrequency=".8" numOctaves="2" result="n"/>
+          <feColorMatrix in="n" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .06 0"/>
+          <feComposite operator="over" in2="SourceGraphic"/>
+        </filter>
+      </defs>
+
+      <!-- sky -->
+      <rect class="hero-sky-night" width="800" height="450" fill="url(#skyN)"/>
+      <rect class="hero-sky-day" width="800" height="450" fill="url(#skyD)"/>
+      <ellipse class="hero-sky-day" cx="400" cy="330" rx="520" ry="150" fill="#e8a13c" opacity=".14" filter="url(#blur6)"/>
+      <ellipse class="hero-sky-night" cx="400" cy="330" rx="520" ry="140" fill="#5a708c" opacity=".10" filter="url(#blur6)"/>
+
+      <!-- stars (twinkle) -->
+      <g class="hero-stars" fill="#d8c9a3">
+        <circle class="tw" cx="90" cy="60" r="1.2"/><circle class="tw t2" cx="210" cy="35" r="1"/>
+        <circle class="tw t3" cx="330" cy="80" r="1.4"/><circle class="tw" cx="470" cy="40" r="1"/>
+        <circle class="tw t2" cx="610" cy="70" r="1.3"/><circle class="tw t3" cx="720" cy="30" r="1"/>
+        <circle class="tw t2" cx="150" cy="110" r="1"/><circle class="tw" cx="560" cy="115" r="1.1"/>
+        <circle class="tw t3" cx="680" cy="140" r="1"/><circle class="tw t2" cx="40" cy="150" r="1"/>
+        <circle class="tw t3" cx="270" cy="140" r=".9"/><circle class="tw" cx="390" cy="120" r=".8"/>
+      </g>
+
+      <!-- moon / sun with halos -->
+      <circle class="hero-moon" cx="640" cy="78" r="60" fill="url(#moonHalo)"/>
+      <circle class="hero-moon" cx="640" cy="78" r="24" fill="#cdd6e4"/>
+      <circle class="hero-moon" cx="633" cy="71" r="5" fill="#aab6c9" opacity=".55"/>
+      <circle class="hero-moon" cx="648" cy="86" r="3.4" fill="#aab6c9" opacity=".4"/>
+      <circle class="hero-sun" cx="640" cy="85" r="66" fill="url(#sunHalo)"/>
+      <circle class="hero-sun" cx="640" cy="85" r="27" fill="#efb254"/>
+      <g class="hero-birds hero-sun" stroke="#2c2a24" stroke-width="1.6" fill="none" stroke-linecap="round">
+        <path d="M180 120q5-6 10 0q5-6 10 0"/><path d="M215 105q4-5 8 0q4-5 8 0"/><path d="M155 100q3-4 7 0q3-4 7 0"/>
+      </g>
+
+      <!-- clouds: soft layered -->
+      <g class="cloud-drift" filter="url(#blur2)">
+        <ellipse cx="140" cy="90" rx="64" ry="12" fill="#43434a" opacity=".8"/>
+        <ellipse cx="185" cy="80" rx="40" ry="9" fill="#4c4c50" opacity=".7"/>
+        <ellipse cx="110" cy="82" rx="30" ry="7" fill="#3a3a40" opacity=".7"/>
+      </g>
+      <g class="cloud-drift c2" filter="url(#blur2)">
+        <ellipse cx="480" cy="145" rx="80" ry="13" fill="#38383c"/>
+        <ellipse cx="545" cy="135" rx="44" ry="9" fill="#414146"/>
+      </g>
+
+      <!-- far ridge + fog band -->
+      <path d="M0 322 90 296 210 312 340 286 480 308 620 288 730 306 800 296 800 450 0 450Z" fill="url(#ridgeFar)"/>
+      <rect y="300" width="800" height="46" fill="#8fa5c4" opacity=".05" filter="url(#blur6)"/>
+
+      <!-- keep on the hill -->
+      <ellipse cx="400" cy="318" rx="150" ry="34" fill="#1b1710"/>
+      <g>
+        <path d="M368 292v-48l-8 8v-14h7v9h7v-9h8v9l7-5 7 5v-9h8v9h7v-9h7v14l-8-8v48Z" fill="url(#stoneR)"/>
+        <path d="M346 292v-22l9-11 9 11v22Z" fill="url(#stoneL)"/>
+        <path d="M436 292v-22l9-11 9 11v22Z" fill="url(#stoneL)"/>
+        <path d="M346 270l9-11 9 11Z" fill="#57503f" opacity=".5"/>
+        <rect class="win-glow" x="392" y="258" width="5" height="8" rx="2"/>
+        <rect class="win-glow" x="406" y="264" width="5" height="8" rx="2"/>
+        <rect class="win-glow" x="352" y="276" width="4" height="7" rx="2"/>
+      </g>
+
+      <!-- mid fog -->
+      <rect y="326" width="800" height="40" fill="#9aa8bc" opacity=".045" filter="url(#blur6)"/>
+
+      <!-- mid-town hill -->
+      <path d="M0 356 120 334 260 350 420 338 570 352 690 336 800 350 800 450 0 450Z" fill="url(#ridgeNear)"/>
+
+      <!-- houses: gradient faces, ridge-line roofs -->
+      <g>
+        <g transform="translate(118,316)">
+          <ellipse cx="22" cy="26" rx="26" ry="7" fill="#0e0c08" opacity=".55"/>
+          <path d="M0 14 22 3 44 14 22 25Z" fill="#39301d"/>
+          <path d="M0 14v12l22 11V25Z" fill="url(#stoneL)"/><path d="M44 14v12L22 37V25Z" fill="url(#stoneR)"/>
+          <path d="M0 14 22 -8 44 14 22 25Z" fill="url(#roofG)"/>
+          <path d="M0 14 22 -8 44 14" fill="none" stroke="#6b4c2b" stroke-width="1.2" opacity=".6"/>
+          <rect class="win-glow" x="11" y="17" width="5" height="6" rx="1.5"/>
+          <ellipse class="smoke" cx="30" cy="-10" rx="4" ry="3"/>
+        </g>
+        <g transform="translate(196,332)">
+          <ellipse cx="22" cy="26" rx="26" ry="7" fill="#0e0c08" opacity=".5"/>
+          <path d="M0 14 22 3 44 14 22 25Z" fill="#352c1b"/>
+          <path d="M0 14v12l22 11V25Z" fill="url(#stoneL)"/><path d="M44 14v12L22 37V25Z" fill="url(#stoneR)"/>
+          <path d="M0 14 22 -8 44 14 22 25Z" fill="url(#roofG)"/>
+          <path d="M0 14 22 -8 44 14" fill="none" stroke="#5d4126" stroke-width="1.2" opacity=".6"/>
+          <rect class="win-glow" x="26" y="17" width="5" height="6" rx="1.5"/>
+        </g>
+        <g transform="translate(556,320)">
+          <ellipse cx="22" cy="26" rx="26" ry="7" fill="#0e0c08" opacity=".55"/>
+          <path d="M0 14 22 3 44 14 22 25Z" fill="#39301d"/>
+          <path d="M0 14v12l22 11V25Z" fill="url(#stoneL)"/><path d="M44 14v12L22 37V25Z" fill="url(#stoneR)"/>
+          <path d="M0 14 22 -8 44 14 22 25Z" fill="url(#roofG)"/>
+          <path d="M0 14 22 -8 44 14" fill="none" stroke="#6b4c2b" stroke-width="1.2" opacity=".6"/>
+          <rect class="win-glow" x="11" y="17" width="5" height="6" rx="1.5"/>
+          <ellipse class="smoke s2" cx="30" cy="-10" rx="4" ry="3"/>
+        </g>
+        <g transform="translate(636,338)">
+          <ellipse cx="22" cy="26" rx="26" ry="7" fill="#0e0c08" opacity=".5"/>
+          <path d="M0 14 22 3 44 14 22 25Z" fill="#352c1b"/>
+          <path d="M0 14v12l22 11V25Z" fill="url(#stoneL)"/><path d="M44 14v12L22 37V25Z" fill="url(#stoneR)"/>
+          <path d="M0 14 22 -8 44 14 22 25Z" fill="url(#roofG)"/>
+          <rect class="win-glow" x="26" y="17" width="5" height="6" rx="1.5"/>
+        </g>
+        <!-- watchtower with brazier -->
+        <g transform="translate(498,296)">
+          <ellipse cx="8" cy="42" rx="16" ry="5" fill="#0e0c08" opacity=".5"/>
+          <path d="M0 40V4h16v36Z" fill="url(#stoneR)"/>
+          <path d="M0 4h16l3 6h-5v-4h-4v4h-4v-4h-4v4h-5Z" fill="url(#stoneL)"/>
+          <rect class="win-glow" x="5" y="12" width="5" height="6" rx="1.5"/>
+          <circle class="win-glow" cx="8" cy="2" r="3"/>
+          <circle class="win-glow" cx="8" cy="2" r="9" fill="url(#torchPool)"/>
+        </g>
+        <!-- ancient oak: layered canopy -->
+        <g transform="translate(287,318)">
+          <ellipse cx="0" cy="50" rx="30" ry="8" fill="#0e0c08" opacity=".5"/>
+          <path d="M0 52 Q-4 34 -2 22 M0 52 Q3 36 1 20 M-2 26 Q-9 20 -12 12 M1 24 Q8 18 11 10" stroke="#3a2f1d" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <ellipse cx="-14" cy="10" rx="18" ry="13" fill="#2c3820"/>
+          <ellipse cx="15" cy="8" rx="17" ry="12" fill="#24301c"/>
+          <ellipse cx="0" cy="0" rx="30" ry="18" fill="url(#oakG)"/>
+          <ellipse cx="-8" cy="-6" rx="14" ry="8" fill="#55683a" opacity=".5"/>
+        </g>
+      </g>
+
+      <!-- near fog at the wall's feet -->
+      <rect y="360" width="800" height="34" fill="#a8b4c6" opacity=".04" filter="url(#blur6)"/>
+
+      <!-- road to the gate -->
+      <path d="M330 450 L376 372 L424 372 L470 450 Z" fill="#3c3323" opacity=".85"/>
+      <path d="M356 450 L390 380 L410 380 L444 450 Z" fill="#4a4030" opacity=".5"/>
+
+      <!-- foreground: crenellated gate wall -->
+      <g transform="translate(400,450)">
+        <path d="M-400 -46h56v-10h12v10h14v-10h12v10h14v-10h12v10h56V0h-176Z" fill="url(#wallG)"/>
+        <path d="M400 -46h-56v-10h-12v10h-14v-10h-12v10h-14v-10h-12v10h-56V0h176Z" fill="url(#wallG)"/>
+        <g stroke="#1c160d" stroke-width="1" opacity=".5">
+          <path d="M-390 -30h160M-380 -16h150M234 -30h160M226 -16h150"/>
+          <path d="M-350 -46v16M-310 -30v14M-280 -46v16M-250 -30v14M280 -46v16M320 -30v14M350 -46v16M250 -30v14"/>
+        </g>
+        <!-- gate towers -->
+        <path d="M-224 0v-96l-12-12v-22h11v12h9v-12h11v12h9v-12h11v22l-12 12V0Z" fill="url(#stoneL)"/>
+        <path d="M224 0v-96l-12-12v-22h-11v12h-9v-12h-11v12h-9v-12h-11v22l12 12V0Z" fill="url(#stoneR)"/>
+        <g stroke="#1c160d" stroke-width="1" opacity=".45">
+          <path d="M-222 -80h44M-220 -60h42M-218 -40h40M178 -80h44M178 -60h42M178 -40h40"/>
+        </g>
+        <rect class="win-glow" x="-206" y="-92" width="7" height="10" rx="2"/>
+        <rect class="win-glow" x="199" y="-92" width="7" height="10" rx="2"/>
+        <!-- gate arch, warm light spilling out -->
+        <path d="M-197 0v-64q0-44 197-44t197 44V0h-38v-56q0-28 -159-28t-159 28V0Z" fill="url(#stoneL)"/>
+        <path d="M-159 0v-56q0-28 159-28t159 28V0Z" fill="#141009"/>
+        <ellipse class="win-glow" cx="0" cy="-8" rx="120" ry="52" fill="url(#gateLight)"/>
+        <path d="M-120 0v-46q0-22 120-22t120 22V0Z" fill="#211a0c"/>
+        <ellipse class="win-glow" cx="0" cy="-4" rx="78" ry="34" fill="url(#gateLight)"/>
+        <path d="M0 -66V0M-58 -60V0M58 -60V0M-116 -34h232M-98 -14h196" stroke="#120e08" stroke-width="3" opacity=".9"/>
+        <!-- torches + light pools on the wall -->
+        <circle class="win-glow" cx="-176" cy="-58" r="4"/>
+        <circle class="win-glow" cx="176" cy="-58" r="4"/>
+        <circle class="win-glow" cx="-176" cy="-58" r="26" fill="url(#torchPool)"/>
+        <circle class="win-glow" cx="176" cy="-58" r="26" fill="url(#torchPool)"/>
+        <ellipse class="smoke s3" cx="-224" cy="-140" rx="5" ry="4"/>
+      </g>
+
+      <!-- film grain over everything -->
+      <rect width="800" height="450" filter="url(#grain)" fill="transparent" opacity=".5"/>
+    </svg>
+
+    <!-- Portrait hero: a composition designed for tall screens, not a crop -->
+    <svg class="hero-svg-port" viewBox="0 0 450 800" preserveAspectRatio="xMidYMax slice">
+      <defs>
+        <linearGradient id="skyNP" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#060a14"/><stop offset=".38" stop-color="#0d1524"/>
+          <stop offset=".58" stop-color="#111a2c"/><stop offset=".72" stop-color="#232838"/><stop offset=".82" stop-color="#33302a"/><stop offset="1" stop-color="#191510"/>
+        </linearGradient>
+        <linearGradient id="skyDP" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#26333e"/><stop offset=".4" stop-color="#43443a"/>
+          <stop offset=".62" stop-color="#5d5844"/><stop offset=".74" stop-color="#8a6f3f"/><stop offset="1" stop-color="#3d341c"/>
+        </linearGradient>
+        <radialGradient id="moonHaloP"><stop offset="0" stop-color="#c8d2e2" stop-opacity=".5"/><stop offset=".4" stop-color="#8fa5c4" stop-opacity=".14"/><stop offset="1" stop-color="#8fa5c4" stop-opacity="0"/></radialGradient>
+        <radialGradient id="sunHaloP"><stop offset="0" stop-color="#f2c069" stop-opacity=".6"/><stop offset=".4" stop-color="#e8a13c" stop-opacity=".16"/><stop offset="1" stop-color="#e8a13c" stop-opacity="0"/></radialGradient>
+        <radialGradient id="torchPoolP"><stop offset="0" stop-color="#e8a13c" stop-opacity=".5"/><stop offset=".5" stop-color="#c98a34" stop-opacity=".15"/><stop offset="1" stop-color="#c98a34" stop-opacity="0"/></radialGradient>
+        <radialGradient id="gateLightP"><stop offset="0" stop-color="#f2b45c" stop-opacity=".65"/><stop offset=".55" stop-color="#e8a13c" stop-opacity=".2"/><stop offset="1" stop-color="#e8a13c" stop-opacity="0"/></radialGradient>
+        <linearGradient id="stoneLP" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4b3f28"/><stop offset="1" stop-color="#2e2718"/></linearGradient>
+        <linearGradient id="stoneRP" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3c331f"/><stop offset="1" stop-color="#241e12"/></linearGradient>
+        <linearGradient id="wallGP" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#43371f"/><stop offset=".6" stop-color="#332a17"/><stop offset="1" stop-color="#211b0f"/></linearGradient>
+        <linearGradient id="roofGP" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5d4126"/><stop offset="1" stop-color="#332313"/></linearGradient>
+        <linearGradient id="ridgeFarP" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c1a1c"/><stop offset="1" stop-color="#14120f"/></linearGradient>
+        <linearGradient id="ridgeMidP" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1e1a15"/><stop offset="1" stop-color="#141110"/></linearGradient>
+        <linearGradient id="ridgeNearP" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#201b12"/><stop offset="1" stop-color="#15110b"/></linearGradient>
+        <radialGradient id="oakGP" cx=".4" cy=".3" r=".9"><stop offset="0" stop-color="#4c5e34"/><stop offset=".6" stop-color="#36452a"/><stop offset="1" stop-color="#24301c"/></radialGradient>
+        <filter id="blur2P"><feGaussianBlur stdDeviation="2"/></filter>
+        <filter id="blur6P"><feGaussianBlur stdDeviation="6"/></filter>
+        <filter id="grainP">
+          <feTurbulence type="fractalNoise" baseFrequency=".8" numOctaves="2" result="n"/>
+          <feColorMatrix in="n" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .06 0"/>
+          <feComposite operator="over" in2="SourceGraphic"/>
+        </filter>
+      </defs>
+
+      <!-- sky -->
+      <rect class="hero-sky-night" width="450" height="800" fill="url(#skyNP)"/>
+      <rect class="hero-sky-day" width="450" height="800" fill="url(#skyDP)"/>
+      <ellipse class="hero-sky-day" cx="225" cy="560" rx="320" ry="120" fill="#e8a13c" opacity=".15" filter="url(#blur6P)"/>
+      <ellipse class="hero-sky-night" cx="225" cy="560" rx="320" ry="110" fill="#5a708c" opacity=".10" filter="url(#blur6P)"/>
+
+      <!-- stars: a real night sky's worth -->
+      <g class="hero-stars" fill="#d8c9a3">
+        <circle class="tw" cx="40" cy="70" r="1.2"/><circle class="tw t2" cx="120" cy="40" r="1"/>
+        <circle class="tw t3" cx="200" cy="90" r="1.4"/><circle class="tw" cx="280" cy="52" r="1"/>
+        <circle class="tw t2" cx="380" cy="66" r="1.2"/><circle class="tw t3" cx="420" cy="130" r="1"/>
+        <circle class="tw t2" cx="70" cy="150" r="1"/><circle class="tw" cx="160" cy="180" r="1.1"/>
+        <circle class="tw t3" cx="250" cy="150" r=".9"/><circle class="tw t2" cx="330" cy="200" r="1"/>
+        <circle class="tw" cx="30" cy="240" r="1"/><circle class="tw t3" cx="110" cy="280" r=".9"/>
+        <circle class="tw t2" cx="210" cy="250" r="1.1"/><circle class="tw" cx="400" cy="260" r="1"/>
+        <circle class="tw t3" cx="300" cy="300" r=".8"/><circle class="tw t2" cx="60" cy="340" r=".9"/>
+      </g>
+
+      <!-- moon / sun -->
+      <circle class="hero-moon" cx="330" cy="130" r="58" fill="url(#moonHaloP)"/>
+      <circle class="hero-moon" cx="330" cy="130" r="23" fill="#cdd6e4"/>
+      <circle class="hero-moon" cx="323" cy="123" r="5" fill="#aab6c9" opacity=".55"/>
+      <circle class="hero-moon" cx="338" cy="138" r="3.2" fill="#aab6c9" opacity=".4"/>
+      <circle class="hero-sun" cx="330" cy="150" r="62" fill="url(#sunHaloP)"/>
+      <circle class="hero-sun" cx="330" cy="150" r="25" fill="#efb254"/>
+      <g class="hero-birds hero-sun" stroke="#2c2a24" stroke-width="1.5" fill="none" stroke-linecap="round">
+        <path d="M100 220q5-6 10 0q5-6 10 0"/><path d="M135 205q4-5 8 0q4-5 8 0"/><path d="M80 200q3-4 7 0q3-4 7 0"/>
+      </g>
+
+      <!-- clouds -->
+      <g class="cloud-drift" filter="url(#blur2P)">
+        <ellipse cx="90" cy="180" rx="58" ry="11" fill="#43434a" opacity=".8"/>
+        <ellipse cx="130" cy="170" rx="36" ry="8" fill="#4c4c50" opacity=".7"/>
+      </g>
+      <g class="cloud-drift c2" filter="url(#blur2P)">
+        <ellipse cx="280" cy="300" rx="72" ry="12" fill="#38383c"/>
+        <ellipse cx="335" cy="290" rx="40" ry="8" fill="#414146"/>
+      </g>
+
+      <!-- farthest treeline ridge + fog -->
+      <path d="M0 520 40 502 90 514 150 496 210 512 270 498 330 512 390 500 450 510 450 800 0 800Z" fill="url(#ridgeFarP)"/>
+      <rect y="498" width="450" height="42" fill="#8fa5c4" opacity=".05" filter="url(#blur6P)"/>
+
+      <!-- keep on its distant hill -->
+      <g transform="translate(-115,282) scale(.85)">
+        <ellipse cx="400" cy="318" rx="150" ry="34" fill="#1b1710"/>
+        <path d="M368 292v-48l-8 8v-14h7v9h7v-9h8v9l7-5 7 5v-9h8v9h7v-9h7v14l-8-8v48Z" fill="url(#stoneRP)"/>
+        <path d="M346 292v-22l9-11 9 11v22Z" fill="url(#stoneLP)"/>
+        <path d="M436 292v-22l9-11 9 11v22Z" fill="url(#stoneLP)"/>
+        <path d="M346 270l9-11 9 11Z" fill="#57503f" opacity=".5"/>
+        <rect class="win-glow" x="392" y="258" width="5" height="8" rx="2"/>
+        <rect class="win-glow" x="406" y="264" width="5" height="8" rx="2"/>
+        <rect class="win-glow" x="352" y="276" width="4" height="7" rx="2"/>
+      </g>
+
+      <!-- second ridge for depth -->
+      <path d="M0 566 70 550 150 562 240 548 320 562 400 550 450 560 450 800 0 800Z" fill="url(#ridgeMidP)"/>
+      <rect y="556" width="450" height="36" fill="#9aa8bc" opacity=".045" filter="url(#blur6P)"/>
+
+      <!-- village hill -->
+      <path d="M0 606 90 586 190 602 300 590 380 604 450 594 450 800 0 800Z" fill="url(#ridgeNearP)"/>
+
+      <!-- the village: staged houses, tower, oak, fences -->
+      <g>
+        <g transform="translate(26,566)">
+          <ellipse cx="22" cy="26" rx="26" ry="7" fill="#0e0c08" opacity=".55"/>
+          <path d="M0 14 22 3 44 14 22 25Z" fill="#39301d"/>
+          <path d="M0 14v12l22 11V25Z" fill="url(#stoneLP)"/><path d="M44 14v12L22 37V25Z" fill="url(#stoneRP)"/>
+          <path d="M0 14 22 -8 44 14 22 25Z" fill="url(#roofGP)"/>
+          <path d="M0 14 22 -8 44 14" fill="none" stroke="#6b4c2b" stroke-width="1.2" opacity=".6"/>
+          <rect class="win-glow" x="11" y="17" width="5" height="6" rx="1.5"/>
+          <ellipse class="smoke" cx="30" cy="-10" rx="4" ry="3"/>
+        </g>
+        <g transform="translate(112,584) scale(1.06)">
+          <ellipse cx="22" cy="26" rx="26" ry="7" fill="#0e0c08" opacity=".5"/>
+          <path d="M0 14 22 3 44 14 22 25Z" fill="#352c1b"/>
+          <path d="M0 14v12l22 11V25Z" fill="url(#stoneLP)"/><path d="M44 14v12L22 37V25Z" fill="url(#stoneRP)"/>
+          <path d="M0 14 22 -8 44 14 22 25Z" fill="url(#roofGP)"/>
+          <path d="M0 14 22 -8 44 14" fill="none" stroke="#5d4126" stroke-width="1.2" opacity=".6"/>
+          <rect class="win-glow" x="26" y="17" width="5" height="6" rx="1.5"/>
+          <ellipse class="smoke s2" cx="30" cy="-10" rx="4" ry="3"/>
+        </g>
+        <g transform="translate(258,590) scale(1.1)">
+          <ellipse cx="22" cy="26" rx="26" ry="7" fill="#0e0c08" opacity=".55"/>
+          <path d="M0 14 22 3 44 14 22 25Z" fill="#39301d"/>
+          <path d="M0 14v12l22 11V25Z" fill="url(#stoneLP)"/><path d="M44 14v12L22 37V25Z" fill="url(#stoneRP)"/>
+          <path d="M0 14 22 -8 44 14 22 25Z" fill="url(#roofGP)"/>
+          <path d="M0 14 22 -8 44 14" fill="none" stroke="#6b4c2b" stroke-width="1.2" opacity=".6"/>
+          <rect class="win-glow" x="11" y="17" width="5" height="6" rx="1.5"/>
+          <ellipse class="smoke s3" cx="30" cy="-10" rx="4" ry="3"/>
+        </g>
+        <g transform="translate(352,572) scale(.92)">
+          <ellipse cx="22" cy="26" rx="26" ry="7" fill="#0e0c08" opacity=".5"/>
+          <path d="M0 14 22 3 44 14 22 25Z" fill="#352c1b"/>
+          <path d="M0 14v12l22 11V25Z" fill="url(#stoneLP)"/><path d="M44 14v12L22 37V25Z" fill="url(#stoneRP)"/>
+          <path d="M0 14 22 -8 44 14 22 25Z" fill="url(#roofGP)"/>
+          <rect class="win-glow" x="26" y="17" width="5" height="6" rx="1.5"/>
+        </g>
+        <!-- watchtower with brazier -->
+        <g transform="translate(330,548)">
+          <ellipse cx="8" cy="42" rx="16" ry="5" fill="#0e0c08" opacity=".5"/>
+          <path d="M0 40V4h16v36Z" fill="url(#stoneRP)"/>
+          <path d="M0 4h16l3 6h-5v-4h-4v4h-4v-4h-4v4h-5Z" fill="url(#stoneLP)"/>
+          <rect class="win-glow" x="5" y="12" width="5" height="6" rx="1.5"/>
+          <circle class="win-glow" cx="8" cy="2" r="3"/>
+          <circle class="win-glow" cx="8" cy="2" r="9" fill="url(#torchPoolP)"/>
+        </g>
+        <!-- ancient oak -->
+        <g transform="translate(392,610) scale(1.05)">
+          <ellipse cx="0" cy="50" rx="30" ry="8" fill="#0e0c08" opacity=".5"/>
+          <path d="M0 52 Q-4 34 -2 22 M0 52 Q3 36 1 20 M-2 26 Q-9 20 -12 12 M1 24 Q8 18 11 10" stroke="#3a2f1d" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <ellipse cx="-14" cy="10" rx="18" ry="13" fill="#2c3820"/>
+          <ellipse cx="15" cy="8" rx="17" ry="12" fill="#24301c"/>
+          <ellipse cx="0" cy="0" rx="30" ry="18" fill="url(#oakGP)"/>
+          <ellipse cx="-8" cy="-6" rx="14" ry="8" fill="#55683a" opacity=".5"/>
+        </g>
+        <!-- fences between homes -->
+        <g stroke="#2e2716" stroke-width="1.6" stroke-linecap="round" opacity=".85">
+          <path d="M74 610h34M74 606v8M85 605v8M96 604v8M107 604v8"/>
+          <path d="M170 626h44M170 622v8M181 621v8M192 621v8M203 621v8M214 621v9"/>
+          <path d="M318 632h30M318 628v8M328 627v8M338 627v8M348 628v8"/>
+        </g>
+      </g>
+
+      <!-- fog at the village's feet -->
+      <rect y="636" width="450" height="30" fill="#a8b4c6" opacity=".04" filter="url(#blur6P)"/>
+
+      <!-- fireflies (night only) -->
+      <g class="hero-night">
+        <circle class="firefly" cx="60" cy="650" r="1.6"/>
+        <circle class="firefly f2" cx="150" cy="680" r="1.3"/>
+        <circle class="firefly f3" cx="340" cy="660" r="1.5"/>
+        <circle class="firefly f2" cx="400" cy="700" r="1.2"/>
+        <circle class="firefly f3" cx="230" cy="646" r="1.2"/>
+      </g>
+
+      <!-- road down to the gate -->
+      <path d="M150 800 L198 644 L252 644 L300 800 Z" fill="#3c3323" opacity=".85"/>
+      <path d="M176 800 L212 654 L238 654 L274 800 Z" fill="#4a4030" opacity=".5"/>
+      <g stroke="#2c2517" stroke-width="2" opacity=".6" stroke-linecap="round">
+        <path d="M205 700h8M235 730h9M214 764h10"/>
+      </g>
+
+      <!-- foreground gate wall -->
+      <g transform="translate(225,800) scale(.62)">
+        <path d="M-400 -46h56v-10h12v10h14v-10h12v10h14v-10h12v10h56V0h-176Z" fill="url(#wallGP)"/>
+        <path d="M400 -46h-56v-10h-12v10h-14v-10h-12v10h-14v-10h-12v10h-56V0h176Z" fill="url(#wallGP)"/>
+        <g stroke="#1c160d" stroke-width="1" opacity=".5">
+          <path d="M-390 -30h160M-380 -16h150M234 -30h160M226 -16h150"/>
+          <path d="M-350 -46v16M-310 -30v14M-280 -46v16M-250 -30v14M280 -46v16M320 -30v14M350 -46v16M250 -30v14"/>
+        </g>
+        <path d="M-224 0v-96l-12-12v-22h11v12h9v-12h11v12h9v-12h11v22l-12 12V0Z" fill="url(#stoneLP)"/>
+        <path d="M224 0v-96l-12-12v-22h-11v12h-9v-12h-11v12h-9v-12h-11v22l12 12V0Z" fill="url(#stoneRP)"/>
+        <g stroke="#1c160d" stroke-width="1" opacity=".45">
+          <path d="M-222 -80h44M-220 -60h42M-218 -40h40M178 -80h44M178 -60h42M178 -40h40"/>
+        </g>
+        <rect class="win-glow" x="-206" y="-92" width="7" height="10" rx="2"/>
+        <rect class="win-glow" x="199" y="-92" width="7" height="10" rx="2"/>
+        <path d="M-197 0v-64q0-44 197-44t197 44V0h-38v-56q0-28 -159-28t-159 28V0Z" fill="url(#stoneLP)"/>
+        <path d="M-159 0v-56q0-28 159-28t159 28V0Z" fill="#141009"/>
+        <ellipse class="win-glow" cx="0" cy="-8" rx="120" ry="52" fill="url(#gateLightP)"/>
+        <path d="M-120 0v-46q0-22 120-22t120 22V0Z" fill="#211a0c"/>
+        <ellipse class="win-glow" cx="0" cy="-4" rx="78" ry="34" fill="url(#gateLightP)"/>
+        <path d="M0 -66V0M-58 -60V0M58 -60V0M-116 -34h232M-98 -14h196" stroke="#120e08" stroke-width="3" opacity=".9"/>
+        <circle class="win-glow" cx="-176" cy="-58" r="4"/>
+        <circle class="win-glow" cx="176" cy="-58" r="4"/>
+        <circle class="win-glow" cx="-176" cy="-58" r="26" fill="url(#torchPoolP)"/>
+        <circle class="win-glow" cx="176" cy="-58" r="26" fill="url(#torchPoolP)"/>
+        <ellipse class="smoke s3" cx="-224" cy="-140" rx="5" ry="4"/>
+      </g>
+
+      <!-- film grain -->
+      <rect width="450" height="800" filter="url(#grainP)" fill="transparent" opacity=".5"/>
+    </svg>
+  </div>
+  <div class="hero-vignette" aria-hidden="true"></div>
+  <div class="hero-copy">
+    <p class="district-kicker">A settlement in a single file</p>
+    <h1>Oakenfall</h1>
+    <p class="hero-tag">Raise a hold from the mud. Feed it, defend it, warm it through the winter — and try to still be standing come spring.</p>
+    <div class="hero-cta-row">
+      <a class="btn btn-gate" href="/play/">⚔ &nbsp;Enter Oakenfall</a>
+      <a class="btn" href="/almanac/">Read the Almanac</a>
+    </div>
+    <p class="vitals" id="vitals">Season: <b>—</b></p>
+  </div>
+</section>
+
+<svg class="tile-divider" viewBox="0 0 800 26" preserveAspectRatio="none" aria-hidden="true"><path d="M0 13 13 0 26 13 13 26Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Zm40 0 13-13 13 13-13 13Z" fill="currentColor"/></svg>
+
+<section class="district">
+  <p class="district-kicker">Walk into town</p>
+  <h2>Four districts, one living hold</h2>
+  <div class="districts-grid">
+    <article class="dcard assemble">
+      <svg class="dicon" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 8 60 24 32 40 4 24Z" fill="#241d12" stroke="#57503f"/><path d="M22 26l10-9 10 9-10 6Z" fill="#4a5d33"/><path d="M22 26v8l10 6v-8Z" fill="#3a2f1d"/><path d="M42 26v8l-10 6v-8Z" fill="#2e2718"/><rect x="30" y="30" width="4" height="5" fill="#e8a13c"/></svg>
+      <h3>Build</h3>
+      <p>Seventeen buildings from woodcutter's camp to manor and keep — with real supply chains, decay, and repair. Nothing stands forever unless you tend it.</p>
+    </article>
+    <article class="dcard assemble">
+      <svg class="dicon" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 8 60 24 32 40 4 24Z" fill="#241d12" stroke="#57503f"/><circle cx="26" cy="22" r="4" fill="#d8c9a3"/><path d="M22 26h8v8h-8z" fill="#7a2f26"/><circle cx="38" cy="24" r="3.4" fill="#d8c9a3"/><path d="M35 27h6.8v7H35z" fill="#5a708c"/><circle cx="32" cy="33" r="2.4" fill="#d8c9a3"/></svg>
+      <h3>Live</h3>
+      <p>Villagers with names, trades, traits, and tempers. They court, marry, raise children, fall ill, lose heart — and walk out the gate if you fail them.</p>
+    </article>
+    <article class="dcard assemble">
+      <svg class="dicon" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 8 60 24 32 40 4 24Z" fill="#241d12" stroke="#57503f"/><path d="M32 14v16M24 18l16 8M40 18l-16 8" stroke="#8fa5c4" stroke-width="2" stroke-linecap="round"/><path d="M26 34l6-4 6 4-6 8Z" fill="#57503f"/><path d="M29 34l3-2 3 2-3 4Z" fill="#e8a13c"/></svg>
+      <h3>Survive</h3>
+      <p>Four seasons, living weather, and long nights. Wolves in the treeline, bandits on the road — raise palisades and guard posts, or bury your losses.</p>
+    </article>
+    <article class="dcard assemble">
+      <svg class="dicon" viewBox="0 0 64 64" aria-hidden="true"><path d="M32 8 60 24 32 40 4 24Z" fill="#241d12" stroke="#57503f"/><circle cx="26" cy="25" r="6" fill="#e8a13c"/><circle cx="26" cy="25" r="3.4" fill="#c98a34"/><path d="M36 18q8 2 6 10t-8 6" stroke="#4a5d33" stroke-width="2.4" fill="none" stroke-linecap="round"/><path d="M40 16l2 4-4 1Z" fill="#4a5d33"/></svg>
+      <h3>Prosper</h3>
+      <p>A nine-branch research tree, hold tiers, daily bounties, a coin economy, and four game modes — from peaceful Settler to the merciless Iron Winter.</p>
+    </article>
+  </div>
+</section>
+
+<section class="district">
+  <p class="district-kicker">The mason's oath</p>
+  <h2>One file. No installs. No accounts.</h2>
+  <p>The whole of Oakenfall — every sprite, every system, every villager's name — lives in a single HTML file. It loads once and plays anywhere a browser runs, built touch-first for phones: drag to pan, pinch to zoom, everything within reach of a thumb. Close it mid-winter and your hold keeps working while you're away.</p>
+  <p><a class="btn" href="/play/">⚔ &nbsp;Take the gate</a></p>
+</section>

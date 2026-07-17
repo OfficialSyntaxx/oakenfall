@@ -1,0 +1,35 @@
+<!-- title: The Tavern — Oakenfall Community -->
+<!-- desc: Report a bug or suggest a feature for Oakenfall. Notes go straight to the masons — no account needed. -->
+<!-- slug: tavern -->
+
+<section class="district">
+  <p class="district-kicker">Pull up a stool</p>
+  <h2>The Tavern</h2>
+  <p>This is where the hold talks. Nail a note to the wall — a bug you hit, a feature you'd love — and it goes straight to the masons' ledger. No account, no sign-up; the tavern keeper handles the courier.</p>
+
+  <div class="tavern-forms">
+    <form class="parchment-form" data-kind="bug">
+      <h3>⚒ Report a fault</h3>
+      <p>Something broke, stuck, or looked wrong? Tell us what you were doing when it happened.</p>
+      <label for="bug-title">In a few words</label>
+      <input id="bug-title" name="title" maxlength="200" required autocomplete="off" placeholder="Villagers stuck at the gate…">
+      <label for="bug-body">What happened</label>
+      <textarea id="bug-body" name="body" maxlength="5000" required placeholder="What you did, what you expected, what happened instead. Device &amp; browser help too."></textarea>
+      <button class="btn" type="submit">Nail it to the board</button>
+      <p class="form-status" role="status" aria-live="polite"></p>
+    </form>
+
+    <form class="parchment-form" data-kind="suggestion">
+      <h3>🕯 Suggest an improvement</h3>
+      <p>A building, a system, a season event — if it belongs in the hold, we want to hear it.</p>
+      <label for="sug-title">In a few words</label>
+      <input id="sug-title" name="title" maxlength="200" required autocomplete="off" placeholder="Let bakers sell at the market…">
+      <label for="sug-body">The idea</label>
+      <textarea id="sug-body" name="body" maxlength="5000" required placeholder="What it does, why it'd make the hold better."></textarea>
+      <button class="btn" type="submit">Nail it to the board</button>
+      <p class="form-status" role="status" aria-live="polite"></p>
+    </form>
+  </div>
+
+  <p style="margin-top:1.6rem">Prefer to see the ledger yourself? Everything lands in the open at the <a href="https://github.com/OfficialSyntaxx/oakenfall/issues" rel="noopener">Mason's Ledger on GitHub</a>. Bug reports filed from inside the game arrive with full diagnostics attached.</p>
+</section>
