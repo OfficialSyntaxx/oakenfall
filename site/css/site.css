@@ -154,6 +154,16 @@ html[data-tod="day"] .hero-night{ display:none; }
 .firefly{ fill:#e8a13c; opacity:.7; filter:drop-shadow(0 0 4px rgba(232,161,60,.9));
   animation:twinkle 3.2s ease-in-out infinite; }
 .firefly.f2{ animation-delay:1.1s; } .firefly.f3{ animation-delay:2.2s; }
+/* daytime birds: flocks glide across the sky, wings beating */
+.bird-l{ animation:flight-l 75s linear infinite; }
+.bird-l.b2{ animation-duration:105s; animation-delay:-45s; }
+.bird-p{ animation:flight-p 60s linear infinite; }
+.bird-p.b2{ animation-duration:85s; animation-delay:-35s; }
+@keyframes flight-l{ from{ transform:translate(-260px,12px);} to{ transform:translate(920px,-42px);} }
+@keyframes flight-p{ from{ transform:translate(-190px,12px);} to{ transform:translate(540px,-42px);} }
+.bird-flap{ animation:flap .9s ease-in-out infinite alternate; transform-origin:center; transform-box:fill-box; }
+.bird-flap.w2{ animation-delay:.25s; } .bird-flap.w3{ animation-delay:.5s; }
+@keyframes flap{ from{ transform:scaleY(1);} to{ transform:scaleY(.5);} }
 .hero-copy{ position:relative; z-index:2; max-width:34rem; }
 .hero-copy h1{ text-shadow:0 2px 24px rgba(0,0,0,.8); }
 .hero-tag{ font-size:1.08rem; color:var(--text); text-shadow:0 1px 12px rgba(0,0,0,.9); margin-bottom:1.4rem; }

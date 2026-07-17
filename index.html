@@ -67,7 +67,18 @@
     z-index:22; display:flex; gap:5px; pointer-events:auto;
   }
   #hud-right .iconbtn{ width:40px; height:40px; font-size:15px; }
-  #hud-top{ padding-right:calc(env(safe-area-inset-right,0px) + 240px); }
+  /* Reserve real space for the fixed button cluster: margin (not padding)
+     shrinks the scrollport, so pills can never slide under the buttons. */
+  #hud-top{ margin-right:calc(env(safe-area-inset-right,0px) + 238px); padding-right:12px; }
+  /* Portrait: two-row HUD — buttons on row 1, full-width resource row below */
+  @media (orientation: portrait){
+    #hud-top{
+      margin-right:0; padding-right:10px;
+      padding-top:calc(env(safe-area-inset-top,0px) + 58px);
+    }
+    #clock{ top:calc(env(safe-area-inset-top,0px) + 96px) !important; }
+    #minimap-wrap{ top:calc(env(safe-area-inset-top,0px) + 126px) !important; }
+  }
   .iconbtn{
     width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;
     background:linear-gradient(180deg,var(--panel-top),var(--panel-bot));
@@ -240,7 +251,10 @@
     #sheet{ max-height:78vh; }
     #minimap-wrap{ top:calc(env(safe-area-inset-top,0px) + 54px) !important; right:calc(env(safe-area-inset-left,0px) + 10px); }
     #build-fab{ bottom:calc(env(safe-area-inset-bottom,0px) + 12px); left:calc(env(safe-area-inset-left,0px) + 14px); right:auto; }
-    #clock-line{ top:calc(env(safe-area-inset-top,0px) + 48px) !important; }
+    #clock{
+      top:calc(env(safe-area-inset-top,0px) + 56px) !important;
+      right:calc(env(safe-area-inset-right,0px) + 108px);
+    }
     #minimap-wrap{ width:88px; height:88px; }
     #toast-container{ top:calc(env(safe-area-inset-top,0px) + 44px); }
   }
@@ -634,7 +648,7 @@ let eventTimer = 140; // world-seconds until the next random event roll
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.10.1';
+const GAME_VERSION = '1.10.2';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -643,6 +657,7 @@ const GAME_VERSION = '1.10.1';
 const REPO_URL = 'https://github.com/OfficialSyntaxx/oakenfall';
 const FEEDBACK_ENDPOINT = '/.netlify/functions/submit-feedback';
 const CHANGELOG = [
+  ['1.10.2', 'HUD no longer overlaps: portrait gets a two-row top bar (buttons above, resources below), landscape reserves space for the buttons, and the day/season line moved clear of the minimap.'],
   ['1.10.1', 'Fixed cramped/overlapping Game Mode description on the start screen; richer, less flat start-screen background.'],
   ['1.10.0', 'Bug reports & suggestions now file to GitHub automatically — no GitHub account or manual submit needed.'],
   ['1.9.0', 'GitHub pipeline live: bug reports and suggestions file directly to the project repo as issues.'],

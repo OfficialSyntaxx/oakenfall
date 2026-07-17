@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.10.2
+Mobile HUD overhaul: in portrait the top bar is now two rows (icon buttons
+above, a full-width scrollable resource row below) so resource pills never
+hide under the buttons; in landscape the resource row reserves real space
+for the button cluster instead of sliding beneath it, and the day/season
+clock line moved out from under the minimap.
+
 ## 1.10.1
 Fixed the Game Mode description on the start screen being cramped against
 the Map Size row below it (reported as issue #1). Start-screen background

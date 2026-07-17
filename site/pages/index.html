@@ -57,8 +57,11 @@
       <circle class="hero-moon" cx="648" cy="86" r="3.4" fill="#aab6c9" opacity=".4"/>
       <circle class="hero-sun" cx="640" cy="85" r="66" fill="url(#sunHalo)"/>
       <circle class="hero-sun" cx="640" cy="85" r="27" fill="#efb254"/>
-      <g class="hero-birds hero-sun" stroke="#2c2a24" stroke-width="1.6" fill="none" stroke-linecap="round">
-        <path d="M180 120q5-6 10 0q5-6 10 0"/><path d="M215 105q4-5 8 0q4-5 8 0"/><path d="M155 100q3-4 7 0q3-4 7 0"/>
+      <g class="hero-sun bird-flock bird-l" stroke="#2c2a24" stroke-width="1.6" fill="none" stroke-linecap="round">
+        <path class="bird-flap" d="M180 120q5-6 10 0q5-6 10 0"/><path class="bird-flap w2" d="M215 105q4-5 8 0q4-5 8 0"/><path class="bird-flap w3" d="M155 100q3-4 7 0q3-4 7 0"/>
+      </g>
+      <g class="hero-sun bird-flock bird-l b2" stroke="#2c2a24" stroke-width="1.4" fill="none" stroke-linecap="round">
+        <path class="bird-flap w2" d="M60 190q4-5 8 0q4-5 8 0"/><path class="bird-flap" d="M90 178q3-4 7 0q3-4 7 0"/>
       </g>
 
       <!-- clouds: soft layered -->
@@ -76,16 +79,9 @@
       <path d="M0 322 90 296 210 312 340 286 480 308 620 288 730 306 800 296 800 450 0 450Z" fill="url(#ridgeFar)"/>
       <rect y="300" width="800" height="46" fill="#8fa5c4" opacity=".05" filter="url(#blur6)"/>
 
-      <!-- keep on the hill -->
-      <ellipse cx="400" cy="318" rx="150" ry="34" fill="#1b1710"/>
-      <g>
-        <path d="M368 292v-48l-8 8v-14h7v9h7v-9h8v9l7-5 7 5v-9h8v9h7v-9h7v14l-8-8v48Z" fill="url(#stoneR)"/>
-        <path d="M346 292v-22l9-11 9 11v22Z" fill="url(#stoneL)"/>
-        <path d="M436 292v-22l9-11 9 11v22Z" fill="url(#stoneL)"/>
-        <path d="M346 270l9-11 9 11Z" fill="#57503f" opacity=".5"/>
-        <rect class="win-glow" x="392" y="258" width="5" height="8" rx="2"/>
-        <rect class="win-glow" x="406" y="264" width="5" height="8" rx="2"/>
-        <rect class="win-glow" x="352" y="276" width="4" height="7" rx="2"/>
+      <!-- distant pine stands along the far ridge -->
+      <g fill="#191714">
+        <path d="M96 296l6-14 6 14Zm10-6l5-12 5 12Zm240-12l6-14 6 14Zm11-5l5-12 5 12Zm266-12l6-14 6 14Zm11 6l5-12 5 12Z"/>
       </g>
 
       <!-- mid fog -->
@@ -94,51 +90,8 @@
       <!-- mid-town hill -->
       <path d="M0 356 120 334 260 350 420 338 570 352 690 336 800 350 800 450 0 450Z" fill="url(#ridgeNear)"/>
 
-      <!-- houses: gradient faces, ridge-line roofs -->
+      <!-- lone trees on the meadow: oaks and pines, no buildings -->
       <g>
-        <g transform="translate(118,316)">
-          <ellipse cx="22" cy="26" rx="26" ry="7" fill="#0e0c08" opacity=".55"/>
-          <path d="M0 14 22 3 44 14 22 25Z" fill="#39301d"/>
-          <path d="M0 14v12l22 11V25Z" fill="url(#stoneL)"/><path d="M44 14v12L22 37V25Z" fill="url(#stoneR)"/>
-          <path d="M0 14 22 -8 44 14 22 25Z" fill="url(#roofG)"/>
-          <path d="M0 14 22 -8 44 14" fill="none" stroke="#6b4c2b" stroke-width="1.2" opacity=".6"/>
-          <rect class="win-glow" x="11" y="17" width="5" height="6" rx="1.5"/>
-          <ellipse class="smoke" cx="30" cy="-10" rx="4" ry="3"/>
-        </g>
-        <g transform="translate(196,332)">
-          <ellipse cx="22" cy="26" rx="26" ry="7" fill="#0e0c08" opacity=".5"/>
-          <path d="M0 14 22 3 44 14 22 25Z" fill="#352c1b"/>
-          <path d="M0 14v12l22 11V25Z" fill="url(#stoneL)"/><path d="M44 14v12L22 37V25Z" fill="url(#stoneR)"/>
-          <path d="M0 14 22 -8 44 14 22 25Z" fill="url(#roofG)"/>
-          <path d="M0 14 22 -8 44 14" fill="none" stroke="#5d4126" stroke-width="1.2" opacity=".6"/>
-          <rect class="win-glow" x="26" y="17" width="5" height="6" rx="1.5"/>
-        </g>
-        <g transform="translate(556,320)">
-          <ellipse cx="22" cy="26" rx="26" ry="7" fill="#0e0c08" opacity=".55"/>
-          <path d="M0 14 22 3 44 14 22 25Z" fill="#39301d"/>
-          <path d="M0 14v12l22 11V25Z" fill="url(#stoneL)"/><path d="M44 14v12L22 37V25Z" fill="url(#stoneR)"/>
-          <path d="M0 14 22 -8 44 14 22 25Z" fill="url(#roofG)"/>
-          <path d="M0 14 22 -8 44 14" fill="none" stroke="#6b4c2b" stroke-width="1.2" opacity=".6"/>
-          <rect class="win-glow" x="11" y="17" width="5" height="6" rx="1.5"/>
-          <ellipse class="smoke s2" cx="30" cy="-10" rx="4" ry="3"/>
-        </g>
-        <g transform="translate(636,338)">
-          <ellipse cx="22" cy="26" rx="26" ry="7" fill="#0e0c08" opacity=".5"/>
-          <path d="M0 14 22 3 44 14 22 25Z" fill="#352c1b"/>
-          <path d="M0 14v12l22 11V25Z" fill="url(#stoneL)"/><path d="M44 14v12L22 37V25Z" fill="url(#stoneR)"/>
-          <path d="M0 14 22 -8 44 14 22 25Z" fill="url(#roofG)"/>
-          <rect class="win-glow" x="26" y="17" width="5" height="6" rx="1.5"/>
-        </g>
-        <!-- watchtower with brazier -->
-        <g transform="translate(498,296)">
-          <ellipse cx="8" cy="42" rx="16" ry="5" fill="#0e0c08" opacity=".5"/>
-          <path d="M0 40V4h16v36Z" fill="url(#stoneR)"/>
-          <path d="M0 4h16l3 6h-5v-4h-4v4h-4v-4h-4v4h-5Z" fill="url(#stoneL)"/>
-          <rect class="win-glow" x="5" y="12" width="5" height="6" rx="1.5"/>
-          <circle class="win-glow" cx="8" cy="2" r="3"/>
-          <circle class="win-glow" cx="8" cy="2" r="9" fill="url(#torchPool)"/>
-        </g>
-        <!-- ancient oak: layered canopy -->
         <g transform="translate(287,318)">
           <ellipse cx="0" cy="50" rx="30" ry="8" fill="#0e0c08" opacity=".5"/>
           <path d="M0 52 Q-4 34 -2 22 M0 52 Q3 36 1 20 M-2 26 Q-9 20 -12 12 M1 24 Q8 18 11 10" stroke="#3a2f1d" stroke-width="5" fill="none" stroke-linecap="round"/>
@@ -147,44 +100,33 @@
           <ellipse cx="0" cy="0" rx="30" ry="18" fill="url(#oakG)"/>
           <ellipse cx="-8" cy="-6" rx="14" ry="8" fill="#55683a" opacity=".5"/>
         </g>
+        <g transform="translate(590,330) scale(.8)">
+          <ellipse cx="0" cy="50" rx="28" ry="7" fill="#0e0c08" opacity=".5"/>
+          <path d="M0 52 Q-4 34 -2 22 M0 52 Q3 36 1 20 M-2 26 Q-9 20 -12 12" stroke="#3a2f1d" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <ellipse cx="-12" cy="10" rx="16" ry="12" fill="#2c3820"/>
+          <ellipse cx="13" cy="8" rx="15" ry="11" fill="#24301c"/>
+          <ellipse cx="0" cy="0" rx="26" ry="16" fill="url(#oakG)"/>
+        </g>
+        <g fill="#1d211a">
+          <path d="M118 356l9-22 9 22Zm14-10l8-19 8 19Zm548-4l9-22 9 22Zm14 8l8-18 8 18Zm-560 14l7-16 7 16Z"/>
+        </g>
       </g>
 
-      <!-- near fog at the wall's feet -->
+      <!-- near fog over the meadow -->
       <rect y="360" width="800" height="34" fill="#a8b4c6" opacity=".04" filter="url(#blur6)"/>
 
-      <!-- road to the gate -->
-      <path d="M330 450 L376 372 L424 372 L470 450 Z" fill="#3c3323" opacity=".85"/>
-      <path d="M356 450 L390 380 L410 380 L444 450 Z" fill="#4a4030" opacity=".5"/>
-
-      <!-- foreground: crenellated gate wall -->
-      <g transform="translate(400,450)">
-        <path d="M-400 -46h56v-10h12v10h14v-10h12v10h14v-10h12v10h56V0h-176Z" fill="url(#wallG)"/>
-        <path d="M400 -46h-56v-10h-12v10h-14v-10h-12v10h-14v-10h-12v10h-56V0h176Z" fill="url(#wallG)"/>
-        <g stroke="#1c160d" stroke-width="1" opacity=".5">
-          <path d="M-390 -30h160M-380 -16h150M234 -30h160M226 -16h150"/>
-          <path d="M-350 -46v16M-310 -30v14M-280 -46v16M-250 -30v14M280 -46v16M320 -30v14M350 -46v16M250 -30v14"/>
-        </g>
-        <!-- gate towers -->
-        <path d="M-224 0v-96l-12-12v-22h11v12h9v-12h11v12h9v-12h11v22l-12 12V0Z" fill="url(#stoneL)"/>
-        <path d="M224 0v-96l-12-12v-22h-11v12h-9v-12h-11v12h-9v-12h-11v22l12 12V0Z" fill="url(#stoneR)"/>
-        <g stroke="#1c160d" stroke-width="1" opacity=".45">
-          <path d="M-222 -80h44M-220 -60h42M-218 -40h40M178 -80h44M178 -60h42M178 -40h40"/>
-        </g>
-        <rect class="win-glow" x="-206" y="-92" width="7" height="10" rx="2"/>
-        <rect class="win-glow" x="199" y="-92" width="7" height="10" rx="2"/>
-        <!-- gate arch, warm light spilling out -->
-        <path d="M-197 0v-64q0-44 197-44t197 44V0h-38v-56q0-28 -159-28t-159 28V0Z" fill="url(#stoneL)"/>
-        <path d="M-159 0v-56q0-28 159-28t159 28V0Z" fill="#141009"/>
-        <ellipse class="win-glow" cx="0" cy="-8" rx="120" ry="52" fill="url(#gateLight)"/>
-        <path d="M-120 0v-46q0-22 120-22t120 22V0Z" fill="#211a0c"/>
-        <ellipse class="win-glow" cx="0" cy="-4" rx="78" ry="34" fill="url(#gateLight)"/>
-        <path d="M0 -66V0M-58 -60V0M58 -60V0M-116 -34h232M-98 -14h196" stroke="#120e08" stroke-width="3" opacity=".9"/>
-        <!-- torches + light pools on the wall -->
-        <circle class="win-glow" cx="-176" cy="-58" r="4"/>
-        <circle class="win-glow" cx="176" cy="-58" r="4"/>
-        <circle class="win-glow" cx="-176" cy="-58" r="26" fill="url(#torchPool)"/>
-        <circle class="win-glow" cx="176" cy="-58" r="26" fill="url(#torchPool)"/>
-        <ellipse class="smoke s3" cx="-224" cy="-140" rx="5" ry="4"/>
+      <!-- foreground meadow swell with grass tufts -->
+      <path d="M0 450 L0 408 Q200 386 400 400 Q600 414 800 396 L800 450 Z" fill="#171309"/>
+      <g stroke="#242013" stroke-width="2" stroke-linecap="round" opacity=".9">
+        <path d="M90 416q2-8 0-14m6 15q3-7 1-13m-13 12q-2-7 0-12"/>
+        <path d="M340 424q2-8 0-14m6 15q3-7 1-13m-13 12q-2-7 0-12"/>
+        <path d="M600 418q2-8 0-14m6 15q3-7 1-13m-13 12q-2-7 0-12"/>
+        <path d="M720 430q2-8 0-14m6 15q3-7 1-13"/>
+      </g>
+      <g class="hero-night">
+        <circle class="firefly" cx="180" cy="420" r="1.6"/>
+        <circle class="firefly f2" cx="460" cy="428" r="1.3"/>
+        <circle class="firefly f3" cx="660" cy="416" r="1.5"/>
       </g>
 
       <!-- film grain over everything -->
@@ -248,8 +190,11 @@
       <circle class="hero-moon" cx="338" cy="138" r="3.2" fill="#aab6c9" opacity=".4"/>
       <circle class="hero-sun" cx="330" cy="150" r="62" fill="url(#sunHaloP)"/>
       <circle class="hero-sun" cx="330" cy="150" r="25" fill="#efb254"/>
-      <g class="hero-birds hero-sun" stroke="#2c2a24" stroke-width="1.5" fill="none" stroke-linecap="round">
-        <path d="M100 220q5-6 10 0q5-6 10 0"/><path d="M135 205q4-5 8 0q4-5 8 0"/><path d="M80 200q3-4 7 0q3-4 7 0"/>
+      <g class="hero-sun bird-flock bird-p" stroke="#2c2a24" stroke-width="1.5" fill="none" stroke-linecap="round">
+        <path class="bird-flap" d="M100 220q5-6 10 0q5-6 10 0"/><path class="bird-flap w2" d="M135 205q4-5 8 0q4-5 8 0"/><path class="bird-flap w3" d="M80 200q3-4 7 0q3-4 7 0"/>
+      </g>
+      <g class="hero-sun bird-flock bird-p b2" stroke="#2c2a24" stroke-width="1.3" fill="none" stroke-linecap="round">
+        <path class="bird-flap w2" d="M40 330q4-5 8 0q4-5 8 0"/><path class="bird-flap" d="M68 318q3-4 7 0q3-4 7 0"/>
       </g>
 
       <!-- clouds -->
@@ -266,16 +211,9 @@
       <path d="M0 520 40 502 90 514 150 496 210 512 270 498 330 512 390 500 450 510 450 800 0 800Z" fill="url(#ridgeFarP)"/>
       <rect y="498" width="450" height="42" fill="#8fa5c4" opacity=".05" filter="url(#blur6P)"/>
 
-      <!-- keep on its distant hill -->
-      <g transform="translate(-115,282) scale(.85)">
-        <ellipse cx="400" cy="318" rx="150" ry="34" fill="#1b1710"/>
-        <path d="M368 292v-48l-8 8v-14h7v9h7v-9h8v9l7-5 7 5v-9h8v9h7v-9h7v14l-8-8v48Z" fill="url(#stoneRP)"/>
-        <path d="M346 292v-22l9-11 9 11v22Z" fill="url(#stoneLP)"/>
-        <path d="M436 292v-22l9-11 9 11v22Z" fill="url(#stoneLP)"/>
-        <path d="M346 270l9-11 9 11Z" fill="#57503f" opacity=".5"/>
-        <rect class="win-glow" x="392" y="258" width="5" height="8" rx="2"/>
-        <rect class="win-glow" x="406" y="264" width="5" height="8" rx="2"/>
-        <rect class="win-glow" x="352" y="276" width="4" height="7" rx="2"/>
+      <!-- distant pine treeline on the far ridge -->
+      <g fill="#191714">
+        <path d="M60 518l6-15 6 15Zm11-6l5-12 5 12Zm120-10l6-15 6 15Zm11-5l5-12 5 12Zm130 8l6-15 6 15Zm11 5l5-12 5 12Zm70-14l6-14 6 14Z"/>
       </g>
 
       <!-- second ridge for depth -->
@@ -285,52 +223,16 @@
       <!-- village hill -->
       <path d="M0 606 90 586 190 602 300 590 380 604 450 594 450 800 0 800Z" fill="url(#ridgeNearP)"/>
 
-      <!-- the village: staged houses, tower, oak, fences -->
+      <!-- meadow trees: oaks and pines, no buildings -->
       <g>
-        <g transform="translate(26,566)">
-          <ellipse cx="22" cy="26" rx="26" ry="7" fill="#0e0c08" opacity=".55"/>
-          <path d="M0 14 22 3 44 14 22 25Z" fill="#39301d"/>
-          <path d="M0 14v12l22 11V25Z" fill="url(#stoneLP)"/><path d="M44 14v12L22 37V25Z" fill="url(#stoneRP)"/>
-          <path d="M0 14 22 -8 44 14 22 25Z" fill="url(#roofGP)"/>
-          <path d="M0 14 22 -8 44 14" fill="none" stroke="#6b4c2b" stroke-width="1.2" opacity=".6"/>
-          <rect class="win-glow" x="11" y="17" width="5" height="6" rx="1.5"/>
-          <ellipse class="smoke" cx="30" cy="-10" rx="4" ry="3"/>
+        <g transform="translate(80,590) scale(.95)">
+          <ellipse cx="0" cy="50" rx="30" ry="8" fill="#0e0c08" opacity=".5"/>
+          <path d="M0 52 Q-4 34 -2 22 M0 52 Q3 36 1 20 M-2 26 Q-9 20 -12 12 M1 24 Q8 18 11 10" stroke="#3a2f1d" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <ellipse cx="-14" cy="10" rx="18" ry="13" fill="#2c3820"/>
+          <ellipse cx="15" cy="8" rx="17" ry="12" fill="#24301c"/>
+          <ellipse cx="0" cy="0" rx="30" ry="18" fill="url(#oakGP)"/>
+          <ellipse cx="-8" cy="-6" rx="14" ry="8" fill="#55683a" opacity=".5"/>
         </g>
-        <g transform="translate(112,584) scale(1.06)">
-          <ellipse cx="22" cy="26" rx="26" ry="7" fill="#0e0c08" opacity=".5"/>
-          <path d="M0 14 22 3 44 14 22 25Z" fill="#352c1b"/>
-          <path d="M0 14v12l22 11V25Z" fill="url(#stoneLP)"/><path d="M44 14v12L22 37V25Z" fill="url(#stoneRP)"/>
-          <path d="M0 14 22 -8 44 14 22 25Z" fill="url(#roofGP)"/>
-          <path d="M0 14 22 -8 44 14" fill="none" stroke="#5d4126" stroke-width="1.2" opacity=".6"/>
-          <rect class="win-glow" x="26" y="17" width="5" height="6" rx="1.5"/>
-          <ellipse class="smoke s2" cx="30" cy="-10" rx="4" ry="3"/>
-        </g>
-        <g transform="translate(258,590) scale(1.1)">
-          <ellipse cx="22" cy="26" rx="26" ry="7" fill="#0e0c08" opacity=".55"/>
-          <path d="M0 14 22 3 44 14 22 25Z" fill="#39301d"/>
-          <path d="M0 14v12l22 11V25Z" fill="url(#stoneLP)"/><path d="M44 14v12L22 37V25Z" fill="url(#stoneRP)"/>
-          <path d="M0 14 22 -8 44 14 22 25Z" fill="url(#roofGP)"/>
-          <path d="M0 14 22 -8 44 14" fill="none" stroke="#6b4c2b" stroke-width="1.2" opacity=".6"/>
-          <rect class="win-glow" x="11" y="17" width="5" height="6" rx="1.5"/>
-          <ellipse class="smoke s3" cx="30" cy="-10" rx="4" ry="3"/>
-        </g>
-        <g transform="translate(352,572) scale(.92)">
-          <ellipse cx="22" cy="26" rx="26" ry="7" fill="#0e0c08" opacity=".5"/>
-          <path d="M0 14 22 3 44 14 22 25Z" fill="#352c1b"/>
-          <path d="M0 14v12l22 11V25Z" fill="url(#stoneLP)"/><path d="M44 14v12L22 37V25Z" fill="url(#stoneRP)"/>
-          <path d="M0 14 22 -8 44 14 22 25Z" fill="url(#roofGP)"/>
-          <rect class="win-glow" x="26" y="17" width="5" height="6" rx="1.5"/>
-        </g>
-        <!-- watchtower with brazier -->
-        <g transform="translate(330,548)">
-          <ellipse cx="8" cy="42" rx="16" ry="5" fill="#0e0c08" opacity=".5"/>
-          <path d="M0 40V4h16v36Z" fill="url(#stoneRP)"/>
-          <path d="M0 4h16l3 6h-5v-4h-4v4h-4v-4h-4v4h-5Z" fill="url(#stoneLP)"/>
-          <rect class="win-glow" x="5" y="12" width="5" height="6" rx="1.5"/>
-          <circle class="win-glow" cx="8" cy="2" r="3"/>
-          <circle class="win-glow" cx="8" cy="2" r="9" fill="url(#torchPoolP)"/>
-        </g>
-        <!-- ancient oak -->
         <g transform="translate(392,610) scale(1.05)">
           <ellipse cx="0" cy="50" rx="30" ry="8" fill="#0e0c08" opacity=".5"/>
           <path d="M0 52 Q-4 34 -2 22 M0 52 Q3 36 1 20 M-2 26 Q-9 20 -12 12 M1 24 Q8 18 11 10" stroke="#3a2f1d" stroke-width="5" fill="none" stroke-linecap="round"/>
@@ -339,11 +241,8 @@
           <ellipse cx="0" cy="0" rx="30" ry="18" fill="url(#oakGP)"/>
           <ellipse cx="-8" cy="-6" rx="14" ry="8" fill="#55683a" opacity=".5"/>
         </g>
-        <!-- fences between homes -->
-        <g stroke="#2e2716" stroke-width="1.6" stroke-linecap="round" opacity=".85">
-          <path d="M74 610h34M74 606v8M85 605v8M96 604v8M107 604v8"/>
-          <path d="M170 626h44M170 622v8M181 621v8M192 621v8M203 621v8M214 621v9"/>
-          <path d="M318 632h30M318 628v8M328 627v8M338 627v8M348 628v8"/>
+        <g fill="#1d211a">
+          <path d="M180 632l9-22 9 22Zm15-9l8-19 8 19Zm90 6l9-22 9 22Zm15 9l7-17 7 17Zm-130 12l7-16 7 16Z"/>
         </g>
       </g>
 
@@ -359,39 +258,14 @@
         <circle class="firefly f3" cx="230" cy="646" r="1.2"/>
       </g>
 
-      <!-- road down to the gate -->
-      <path d="M150 800 L198 644 L252 644 L300 800 Z" fill="#3c3323" opacity=".85"/>
-      <path d="M176 800 L212 654 L238 654 L274 800 Z" fill="#4a4030" opacity=".5"/>
-      <g stroke="#2c2517" stroke-width="2" opacity=".6" stroke-linecap="round">
-        <path d="M205 700h8M235 730h9M214 764h10"/>
-      </g>
-
-      <!-- foreground gate wall -->
-      <g transform="translate(225,800) scale(.62)">
-        <path d="M-400 -46h56v-10h12v10h14v-10h12v10h14v-10h12v10h56V0h-176Z" fill="url(#wallGP)"/>
-        <path d="M400 -46h-56v-10h-12v10h-14v-10h-12v10h-14v-10h-12v10h-56V0h176Z" fill="url(#wallGP)"/>
-        <g stroke="#1c160d" stroke-width="1" opacity=".5">
-          <path d="M-390 -30h160M-380 -16h150M234 -30h160M226 -16h150"/>
-          <path d="M-350 -46v16M-310 -30v14M-280 -46v16M-250 -30v14M280 -46v16M320 -30v14M350 -46v16M250 -30v14"/>
-        </g>
-        <path d="M-224 0v-96l-12-12v-22h11v12h9v-12h11v12h9v-12h11v22l-12 12V0Z" fill="url(#stoneLP)"/>
-        <path d="M224 0v-96l-12-12v-22h-11v12h-9v-12h-11v12h-9v-12h-11v22l12 12V0Z" fill="url(#stoneRP)"/>
-        <g stroke="#1c160d" stroke-width="1" opacity=".45">
-          <path d="M-222 -80h44M-220 -60h42M-218 -40h40M178 -80h44M178 -60h42M178 -40h40"/>
-        </g>
-        <rect class="win-glow" x="-206" y="-92" width="7" height="10" rx="2"/>
-        <rect class="win-glow" x="199" y="-92" width="7" height="10" rx="2"/>
-        <path d="M-197 0v-64q0-44 197-44t197 44V0h-38v-56q0-28 -159-28t-159 28V0Z" fill="url(#stoneLP)"/>
-        <path d="M-159 0v-56q0-28 159-28t159 28V0Z" fill="#141009"/>
-        <ellipse class="win-glow" cx="0" cy="-8" rx="120" ry="52" fill="url(#gateLightP)"/>
-        <path d="M-120 0v-46q0-22 120-22t120 22V0Z" fill="#211a0c"/>
-        <ellipse class="win-glow" cx="0" cy="-4" rx="78" ry="34" fill="url(#gateLightP)"/>
-        <path d="M0 -66V0M-58 -60V0M58 -60V0M-116 -34h232M-98 -14h196" stroke="#120e08" stroke-width="3" opacity=".9"/>
-        <circle class="win-glow" cx="-176" cy="-58" r="4"/>
-        <circle class="win-glow" cx="176" cy="-58" r="4"/>
-        <circle class="win-glow" cx="-176" cy="-58" r="26" fill="url(#torchPoolP)"/>
-        <circle class="win-glow" cx="176" cy="-58" r="26" fill="url(#torchPoolP)"/>
-        <ellipse class="smoke s3" cx="-224" cy="-140" rx="5" ry="4"/>
+      <!-- foreground meadow swell with grass tufts -->
+      <path d="M0 800 L0 700 Q120 682 240 694 Q360 706 450 690 L450 800 Z" fill="#171309"/>
+      <g stroke="#242013" stroke-width="2" stroke-linecap="round" opacity=".9">
+        <path d="M60 716q2-8 0-14m6 15q3-7 1-13m-13 12q-2-7 0-12"/>
+        <path d="M210 726q2-8 0-14m6 15q3-7 1-13m-13 12q-2-7 0-12"/>
+        <path d="M360 712q2-8 0-14m6 15q3-7 1-13m-13 12q-2-7 0-12"/>
+        <path d="M130 756q2-8 0-14m6 15q3-7 1-13"/>
+        <path d="M300 764q2-8 0-14m6 15q3-7 1-13"/>
       </g>
 
       <!-- film grain -->
