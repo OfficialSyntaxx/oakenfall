@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.11.0
+Real audio samples layered in as an upgrade over the existing procedural
+WebAudio synth (never a dependency — the synth still covers every kind if a
+sample fails to load/play): chopping, mining, tap, warning, and sheet
+open/close, sourced from Kenney's RPG Audio, Interface Sounds, and Impact
+Sounds packs (all CC0). Added an optional ambient background-music toggle
+(off by default to keep the initial load light); music tracks are sourced
+from AlkaKrab's free medieval loop pack.
+
 ## 1.10.1
 Fixed the Game Mode description on the start screen being cramped against
 the Map Size row below it (reported as issue #1). Start-screen background
