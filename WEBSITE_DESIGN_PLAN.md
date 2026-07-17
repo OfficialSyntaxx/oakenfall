@@ -125,12 +125,51 @@ press kit is the only separate route.
 **Town Center (hero)**
 - Full-viewport isometric vignette of a small live settlement (Canvas 2D,
   reusing the game's actual sprite pipeline — see 2.6). Dawn light.
+- The background must NOT read as "a few homes on a flat backdrop". Build it
+  as a five-layer deep scene (see 2.4.1 for the full spec): sky, far ridge,
+  mid-ground settlement, hero foreground, and framing silhouettes — each on
+  its own parallax plane with atmospheric perspective between them.
 - Wordmark build-in, one-line pitch ("Raise a village. Weather the winters.
   Outlast the bandits."), two CTAs: **Enter Oakenfall** (ember, primary) and
   **Read the Chronicle**.
 - Parallax on device tilt (mobile, gyroscope, subtle) / mouse (desktop).
 - A signpost doubles as the nav: each plank is a district link; on tap the
   camera *pans along the road* to that section instead of jump-scrolling.
+
+**2.4.1 Hero background depth spec** (the anti-"too simple" treatment)
+
+Five parallax planes, back to front, each moving at a different rate against
+scroll/tilt (far layers barely move, foreground moves most):
+
+1. **Sky plane** — pre-dawn gradient with a low moon fading out, two layers
+   of drifting clouds (the game's DECOR cloud sprites, tinted), a slow
+   wheeling flock of birds every ~40s, and faint stars that dissolve as the
+   scene warms toward dawn.
+2. **Far ridge** — silhouetted forested hills in 2–3 tones of blue-grey
+   haze, a distant watchtower with a single lit window, a thin waterfall
+   line catching light. Heavy atmospheric fog gradient at its base so the
+   settlement never sits on a hard edge.
+3. **Mid-ground settlement** — the homes themselves, but *staged*, not
+   scattered: varied roof heights and rotations, clustered around a visible
+   road that S-curves toward the viewer (leading line to the CTA), warm
+   window glow flickering at slightly different phases per house, chimney
+   smoke drifting with a shared wind direction, one mill wheel turning,
+   laundry lines and fences filling gaps between buildings so no bare
+   ground shows. Light shafts (god rays) rake across at a low dawn angle.
+4. **Hero foreground** — a large ancient oak (the game's swaying oak) on
+   one side anchoring the composition, a lit brazier or lamppost near the
+   CTA whose glow literally illuminates the "Enter Oakenfall" button, 2–3
+   villagers on the road (one waves if the visitor idles ~8s), fireflies /
+   drifting pollen motes for air texture.
+5. **Framing silhouettes** — out-of-focus dark branches and grass blades at
+   the very edges of the viewport (slight blur), which is what makes the
+   scene feel deep instead of like a flat painting.
+
+Unifying tricks: a single global light direction; desaturate + lighten each
+plane stepwise toward the horizon (atmospheric perspective); a soft
+vignette; grain/texture overlay at ~3% so gradients never band. Under
+reduced-motion, the same five layers render as one still composite — the
+depth grading alone keeps it from looking simple.
 
 **The Village (features)**
 - Scroll-driven vignettes, one per pillar: Build (a house assembles plank
