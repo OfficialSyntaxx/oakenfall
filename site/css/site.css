@@ -257,6 +257,23 @@ html[data-tod="day"] .hero-moon,html[data-tod="day"] .hero-stars{ display:none; 
 .season b{ display:block; font-family:var(--f-display); color:var(--parchment); margin-top:.3rem; }
 .season span{ font-size:.85rem; color:var(--text-dim); }
 
+/* ---------- Almanac diorama ---------- */
+.diorama-wrap{ border:1px solid var(--iron); border-radius:8px; overflow:hidden; background:#12100a; margin:1rem 0 1.4rem; }
+#diorama{ display:block; width:100%; height:auto; touch-action:manipulation; cursor:pointer; }
+.diorama-caption{ display:flex; flex-direction:column; gap:.15rem; padding:.8rem 1rem calc(.8rem + env(safe-area-inset-bottom)*0);
+  border-top:1px solid var(--iron); background:var(--ground-2); min-height:64px; }
+.diorama-caption b{ font-family:var(--f-display); color:var(--amber); letter-spacing:.04em; }
+.diorama-caption span{ font-size:.92rem; color:var(--text-dim); }
+
+/* ---------- Lantern cursor (fine pointers only) ---------- */
+.lantern{ position:fixed; z-index:1; width:340px; height:340px; margin:-170px 0 0 -170px;
+  pointer-events:none; opacity:0; transition:opacity .6s;
+  background:radial-gradient(circle, rgba(232,161,60,.07) 0%, rgba(232,161,60,.03) 40%, transparent 70%); }
+html[data-tod="night"] .lantern.lit{ opacity:1; }
+
+/* ---------- Weather overlay ---------- */
+#weather{ position:fixed; inset:0; z-index:3; pointer-events:none; }
+
 /* ---------- Tavern ---------- */
 .tavern-forms{ display:grid; gap:1.4rem; grid-template-columns:1fr; margin-top:1.4rem; }
 @media (min-width:52rem){ .tavern-forms{ grid-template-columns:1fr 1fr; } }
