@@ -149,15 +149,34 @@
     function tilePath(c, x, y){
       c.beginPath(); c.moveTo(x, y - TH/2); c.lineTo(x + TW/2, y); c.lineTo(x, y + TH/2); c.lineTo(x - TW/2, y); c.closePath();
     }
+    function shade(c, col, x, y, h, amt){
+      var g = c.createLinearGradient(x, y - h, x, y + TH/2);
+      g.addColorStop(0, col); g.addColorStop(1, darken(col, amt));
+      return g;
+    }
+    function darken(hex, f){
+      var n = parseInt(hex.slice(1), 16);
+      var r = Math.round(((n>>16)&255)*f), g2 = Math.round(((n>>8)&255)*f), b2 = Math.round((n&255)*f);
+      return 'rgb(' + r + ',' + g2 + ',' + b2 + ')';
+    }
     function box(c, x, y, h, top, left, right){
-      c.fillStyle = left; c.beginPath(); c.moveTo(x - TW/2, y); c.lineTo(x, y + TH/2); c.lineTo(x, y + TH/2 - h); c.lineTo(x - TW/2, y - h); c.closePath(); c.fill();
-      c.fillStyle = right; c.beginPath(); c.moveTo(x + TW/2, y); c.lineTo(x, y + TH/2); c.lineTo(x, y + TH/2 - h); c.lineTo(x + TW/2, y - h); c.closePath(); c.fill();
-      c.save(); c.translate(0, -h); c.fillStyle = top; tilePath(c, x, y); c.fill(); c.restore();
+      c.fillStyle = 'rgba(8,6,3,.45)';
+      c.beginPath(); c.ellipse(x, y + TH*0.22, TW*0.52, TH*0.4, 0, 0, 7); c.fill();
+      c.fillStyle = shade(c, left, x, y, h, 0.55); c.beginPath(); c.moveTo(x - TW/2, y); c.lineTo(x, y + TH/2); c.lineTo(x, y + TH/2 - h); c.lineTo(x - TW/2, y - h); c.closePath(); c.fill();
+      c.fillStyle = shade(c, right, x, y, h, 0.5); c.beginPath(); c.moveTo(x + TW/2, y); c.lineTo(x, y + TH/2); c.lineTo(x, y + TH/2 - h); c.lineTo(x + TW/2, y - h); c.closePath(); c.fill();
+      c.save(); c.translate(0, -h); c.fillStyle = top; tilePath(c, x, y); c.fill();
+      c.strokeStyle = 'rgba(255,240,200,.12)'; c.lineWidth = 1; c.stroke(); c.restore();
     }
     function roof(c, x, y, h, colL, colR){
       var peak = y - h - TH * 0.9;
-      c.fillStyle = colL; c.beginPath(); c.moveTo(x - TW/2, y - h); c.lineTo(x, peak); c.lineTo(x, y + TH/2 - h); c.closePath(); c.fill();
-      c.fillStyle = colR; c.beginPath(); c.moveTo(x + TW/2, y - h); c.lineTo(x, peak); c.lineTo(x, y + TH/2 - h); c.closePath(); c.fill();
+      var gl = c.createLinearGradient(x, peak, x, y + TH/2 - h);
+      gl.addColorStop(0, colL); gl.addColorStop(1, darken(colL, 0.55));
+      var gr = c.createLinearGradient(x, peak, x, y + TH/2 - h);
+      gr.addColorStop(0, colR); gr.addColorStop(1, darken(colR, 0.5));
+      c.fillStyle = gl; c.beginPath(); c.moveTo(x - TW/2, y - h); c.lineTo(x, peak); c.lineTo(x, y + TH/2 - h); c.closePath(); c.fill();
+      c.fillStyle = gr; c.beginPath(); c.moveTo(x + TW/2, y - h); c.lineTo(x, peak); c.lineTo(x, y + TH/2 - h); c.closePath(); c.fill();
+      c.strokeStyle = 'rgba(255,240,200,.14)'; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(x - TW/2, y - h); c.lineTo(x, peak); c.lineTo(x + TW/2, y - h); c.stroke();
     }
     function windowGlow(c, x, y){
       if(!night()) return;
