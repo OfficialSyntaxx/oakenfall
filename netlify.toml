@@ -1,3 +1,4 @@
 [build]
-  publish = "."
+  command = "node site/build.js"
+  publish = "_site"
   functions = "netlify/functions"

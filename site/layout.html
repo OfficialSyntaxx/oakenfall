@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en" data-tod="night">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{title}}</title>
+<meta name="description" content="{{desc}}">
+<meta name="theme-color" content="#15120c">
+<meta property="og:title" content="{{title}}">
+<meta property="og:description" content="{{desc}}">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 30 16 16 30 2 16Z' fill='%2315120c' stroke='%23e8a13c' stroke-width='2'/%3E%3Cpath d='M16 22V13M16 13c-3-1-5-4-5-6 2 0 4 1 5 3 1-2 3-3 5-3 0 2-2 5-5 6Z' stroke='%234a5d33' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/css/site.css">
+</head>
+<body class="page-{{slug}}">
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="site-header" id="siteHeader">
+  <a class="brand" href="/" aria-label="Oakenfall home">
+    <svg class="brand-oak" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 30 16 16 30 2 16Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 22V13M16 13c-3-1-5-4-5-6 2 0 4 1 5 3 1-2 3-3 5-3 0 2-2 5-5 6Z" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+    <span>Oakenfall</span>
+  </a>
+  <nav class="signpost" aria-label="Main">
+    <a href="/" data-nav="home">The Gate</a>
+    <a href="/play/" data-nav="play" class="nav-play">Play</a>
+    <a href="/chronicle/" data-nav="chronicle">Chronicle</a>
+    <a href="/almanac/" data-nav="almanac">Almanac</a>
+    <a href="/tavern/" data-nav="tavern">Tavern</a>
+  </nav>
+  <div class="header-tools">
+    <button class="tod-toggle" id="todToggle" aria-label="Toggle day and night" title="Toggle day / night">
+      <svg class="ic-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/></g></svg>
+      <svg class="ic-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8.5 8.5 0 0 1 9.5 4 8.5 8.5 0 1 0 20 14.5Z" fill="currentColor"/></svg>
+    </button>
+    <button class="menu-toggle" id="menuToggle" aria-label="Open menu" aria-expanded="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    </button>
+  </div>
+</header>
+
+<div class="sheet-scrim" id="sheetScrim" hidden></div>
+<nav class="mobile-sheet" id="mobileSheet" aria-label="Main menu" hidden>
+  <div class="sheet-grip" aria-hidden="true"></div>
+  <a href="/" data-nav="home"><span class="sheet-ic" aria-hidden="true">⛩</span>The Gate</a>
+  <a href="/play/" data-nav="play" class="sheet-play"><span class="sheet-ic" aria-hidden="true">⚔</span>Enter the Hold — Play</a>
+  <a href="/chronicle/" data-nav="chronicle"><span class="sheet-ic" aria-hidden="true">📜</span>Chronicle</a>
+  <a href="/almanac/" data-nav="almanac"><span class="sheet-ic" aria-hidden="true">📖</span>Almanac</a>
+  <a href="/tavern/" data-nav="tavern"><span class="sheet-ic" aria-hidden="true">🍺</span>Tavern</a>
+  <a href="/credits/" data-nav="credits"><span class="sheet-ic" aria-hidden="true">🖋</span>The Charter</a>
+</nav>
+
+<main id="main">
+{{content}}
+</main>
+
+<footer class="charter">
+  <div class="charter-inner">
+    <svg class="charter-oak" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2 30 16 16 30 2 16Z" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M16 22V13M16 13c-3-1-5-4-5-6 2 0 4 1 5 3 1-2 3-3 5-3 0 2-2 5-5 6Z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+    <p class="charter-line">Let it be known: this hold was raised by hand, one file, one tile at a time.</p>
+    <nav class="seals" aria-label="Footer">
+      <a href="/play/">Play</a>
+      <a href="/chronicle/">Chronicle</a>
+      <a href="/almanac/">Almanac</a>
+      <a href="/tavern/">Tavern</a>
+      <a href="/credits/">The&nbsp;Charter</a>
+      <a href="https://github.com/OfficialSyntaxx/oakenfall" rel="noopener">Mason's&nbsp;Ledger</a>
+    </nav>
+    <p class="charter-fine">Oakenfall — a settlement in a single file. No trackers, no accounts, no nonsense.</p>
+  </div>
+</footer>
+
+<script src="/js/site.js" defer></script>
+</body>
+</html>
