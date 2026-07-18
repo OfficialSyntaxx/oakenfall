@@ -70,6 +70,9 @@ copyDir(path.join(SITE, 'js'), path.join(OUT, 'js'));
 fs.mkdirSync(path.join(OUT, 'game'), { recursive: true });
 fs.copyFileSync(path.join(ROOT, 'index.html'), path.join(OUT, 'game', 'index.html'));
 
+// Home-screen icon, referenced by both the site layout and the game
+fs.copyFileSync(path.join(ROOT, 'apple-touch-icon.png'), path.join(OUT, 'apple-touch-icon.png'));
+
 const layout = fs.readFileSync(path.join(SITE, 'layout.html'), 'utf8');
 const changelog = changelogNotices(fs.readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8'));
 const credits = md(fs.readFileSync(path.join(ROOT, 'CREDITS.md'), 'utf8'));
