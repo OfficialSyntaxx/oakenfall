@@ -69,7 +69,26 @@
   #hud-right .iconbtn{ width:40px; height:40px; font-size:15px; }
   /* Reserve real space for the fixed button cluster: margin (not padding)
      shrinks the scrollport, so pills can never slide under the buttons. */
-  #hud-top{ margin-right:calc(env(safe-area-inset-right,0px) + 238px); padding-right:12px; }
+  #hud-top{ margin-right:calc(env(safe-area-inset-right,0px) + 156px); padding-right:12px; }
+  /* fade hint: the right edge dissolves so players know the row scrolls */
+  #hud-top{
+    -webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 26px),transparent);
+    mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 26px),transparent);
+  }
+  #more-menu{
+    position:absolute; top:calc(100% + 6px); right:0;
+    display:flex; flex-direction:column; gap:6px;
+    background:linear-gradient(180deg,var(--panel-top),var(--panel-bot));
+    border:1px solid var(--panel-edge); border-radius:10px; padding:6px;
+    box-shadow:0 6px 18px rgba(0,0,0,0.55);
+  }
+  #minimap-wrap #mm-zoom{
+    position:absolute; left:0; bottom:0; width:32px; height:32px;
+    display:flex; align-items:center; justify-content:center;
+    background:rgba(20,15,10,0.75); border:1px solid var(--panel-edge);
+    border-radius:0 8px 0 8px; color:var(--parchment-dim); font-size:15px; padding:0;
+  }
+  #minimap-wrap.mm-big{ width:200px; height:200px; }
   /* Portrait: two-row HUD — buttons on row 1, full-width resource row below */
   @media (orientation: portrait){
     #hud-top{
@@ -282,17 +301,22 @@
   <div class="pill"><span class="icon">🍞</span><b id="res-bread">0</b><span class="cap" id="cap-bread"></span></div>
   <div class="pill" id="shop-pill" style="cursor:pointer;"><span class="icon">💰</span><b id="res-coins">0</b></div>
   <div class="pill"><span class="icon">👥</span><b id="res-pop">0</b><span class="cap" id="res-cap">/0</span></div>
-  <div id="hud-right">
-    <button class="iconbtn" id="quest-btn">📜<span id="quest-dot" class="hidden" style="position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:#e7a23d;"></span></button>
+</div>
+<!-- Fixed button cluster: OUTSIDE #hud-top so its mask/overflow can't clip
+     the ⚙ dropdown. -->
+<div id="hud-right">
+  <button class="iconbtn" id="quest-btn">📜<span id="quest-dot" class="hidden" style="position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:#e7a23d;"></span></button>
+  <button class="iconbtn" id="speed-btn">▶</button>
+  <button class="iconbtn" id="more-btn">⚙</button>
+  <div id="more-menu" class="hidden">
     <button class="iconbtn" id="save-btn">💾</button>
     <button class="iconbtn" id="snd-btn">🔊</button>
     <button class="iconbtn" id="fs-btn">⛶</button>
-    <button class="iconbtn" id="speed-btn">▶</button>
   </div>
 </div>
 <div id="clock" style="position:fixed;top:54px;right:14px;z-index:20;pointer-events:none;">Day 1 · <span id="phase-label">Dawn</span></div>
 
-<div id="minimap-wrap"><canvas id="minimap" width="112" height="112"></canvas></div>
+<div id="minimap-wrap"><canvas id="minimap" width="112" height="112"></canvas><button id="mm-zoom">⤢</button></div>
 
 <div id="crosshair"><div class="mark"></div></div>
 
@@ -648,7 +672,7 @@ let eventTimer = 140; // world-seconds until the next random event roll
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.10.2';
+const GAME_VERSION = '1.11.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -657,6 +681,7 @@ const GAME_VERSION = '1.10.2';
 const REPO_URL = 'https://github.com/OfficialSyntaxx/oakenfall';
 const FEEDBACK_ENDPOINT = '/.netlify/functions/submit-feedback';
 const CHANGELOG = [
+  ['1.11.0', 'Cleaner HUD: save/sound/fullscreen folded into a ⚙ menu, resource row fades at its edge to hint it scrolls, the camera pans so your selection is never hidden behind the sheet, and the minimap can be enlarged with its ⤢ button.'],
   ['1.10.2', 'HUD no longer overlaps: portrait gets a two-row top bar (buttons above, resources below), landscape reserves space for the buttons, and the day/season line moved clear of the minimap.'],
   ['1.10.1', 'Fixed cramped/overlapping Game Mode description on the start screen; richer, less flat start-screen background.'],
   ['1.10.0', 'Bug reports & suggestions now file to GitHub automatically — no GitHub account or manual submit needed.'],
@@ -3181,7 +3206,7 @@ function drawMinimap(){
   const mmTile = Math.max(1, Math.floor(MM_SIZE / MAP_SIZE));
   const sz = MAP_SIZE * mmTile;
   minimapCanvas.width = sz; minimapCanvas.height = sz;
-  minimapCanvas.style.width = MM_SIZE+'px'; minimapCanvas.style.height = MM_SIZE+'px';
+  minimapCanvas.style.width = '100%'; minimapCanvas.style.height = '100%';
 
   mmCtx.clearRect(0,0,sz,sz);
 
@@ -3573,6 +3598,22 @@ document.getElementById('quest-btn').addEventListener('click', ()=>{
 });
 document.getElementById('save-btn').addEventListener('click', ()=>{ saveGame(); });
 
+// ⚙ overflow menu: save/sound/fullscreen live in a dropdown to free HUD width
+const moreBtn = document.getElementById('more-btn');
+const moreMenu = document.getElementById('more-menu');
+moreBtn.addEventListener('click', ()=>{ moreMenu.classList.toggle('hidden'); });
+document.addEventListener('pointerdown', (e)=>{
+  if(!moreMenu.classList.contains('hidden') && !document.getElementById('hud-right').contains(e.target)){
+    moreMenu.classList.add('hidden');
+  }
+});
+
+// Minimap enlarge toggle
+document.getElementById('mm-zoom').addEventListener('click', (e)=>{
+  e.stopPropagation();
+  document.getElementById('minimap-wrap').classList.toggle('mm-big');
+});
+
 /* =========================================================================
    HUD UPDATE
 ========================================================================= */
@@ -3634,6 +3675,25 @@ const buildFab = document.getElementById('build-fab');
 const crosshair = document.getElementById('crosshair');
 
 function openSheet(){ sheetWrap.classList.add('open'); }
+
+// If the freshly-opened sheet (or the HUD) covers the selection, pan the
+// camera just enough to bring it back into the uncovered part of the screen.
+function ensureSelectionVisible(){
+  if(!selection.type || !selection.ref) return;
+  const g = selection.type==='building' ? buildingCenter(selection.ref)
+          : { gx:selection.ref.gx, gy:selection.ref.gy };
+  if(g.gx===undefined || g.gy===undefined) return;
+  const p = project(g.gx, g.gy);
+  const s = worldToScreen(p.x, p.y);
+  const sideDock = matchMedia('(orientation: landscape) and (max-height: 520px)').matches;
+  const top = 130, left = 40;
+  const bottom = sideDock ? cssH - 50 : cssH * 0.48;
+  const right = sideDock ? cssW - Math.min(cssW*0.46, 380) - 40 : cssW - 40;
+  let dx = 0, dy = 0;
+  if(s.x < left) dx = left - s.x; else if(s.x > right) dx = right - s.x;
+  if(s.y < top) dy = top - s.y; else if(s.y > bottom) dy = bottom - s.y;
+  if(dx || dy){ camera.panX += dx; camera.panY += dy; clampCamera(); }
+}
 function closeSheet(){ sheetWrap.classList.remove('open'); }
 document.getElementById('sheet-close').addEventListener('click', ()=>{
   deselectAll();
@@ -3652,6 +3712,7 @@ function selectVillager(v){
   selection = { type:'villager', ref:v };
   renderVillagerSheet(v);
   openSheet();
+  ensureSelectionVisible();
 }
 function selectBuilding(b){
   sfx('tap');
@@ -3659,12 +3720,14 @@ function selectBuilding(b){
   selection = { type:'building', ref:b };
   renderBuildingSheet(b);
   openSheet();
+  ensureSelectionVisible();
 }
 function selectTile(t){
   exitBuildModeIfActive();
   selection = { type:'tile', ref:t };
   renderTileSheet(t);
   openSheet();
+  ensureSelectionVisible();
 }
 function exitBuildModeIfActive(){ if(buildMode.active) exitBuildMode(); }
 

@@ -50,13 +50,15 @@
         <circle class="tw t3" cx="270" cy="140" r=".9"/><circle class="tw" cx="390" cy="120" r=".8"/>
       </g>
 
-      <!-- moon / sun with halos -->
-      <circle class="hero-moon" cx="640" cy="78" r="60" fill="url(#moonHalo)"/>
-      <circle class="hero-moon" cx="640" cy="78" r="24" fill="#cdd6e4"/>
-      <circle class="hero-moon" cx="633" cy="71" r="5" fill="#aab6c9" opacity=".55"/>
-      <circle class="hero-moon" cx="648" cy="86" r="3.4" fill="#aab6c9" opacity=".4"/>
-      <circle class="hero-sun" cx="640" cy="85" r="66" fill="url(#sunHalo)"/>
-      <circle class="hero-sun" cx="640" cy="85" r="27" fill="#efb254"/>
+      <!-- moon / sun with halos (position set from local time by site.js) -->
+      <g class="celest" data-base="640" data-width="800">
+        <circle class="hero-moon" cx="640" cy="78" r="60" fill="url(#moonHalo)"/>
+        <circle class="hero-moon" cx="640" cy="78" r="24" fill="#cdd6e4"/>
+        <circle class="hero-moon" cx="633" cy="71" r="5" fill="#aab6c9" opacity=".55"/>
+        <circle class="hero-moon" cx="648" cy="86" r="3.4" fill="#aab6c9" opacity=".4"/>
+        <circle class="hero-sun" cx="640" cy="85" r="66" fill="url(#sunHalo)"/>
+        <circle class="hero-sun" cx="640" cy="85" r="27" fill="#efb254"/>
+      </g>
       <g class="hero-sun bird-flock bird-l" stroke="#2c2a24" stroke-width="1.6" fill="none" stroke-linecap="round">
         <path class="bird-flap" d="M180 120q5-6 10 0q5-6 10 0"/><path class="bird-flap w2" d="M215 105q4-5 8 0q4-5 8 0"/><path class="bird-flap w3" d="M155 100q3-4 7 0q3-4 7 0"/>
       </g>
@@ -76,14 +78,15 @@
       </g>
 
       <!-- far ridge + fog band -->
-      <path d="M0 322 90 296 210 312 340 286 480 308 620 288 730 306 800 296 800 450 0 450Z" fill="url(#ridgeFar)"/>
-      <rect y="300" width="800" height="46" fill="#8fa5c4" opacity=".05" filter="url(#blur6)"/>
-
-      <!-- distant pine stands along the far ridge -->
-      <g fill="#191714">
-        <path d="M96 296l6-14 6 14Zm10-6l5-12 5 12Zm240-12l6-14 6 14Zm11-5l5-12 5 12Zm266-12l6-14 6 14Zm11 6l5-12 5 12Z"/>
+      <g class="par" data-par=".05">
+        <path d="M0 322 90 296 210 312 340 286 480 308 620 288 730 306 800 296 800 450 0 450Z" fill="url(#ridgeFar)"/>
+        <rect y="300" width="800" height="46" fill="#8fa5c4" opacity=".05" filter="url(#blur6)"/>
+        <g fill="#191714">
+          <path d="M96 296l6-14 6 14Zm10-6l5-12 5 12Zm240-12l6-14 6 14Zm11-5l5-12 5 12Zm266-12l6-14 6 14Zm11 6l5-12 5 12Z"/>
+        </g>
       </g>
 
+      <g class="par" data-par=".11">
       <!-- mid fog -->
       <rect y="326" width="800" height="40" fill="#9aa8bc" opacity=".045" filter="url(#blur6)"/>
 
@@ -111,12 +114,21 @@
           <path d="M118 356l9-22 9 22Zm14-10l8-19 8 19Zm548-4l9-22 9 22Zm14 8l8-18 8 18Zm-560 14l7-16 7 16Z"/>
         </g>
       </g>
+      </g>
 
+      <g class="par" data-par=".2">
       <!-- near fog over the meadow -->
       <rect y="360" width="800" height="34" fill="#a8b4c6" opacity=".04" filter="url(#blur6)"/>
 
       <!-- foreground meadow swell with grass tufts -->
       <path d="M0 450 L0 408 Q200 386 400 400 Q600 414 800 396 L800 450 Z" fill="#171309"/>
+      <!-- cloud shadows sweeping the meadow, paced to the clouds above -->
+      <g class="cloud-drift" opacity=".16" filter="url(#blur6)">
+        <ellipse cx="150" cy="424" rx="95" ry="12" fill="#000"/>
+      </g>
+      <g class="cloud-drift c2" opacity=".12" filter="url(#blur6)">
+        <ellipse cx="490" cy="416" rx="120" ry="13" fill="#000"/>
+      </g>
       <g stroke="#242013" stroke-width="2" stroke-linecap="round" opacity=".9">
         <path d="M90 416q2-8 0-14m6 15q3-7 1-13m-13 12q-2-7 0-12"/>
         <path d="M340 424q2-8 0-14m6 15q3-7 1-13m-13 12q-2-7 0-12"/>
@@ -127,6 +139,7 @@
         <circle class="firefly" cx="180" cy="420" r="1.6"/>
         <circle class="firefly f2" cx="460" cy="428" r="1.3"/>
         <circle class="firefly f3" cx="660" cy="416" r="1.5"/>
+      </g>
       </g>
 
       <!-- film grain over everything -->
@@ -183,13 +196,15 @@
         <circle class="tw t3" cx="300" cy="300" r=".8"/><circle class="tw t2" cx="60" cy="340" r=".9"/>
       </g>
 
-      <!-- moon / sun -->
-      <circle class="hero-moon" cx="330" cy="130" r="58" fill="url(#moonHaloP)"/>
-      <circle class="hero-moon" cx="330" cy="130" r="23" fill="#cdd6e4"/>
-      <circle class="hero-moon" cx="323" cy="123" r="5" fill="#aab6c9" opacity=".55"/>
-      <circle class="hero-moon" cx="338" cy="138" r="3.2" fill="#aab6c9" opacity=".4"/>
-      <circle class="hero-sun" cx="330" cy="150" r="62" fill="url(#sunHaloP)"/>
-      <circle class="hero-sun" cx="330" cy="150" r="25" fill="#efb254"/>
+      <!-- moon / sun (position set from local time by site.js) -->
+      <g class="celest" data-base="330" data-width="450">
+        <circle class="hero-moon" cx="330" cy="130" r="58" fill="url(#moonHaloP)"/>
+        <circle class="hero-moon" cx="330" cy="130" r="23" fill="#cdd6e4"/>
+        <circle class="hero-moon" cx="323" cy="123" r="5" fill="#aab6c9" opacity=".55"/>
+        <circle class="hero-moon" cx="338" cy="138" r="3.2" fill="#aab6c9" opacity=".4"/>
+        <circle class="hero-sun" cx="330" cy="150" r="62" fill="url(#sunHaloP)"/>
+        <circle class="hero-sun" cx="330" cy="150" r="25" fill="#efb254"/>
+      </g>
       <g class="hero-sun bird-flock bird-p" stroke="#2c2a24" stroke-width="1.5" fill="none" stroke-linecap="round">
         <path class="bird-flap" d="M100 220q5-6 10 0q5-6 10 0"/><path class="bird-flap w2" d="M135 205q4-5 8 0q4-5 8 0"/><path class="bird-flap w3" d="M80 200q3-4 7 0q3-4 7 0"/>
       </g>
@@ -208,14 +223,15 @@
       </g>
 
       <!-- farthest treeline ridge + fog -->
-      <path d="M0 520 40 502 90 514 150 496 210 512 270 498 330 512 390 500 450 510 450 800 0 800Z" fill="url(#ridgeFarP)"/>
-      <rect y="498" width="450" height="42" fill="#8fa5c4" opacity=".05" filter="url(#blur6P)"/>
-
-      <!-- distant pine treeline on the far ridge -->
-      <g fill="#191714">
-        <path d="M60 518l6-15 6 15Zm11-6l5-12 5 12Zm120-10l6-15 6 15Zm11-5l5-12 5 12Zm130 8l6-15 6 15Zm11 5l5-12 5 12Zm70-14l6-14 6 14Z"/>
+      <g class="par" data-par=".05">
+        <path d="M0 520 40 502 90 514 150 496 210 512 270 498 330 512 390 500 450 510 450 800 0 800Z" fill="url(#ridgeFarP)"/>
+        <rect y="498" width="450" height="42" fill="#8fa5c4" opacity=".05" filter="url(#blur6P)"/>
+        <g fill="#191714">
+          <path d="M60 518l6-15 6 15Zm11-6l5-12 5 12Zm120-10l6-15 6 15Zm11-5l5-12 5 12Zm130 8l6-15 6 15Zm11 5l5-12 5 12Zm70-14l6-14 6 14Z"/>
+        </g>
       </g>
 
+      <g class="par" data-par=".11">
       <!-- second ridge for depth -->
       <path d="M0 566 70 550 150 562 240 548 320 562 400 550 450 560 450 800 0 800Z" fill="url(#ridgeMidP)"/>
       <rect y="556" width="450" height="36" fill="#9aa8bc" opacity=".045" filter="url(#blur6P)"/>
@@ -245,7 +261,9 @@
           <path d="M180 632l9-22 9 22Zm15-9l8-19 8 19Zm90 6l9-22 9 22Zm15 9l7-17 7 17Zm-130 12l7-16 7 16Z"/>
         </g>
       </g>
+      </g>
 
+      <g class="par" data-par=".2">
       <!-- fog at the village's feet -->
       <rect y="636" width="450" height="30" fill="#a8b4c6" opacity=".04" filter="url(#blur6P)"/>
 
@@ -266,6 +284,14 @@
         <path d="M360 712q2-8 0-14m6 15q3-7 1-13m-13 12q-2-7 0-12"/>
         <path d="M130 756q2-8 0-14m6 15q3-7 1-13"/>
         <path d="M300 764q2-8 0-14m6 15q3-7 1-13"/>
+      </g>
+      <!-- cloud shadows sweeping the meadow -->
+      <g class="cloud-drift" opacity=".16" filter="url(#blur6P)">
+        <ellipse cx="120" cy="712" rx="80" ry="11" fill="#000"/>
+      </g>
+      <g class="cloud-drift c2" opacity=".12" filter="url(#blur6P)">
+        <ellipse cx="320" cy="700" rx="95" ry="12" fill="#000"/>
+      </g>
       </g>
 
       <!-- film grain -->

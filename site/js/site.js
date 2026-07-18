@@ -56,19 +56,19 @@
   }
 
   /* ----- Vitals strip (flavor, seeded from the real date) ----- */
+  var now = new Date();
+  var seasonIdx = now.getMonth();
+  var season = ['Winter','Winter','Spring','Spring','Spring','Summer','Summer','Summer','Autumn','Autumn','Autumn','Winter'][seasonIdx];
+  var doy = Math.floor((now - new Date(now.getFullYear(),0,0)) / 864e5);
+  var weathers = { Winter:['Snow on the roofs','Iron-cold and clear','Hearths burning low'],
+    Spring:['Rain over the fields','Mild winds','Mud on the roads'],
+    Summer:['Warm and dry','Long golden evenings','Bees in the orchard'],
+    Autumn:['Mist off the river','Leaves on the wind','Harvest carts rolling'] };
+  var vitalsWeather = weathers[season][doy % 3];
   var vit = document.getElementById('vitals');
   if(vit){
-    var now = new Date();
-    var m = now.getMonth();
-    var season = ['Winter','Winter','Spring','Spring','Spring','Summer','Summer','Summer','Autumn','Autumn','Autumn','Winter'][m];
-    var doy = Math.floor((now - new Date(now.getFullYear(),0,0)) / 864e5);
     var moods = ['thriving','content','weathering the season','singing in the tavern','minding the walls'];
-    var weathers = { Winter:['Snow on the roofs','Iron-cold and clear','Hearths burning low'],
-      Spring:['Rain over the fields','Mild winds','Mud on the roads'],
-      Summer:['Warm and dry','Long golden evenings','Bees in the orchard'],
-      Autumn:['Mist off the river','Leaves on the wind','Harvest carts rolling'] };
-    var w = weathers[season][doy % 3];
-    vit.innerHTML = 'Season: <b>'+season+'</b> · Day <b>'+((doy % 28)+1)+'</b> · '+w+' · Villagers <b>'+moods[doy % moods.length]+'</b>';
+    vit.innerHTML = 'Season: <b>'+season+'</b> · Day <b>'+((doy % 28)+1)+'</b> · '+vitalsWeather+' · Villagers <b>'+moods[doy % moods.length]+'</b>';
   }
 
   /* ----- Play page: loader + header tuck ----- */
@@ -252,16 +252,17 @@
     sizeDio();
   }
 
-  /* ----- Weather easter egg (home only, seasonal, ~1 visit in 12) ----- */
+  /* ----- Weather overlay, synced to what the vitals strip claims -----
+     Snowy vitals line → snow, rainy/misty line → rain, otherwise clear. */
   var hero = document.querySelector('.hero');
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if(hero && !reduced && Math.random() < 1/12){
+  var snow = /Snow/.test(vitalsWeather);
+  var rainy = /Rain|Mist/.test(vitalsWeather);
+  if(hero && !reduced && (snow || rainy)){
     var wc = document.createElement('canvas');
     wc.id = 'weather'; wc.setAttribute('aria-hidden','true');
     document.body.appendChild(wc);
     var wcx = wc.getContext('2d');
-    var mth = new Date().getMonth();
-    var snow = (mth <= 1 || mth === 11);
     var drops = [];
     for(var i=0;i<(snow?70:110);i++) drops.push({ x:Math.random(), y:Math.random(), s:.4+Math.random()*.6 });
     function wsize(){ wc.width = innerWidth; wc.height = innerHeight; }
@@ -286,6 +287,60 @@
       });
       requestAnimationFrame(wtick);
     })();
+  }
+
+  /* ----- Hero scene: parallax, celestial position, shooting stars ----- */
+  if(hero && !reduced){
+    // Parallax: layers drift at different rates against scroll (and tilt on
+    // mobile). data-par is the layer's rate; transform is set directly.
+    var parEls = [].slice.call(hero.querySelectorAll('.par'));
+    var tiltX = 0;
+    function applyPar(){
+      var sy = window.scrollY || 0;
+      if(sy > window.innerHeight) return;
+      parEls.forEach(function(el){
+        var f = parseFloat(el.dataset.par) || 0.1;
+        el.style.transform = 'translate(' + (tiltX * f * 40).toFixed(1) + 'px,' + (sy * f).toFixed(1) + 'px)';
+      });
+    }
+    window.addEventListener('scroll', applyPar, { passive:true });
+    window.addEventListener('deviceorientation', function(e){
+      if(e.gamma == null) return;
+      tiltX = Math.max(-1, Math.min(1, e.gamma / 30));
+      applyPar();
+    }, { passive:true });
+    applyPar();
+
+    // Sun and moon ride an arc across the sky based on the local clock:
+    // sun 7:00→19:00, moon 19:00→7:00, low at the edges, high at midpoint.
+    function placeCelestials(){
+      var h = new Date().getHours() + new Date().getMinutes()/60;
+      var isNight = doc.getAttribute('data-tod') === 'night';
+      var t = isNight ? ((h >= 19 ? h - 19 : h + 5) / 12) : Math.max(0, Math.min(1, (h - 7) / 12));
+      hero.querySelectorAll('.celest').forEach(function(g){
+        var base = parseFloat(g.dataset.base), w = parseFloat(g.dataset.width);
+        var want = w * (0.16 + 0.68 * t);
+        var dy = (1 - Math.sin(Math.PI * t)) * 60;
+        g.style.transform = 'translate(' + (want - base).toFixed(0) + 'px,' + dy.toFixed(0) + 'px)';
+      });
+    }
+    placeCelestials();
+    setInterval(placeCelestials, 60000);
+    if(todBtn) todBtn.addEventListener('click', placeCelestials);
+
+    // Shooting star: a rare streak across the night sky (every 25–55s).
+    function shoot(){
+      if(doc.getAttribute('data-tod') === 'night' && !document.hidden){
+        var s = document.createElement('div');
+        s.className = 'star-streak';
+        s.style.top = (5 + Math.random() * 25) + '%';
+        s.style.left = (10 + Math.random() * 55) + '%';
+        hero.appendChild(s);
+        setTimeout(function(){ s.remove(); }, 1200);
+      }
+      setTimeout(shoot, 25000 + Math.random() * 30000);
+    }
+    setTimeout(shoot, 8000 + Math.random() * 15000);
   }
 
   /* ----- Lantern cursor (desktop, night only) ----- */

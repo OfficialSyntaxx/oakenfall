@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.11.0
+HUD quality-of-life: save/sound/fullscreen now live in a ⚙ overflow menu
+(freeing top-bar width on phones), the resource row's right edge fades to
+hint that it scrolls, selecting a villager/building/tile pans the camera so
+the selection is never hidden behind the bottom/side sheet, and the minimap
+gained a ⤢ button to toggle a larger view.
+
 ## 1.10.2
 Mobile HUD overhaul: in portrait the top bar is now two rows (icon buttons
 above, a full-width scrollable resource row below) so resource pills never

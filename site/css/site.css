@@ -164,6 +164,21 @@ html[data-tod="day"] .hero-night{ display:none; }
 .bird-flap{ animation:flap .9s ease-in-out infinite alternate; transform-origin:center; transform-box:fill-box; }
 .bird-flap.w2{ animation-delay:.25s; } .bird-flap.w3{ animation-delay:.5s; }
 @keyframes flap{ from{ transform:scaleY(1);} to{ transform:scaleY(.5);} }
+/* parallax layers + sun/moon are positioned by JS; ease their movement */
+.par{ will-change:transform; }
+.celest{ transition:transform 1.2s ease; }
+/* shooting star: a brief streak across the night sky */
+.star-streak{
+  position:absolute; z-index:1; width:90px; height:2px; border-radius:2px;
+  background:linear-gradient(90deg, rgba(216,222,235,0), #dfe6f2);
+  pointer-events:none; opacity:0;
+  animation:streak 1.1s ease-out forwards;
+}
+@keyframes streak{
+  0%{ opacity:0; transform:translate(0,0) rotate(24deg); }
+  12%{ opacity:.9; }
+  100%{ opacity:0; transform:translate(220px,98px) rotate(24deg); }
+}
 .hero-copy{ position:relative; z-index:2; max-width:34rem; }
 .hero-copy h1{ text-shadow:0 2px 24px rgba(0,0,0,.8); }
 .hero-tag{ font-size:1.08rem; color:var(--text); text-shadow:0 1px 12px rgba(0,0,0,.9); margin-bottom:1.4rem; }
