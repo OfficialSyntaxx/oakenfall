@@ -66,10 +66,38 @@
     Autumn:['Mist off the river','Leaves on the wind','Harvest carts rolling'] };
   var vitalsWeather = weathers[season][doy % 3];
   var vit = document.getElementById('vitals');
+  var heldSave = null;
+  try{ heldSave = JSON.parse(localStorage.getItem('oakenfall-save')); }catch(e){}
   if(vit){
-    var moods = ['thriving','content','weathering the season','singing in the tavern','minding the walls'];
-    vit.innerHTML = 'Season: <b>'+season+'</b> · Day <b>'+((doy % 28)+1)+'</b> · '+vitalsWeather+' · Villagers <b>'+moods[doy % moods.length]+'</b>';
+    if(heldSave && heldSave.dayCount){
+      // The visitor has a real hold — show ITS state, not flavor text
+      vit.innerHTML = 'Your hold stands at Day <b>'+heldSave.dayCount+'</b> · <b>'+
+        ((heldSave.villagers&&heldSave.villagers.length)||0)+'</b> settlers · '+vitalsWeather;
+      var gateBtn = document.querySelector('.btn-gate');
+      if(gateBtn) gateBtn.innerHTML = '⚔ &nbsp;Return to your village';
+    } else {
+      var moods = ['thriving','content','weathering the season','singing in the tavern','minding the walls'];
+      vit.innerHTML = 'Season: <b>'+season+'</b> · Day <b>'+((doy % 28)+1)+'</b> · '+vitalsWeather+' · Villagers <b>'+moods[doy % moods.length]+'</b>';
+    }
   }
+
+  /* ----- "New since your last visit" banner ----- */
+  try{
+    var latest = window.OAKENFALL_LATEST;
+    var lastSeen = localStorage.getItem('oakenfall-last-ver');
+    if(latest && lastSeen && lastSeen !== latest.ver && document.querySelector('.hero')){
+      var nb = document.createElement('div');
+      nb.className = 'newsince';
+      nb.innerHTML = '<b>📜 New since your last visit — v'+latest.ver+'</b><span>'+latest.notes+'</span>'+
+        '<a href="/chronicle/">Read the Chronicle →</a><button aria-label="Dismiss">✕</button>';
+      document.body.appendChild(nb);
+      nb.querySelector('button').addEventListener('click', function(){ nb.remove(); });
+    }
+    if(latest) localStorage.setItem('oakenfall-last-ver', latest.ver);
+  }catch(e){}
+
+  /* ----- Seasonal foliage on the hero scene ----- */
+  doc.setAttribute('data-season', season);
 
   /* ----- Play page: loader + header tuck ----- */
   var frame = document.getElementById('gameFrame');
@@ -78,16 +106,18 @@
     frame.addEventListener('load', function(){
       if(loader) setTimeout(function(){ loader.classList.add('done'); }, 400);
     });
-    // Tuck the header after a few seconds so the game gets the full screen;
-    // tap the very top edge to bring it back.
+    // Tuck the header after a few seconds so the game gets the full screen.
+    // A small floating tab brings it back (a top-edge tap zone fought the
+    // iOS Safari URL-bar gesture).
     var header = document.getElementById('siteHeader');
-    var tuckTimer = setTimeout(function(){ header.classList.add('tucked'); }, 4000);
-    document.addEventListener('pointerdown', function(e){
-      if(e.clientY < 24 && header.classList.contains('tucked')){
-        header.classList.remove('tucked');
-        clearTimeout(tuckTimer);
-        tuckTimer = setTimeout(function(){ header.classList.add('tucked'); }, 5000);
-      }
+    var tab = document.createElement('button');
+    tab.className = 'header-tab'; tab.textContent = '⌄'; tab.setAttribute('aria-label','Show site header');
+    document.body.appendChild(tab);
+    var tuckTimer = setTimeout(function(){ header.classList.add('tucked'); tab.classList.add('show'); }, 4000);
+    tab.addEventListener('click', function(){
+      header.classList.remove('tucked'); tab.classList.remove('show');
+      clearTimeout(tuckTimer);
+      tuckTimer = setTimeout(function(){ header.classList.add('tucked'); tab.classList.add('show'); }, 5000);
     });
   }
 
@@ -129,8 +159,10 @@
       { gx:1, gy:2, kind:'tower', name:'Watchtower', text:'Eyes on the treeline. Guards posted here blunt bandit raids before they reach the granary.' },
       { gx:6, gy:6, kind:'granary', name:'Granary', text:'Raises your storage caps. A full granary in autumn is the whole game, honestly.' },
       { gx:2, gy:1, kind:'oak', name:'The Ancient Oak', text:'Older than the hold, older than the road. Research grows along its nine great branches.' },
-      { gx:6, gy:4, kind:'farm', name:'Farm', text:'Sown in spring, tended all summer, raced against the first frost at harvest.' }
+      { gx:6, gy:4, kind:'farm', name:'Farm', text:'Sown in spring, tended all summer, raced against the first frost at harvest.' },
+      { gx:0, gy:4, kind:'bridge', name:'Bridge', text:'A plank span over the river. Opens the far bank — but every bridge is a door raiders can use. Post a guard to watch it.' }
     ];
+    var isRiver = function(gx, gy){ return gx === 0; };
     var iso = function(gx, gy){ return { x:(gx - gy) * TW/2, y:(gx + gy) * TH/2 }; };
     var ctx2, W, H, OX, OY, DPR;
 
@@ -191,9 +223,11 @@
       // ground tiles
       for(var gy=0; gy<N; gy++) for(var gx=0; gx<N; gx++){
         var p = iso(gx, gy), x = OX + p.x, y = OY + p.y;
-        var road = (gy === 4 && gx < 6) || (gx === 3 && gy <= 4);
-        c.fillStyle = road ? (nt ? '#3a342a' : '#4a4234')
-          : ((gx + gy) % 2 ? (nt ? '#232a18' : '#33401f') : (nt ? '#1f2515' : '#2e3a1c'));
+        var road = (gy === 4 && gx < 6 && gx > 0) || (gx === 3 && gy <= 4);
+        var nt2 = night();
+        c.fillStyle = isRiver(gx, gy) ? (nt2 ? '#1e2c3a' : '#31506a')
+          : road ? (nt2 ? '#3a342a' : '#4a4234')
+          : ((gx + gy) % 2 ? (nt2 ? '#232a18' : '#33401f') : (nt2 ? '#1f2515' : '#2e3a1c'));
         tilePath(c, x, y); c.fill();
         c.strokeStyle = 'rgba(0,0,0,.25)'; c.lineWidth = 1; c.stroke();
       }
@@ -208,6 +242,14 @@
           c.beginPath(); c.ellipse(x, y - TH*1.9, TW*0.44, TH*0.7, 0, 0, 7); c.fill();
           c.fillStyle = nt ? '#2a3722' : '#374827';
           c.beginPath(); c.ellipse(x - TW*0.22, y - TH*1.6, TW*0.26, TH*0.44, 0, 0, 7); c.fill();
+        } else if(b.kind === 'bridge'){
+          c.fillStyle = '#5a4429'; tilePath(c, x, y - 2); c.fill();
+          c.strokeStyle = 'rgba(30,20,10,.55)'; c.lineWidth = 1;
+          for(var pi = -2; pi <= 2; pi++){
+            c.beginPath(); c.moveTo(x - TW*0.4, y - 2 + pi*TH*0.14); c.lineTo(x + TW*0.4, y - 2 + pi*TH*0.14); c.stroke();
+          }
+          c.strokeStyle = '#46351e'; c.lineWidth = 2;
+          c.beginPath(); c.moveTo(x - TW*0.36, y - TH*0.36); c.lineTo(x + TW*0.36, y - TH*0.36); c.stroke();
         } else if(b.kind === 'farm'){
           c.save(); c.translate(0, -2); c.fillStyle = nt ? '#4a3d20' : '#6b5827'; tilePath(c, x, y); c.fill(); c.restore();
           c.strokeStyle = nt ? '#5d4c26' : '#8a7233'; c.lineWidth = 1.4;

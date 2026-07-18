@@ -265,6 +265,14 @@ html[data-tod="day"] .hero-moon,html[data-tod="day"] .hero-stars{ display:none; 
 .load-tiles i:nth-child(16){animation-delay:.75s}
 @keyframes tilein{ 0%,100%{opacity:.12} 50%{opacity:.85} }
 .page-play .charter{ display:none; }
+.header-tab{
+  position:fixed; top:0; left:50%; transform:translate(-50%,-110%); z-index:41;
+  min-width:56px; min-height:30px; padding:2px 18px 6px;
+  background:rgba(21,18,12,.92); color:var(--amber); border:1px solid var(--iron);
+  border-top:none; border-radius:0 0 10px 10px; cursor:pointer; font-size:1rem;
+  transition:transform .3s;
+}
+.header-tab.show{ transform:translate(-50%,0); }
 .page-play .site-header{ transition:transform .3s; }
 .page-play .site-header.tucked{ transform:translateY(-100%); }
 
@@ -372,10 +380,42 @@ html[data-tod="night"] .lantern.lit{ opacity:1; }
 .seals a:hover{ color:var(--amber); border-color:var(--amber-soft); }
 .charter-fine{ font-size:.82rem; color:var(--text-dim); opacity:.8; }
 
+/* ---------- "New since your last visit" banner ---------- */
+.newsince{
+  position:fixed; left:50%; bottom:calc(1rem + env(safe-area-inset-bottom)); transform:translateX(-50%);
+  z-index:60; max-width:min(92vw, 34rem);
+  display:grid; grid-template-columns:1fr auto; gap:.15rem .8rem; align-items:start;
+  padding:.8rem 1rem; border-radius:4px; color:var(--ink);
+  background:linear-gradient(178deg, #d8c9a3, #c9b78c 90%);
+  box-shadow:0 8px 30px rgba(0,0,0,.6);
+}
+.newsince b{ font-family:var(--f-display); grid-column:1; }
+.newsince span{ grid-column:1; font-size:.88rem; color:#41371f;
+  display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.newsince a{ grid-column:1; color:var(--blood); font-size:.9rem; }
+.newsince button{ grid-column:2; grid-row:1 / span 3; align-self:center;
+  min-width:40px; min-height:40px; background:none; border:1px solid rgba(42,35,24,.3);
+  border-radius:4px; color:var(--ink); cursor:pointer; }
+
+/* ---------- Feature icons assemble when their card settles ---------- */
+.dcard .dicon > *{ opacity:0; transform:translateY(7px); }
+.dcard.settled .dicon > *{ opacity:1; transform:none; transition:opacity .45s ease, transform .45s cubic-bezier(.2,.9,.3,1); }
+.dcard.settled .dicon > :nth-child(2){ transition-delay:.12s; }
+.dcard.settled .dicon > :nth-child(3){ transition-delay:.24s; }
+.dcard.settled .dicon > :nth-child(4){ transition-delay:.36s; }
+.dcard.settled .dicon > :nth-child(5){ transition-delay:.48s; }
+
+/* ---------- Seasonal foliage on the hero scene ---------- */
+html[data-season="Autumn"] .hero-scene .foliage{ fill:#7a5c26; }
+html[data-season="Autumn"] .hero-scene .foliage-dark{ fill:#5d451e; }
+html[data-season="Winter"] .hero-scene .foliage{ fill:#8d999b; }
+html[data-season="Winter"] .hero-scene .foliage-dark{ fill:#6d7a7c; }
+
 /* ---------- Reduced motion: static hold ---------- */
 @media (prefers-reduced-motion: reduce){
   html{ scroll-behavior:auto; }
   *,*::before,*::after{ animation:none !important; transition:none !important; }
   .assemble{ opacity:1; transform:none; }
+  .dcard .dicon > *{ opacity:1; transform:none; }
   .smoke{ display:none; }
 }

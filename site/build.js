@@ -74,8 +74,24 @@ fs.copyFileSync(path.join(ROOT, 'index.html'), path.join(OUT, 'game', 'index.htm
 fs.copyFileSync(path.join(ROOT, 'apple-touch-icon.png'), path.join(OUT, 'apple-touch-icon.png'));
 
 const layout = fs.readFileSync(path.join(SITE, 'layout.html'), 'utf8');
-const changelog = changelogNotices(fs.readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8'));
+const changelogSrc = fs.readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8');
+const changelog = changelogNotices(changelogSrc);
 const credits = md(fs.readFileSync(path.join(ROOT, 'CREDITS.md'), 'utf8'));
+
+// Version guard: the game's GAME_VERSION and CHANGELOG.md's top entry must
+// agree, or the chronicle silently drifts from the game. Fail the build.
+const gameSrc = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+const gameVer = (gameSrc.match(/const GAME_VERSION = '([^']+)'/) || [])[1];
+const logVer = (changelogSrc.match(/^## (\S+)/m) || [])[1];
+if (!gameVer || gameVer !== logVer) {
+  throw new Error(`version drift: GAME_VERSION=${gameVer} but CHANGELOG.md top entry=${logVer}`);
+}
+// Expose the latest version + its notes to the site (for the "new since
+// your last visit" banner).
+const latestNotes = changelogSrc.split(/^## /m)[1].split('\n').slice(1).join(' ').trim();
+fs.mkdirSync(path.join(OUT, 'js'), { recursive: true });
+fs.writeFileSync(path.join(OUT, 'js', 'version.js'),
+  'window.OAKENFALL_LATEST=' + JSON.stringify({ ver: gameVer, notes: latestNotes.slice(0, 300) }) + ';\n');
 
 const meta = (src, key, fallback) => {
   const m = src.match(new RegExp('<!--\\s*' + key + ':\\s*(.*?)\\s*-->'));
