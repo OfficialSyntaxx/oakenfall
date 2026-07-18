@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.13.0
+Rivers & Bridges: a new Bridge building (20 wood + 6 planks, so it arrives
+with sawmill-era progression) placeable only on river tiles. Villagers
+path across bridges, opening the far bank's timber, stone, and hunting
+grounds. The river now counts as a natural moat in bandit-raid defense —
+each bridge erodes that bonus, so spanning the river is a real strategic
+trade-off. Farms adjacent to water gain +15% yield (irrigation).
+
 ## 1.12.1
 iPhone polish: removed the Google Fonts fetch (the game now makes zero
 network requests and works fully offline, honoring the project's hard
