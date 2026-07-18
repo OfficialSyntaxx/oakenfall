@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.12.1
+iPhone polish: removed the Google Fonts fetch (the game now makes zero
+network requests and works fully offline, honoring the project's hard
+constraint; text falls back to the system serif stack), added home-screen
+app support (theme color, status-bar style, and a generated oak
+apple-touch-icon at the repo root), a screen wake lock so the display
+doesn't dim mid-session, and all top-bar/minimap buttons enlarged to the
+44px minimum touch target.
+
 ## 1.12.0
 HUD quality-of-life: save/sound/fullscreen now live in a ⚙ overflow menu
 (freeing top-bar width on phones), the resource row's right edge fades to
