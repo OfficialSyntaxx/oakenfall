@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.14.0
+The living river update. Fords: two shallow rows per map where settlers can
+wade across slowly with no bridge. Winter now freezes the river — anything
+can cross the ice (the moat bonus disappears) but fishing halts until thaw,
+with ice-sheet rendering. Guard posts within 3 tiles of a bridge keep that
+crossing "watched" so it no longer erodes the moat, and raids narrate which
+unwatched bridge the raiders used. Road logistics: processors beside a road
+network connected to the Town Center run 12% faster. Legacy traits: settlers
+can become Brave (survived a raid — half morale loss from attacks) or
+Steadfast (a partner left — steadier morale). The traveling merchant now
+physically parks a cart beside the Town Center. Photo mode (📷 in the ⚙
+menu) captures a clean UI-free shot and shares/saves it. Critical fix: saves
+now fall back to localStorage when the host KV is absent — save/load on the
+website deploy was silently broken. Plus: an in-game event log in the Goals
+sheet, minimap size persisting across sessions, and assorted Phase 1 fixes.
+
 ## 1.13.0
 Rivers & Bridges: a new Bridge building (20 wood + 6 planks, so it arrives
 with sawmill-era progression) placeable only on river tiles. Villagers
