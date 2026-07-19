@@ -1,0 +1,10 @@
+{
+  "name": "oakenfall",
+  "version": "1.15.0",
+  "private": true,
+  "description": "Oakenfall — living-world villager simulation and site build.",
+  "scripts": {
+    "test": "cd game && node soak-test.js",
+    "build": "node site/build.js"
+  }
+}
