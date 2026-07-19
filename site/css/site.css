@@ -241,7 +241,7 @@ html[data-tod="day"] .hero-moon,html[data-tod="day"] .hero-stars{ display:none; 
 /* ---------- Play page ---------- */
 .page-play main{ display:flex; flex-direction:column; }
 .play-frame-wrap{
-  position:relative; height:calc(100svh - var(--head-h)); background:#0d0b07;
+  position:relative; height:100dvh; background:#0d0b07;
 }
 .play-frame-wrap iframe{
   position:absolute; inset:0; width:100%; height:100%; border:0; display:block;
@@ -264,17 +264,9 @@ html[data-tod="day"] .hero-moon,html[data-tod="day"] .hero-stars{ display:none; 
 .load-tiles i:nth-child(14){animation-delay:.55s}.load-tiles i:nth-child(15){animation-delay:.65s}
 .load-tiles i:nth-child(16){animation-delay:.75s}
 @keyframes tilein{ 0%,100%{opacity:.12} 50%{opacity:.85} }
+/* Play page = pure game surface: no site header or footer chrome. */
 .page-play .charter{ display:none; }
-.header-tab{
-  position:fixed; top:0; left:50%; transform:translate(-50%,-110%); z-index:41;
-  min-width:56px; min-height:30px; padding:2px 18px 6px;
-  background:rgba(21,18,12,.92); color:var(--amber); border:1px solid var(--iron);
-  border-top:none; border-radius:0 0 10px 10px; cursor:pointer; font-size:1rem;
-  transition:transform .3s;
-}
-.header-tab.show{ transform:translate(-50%,0); }
-.page-play .site-header{ transition:transform .3s; }
-.page-play .site-header.tucked{ transform:translateY(-100%); }
+.page-play .site-header{ display:none; }
 
 /* ---------- Chronicle (crier's board) ---------- */
 .board{ display:grid; gap:1.3rem; margin-top:1.5rem; }

@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.15.0
+Menu restructure and mobile HUD fixes. The Goals (📜) button and coins (💰)
+pill now open a single Hold Menu hub with four tabs — Goals, Research, Shop,
+Journal — backed by a real sheet-navigation stack (push/replace/back) with a
+header back-arrow; research is now reachable from the hub, not only by tapping
+the Town Center. The bottom sheet has a working drag-to-expand grabber (two
+detents). HUD: fixed the landscape day/season clock rendering under the
+minimap (root cause: an inline `right` style overrode the media query), fixed
+two dead `#hud`/`#sheet` selectors, and the landscape minimap now shrinks as
+intended. The Play page (`/play/`) drops the site header and the old floating
+return tab, so the game runs full-screen (100dvh) with no site chrome.
+
 ## 1.14.0
 The living river update. Fords: two shallow rows per map where settlers can
 wade across slowly with no bridge. Winter now freezes the river — anything

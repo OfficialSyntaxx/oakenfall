@@ -99,25 +99,14 @@
   /* ----- Seasonal foliage on the hero scene ----- */
   doc.setAttribute('data-season', season);
 
-  /* ----- Play page: loader + header tuck ----- */
+  /* ----- Play page: loader only. The site chrome (header/footer) is hidden
+     on the play page via CSS so the game runs full-screen with no route back
+     to the site — the game has its own fullscreen/return controls. ----- */
   var frame = document.getElementById('gameFrame');
   if(frame){
     var loader = document.getElementById('playLoading');
     frame.addEventListener('load', function(){
       if(loader) setTimeout(function(){ loader.classList.add('done'); }, 400);
-    });
-    // Tuck the header after a few seconds so the game gets the full screen.
-    // A small floating tab brings it back (a top-edge tap zone fought the
-    // iOS Safari URL-bar gesture).
-    var header = document.getElementById('siteHeader');
-    var tab = document.createElement('button');
-    tab.className = 'header-tab'; tab.textContent = '⌄'; tab.setAttribute('aria-label','Show site header');
-    document.body.appendChild(tab);
-    var tuckTimer = setTimeout(function(){ header.classList.add('tucked'); tab.classList.add('show'); }, 4000);
-    tab.addEventListener('click', function(){
-      header.classList.remove('tucked'); tab.classList.remove('show');
-      clearTimeout(tuckTimer);
-      tuckTimer = setTimeout(function(){ header.classList.add('tucked'); tab.classList.add('show'); }, 5000);
     });
   }
 
