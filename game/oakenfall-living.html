@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Oakenfall — Living Valley (Phases 1–3)</title>
+<style>
+  :root{
+    --night:#0B1410; --amber:#FFB454; --amber-dim:#C98A3B;
+    --parchment:#EFE6D2; --parchment-dim:#BDB29A;
+    --glass:rgba(16,26,22,.62); --glass-line:rgba(239,230,210,.16);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--night);color:var(--parchment);font-family:system-ui,sans-serif;
+    overflow:hidden;height:100dvh;touch-action:none}
+  #world{position:fixed;inset:0}
+  .glass{background:var(--glass);border:1px solid var(--glass-line);border-radius:12px;
+    backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+  #topbar{position:fixed;top:calc(8px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);
+    z-index:10;display:flex;gap:clamp(8px,2.6vw,18px);align-items:center;
+    padding:.5rem clamp(.7rem,2.6vw,1.2rem);font-family:ui-monospace,monospace;
+    font-size:clamp(.68rem,2.5vw,.82rem);max-width:calc(100vw - 12px);white-space:nowrap}
+  #topbar b{color:var(--amber);font-weight:600}
+  #season-pill{color:var(--parchment-dim)}
+  .demand{opacity:.25}.demand.hot{opacity:1;color:var(--amber)}
+  #hotbar{position:fixed;left:50%;transform:translateX(-50%);
+    bottom:calc(10px + env(safe-area-inset-bottom));z-index:10;display:flex;
+    gap:clamp(4px,1.4vw,9px);padding:.45rem;max-width:calc(100vw - 12px);
+    overflow-x:auto;scrollbar-width:none}
+  #hotbar::-webkit-scrollbar{display:none}
+  #hotbar button{flex:0 0 auto;width:clamp(52px,13vw,74px);height:clamp(44px,10vw,54px);
+    border-radius:9px;border:1px solid var(--glass-line);background:rgba(239,230,210,.06);
+    color:var(--parchment);font-family:ui-monospace,monospace;font-size:clamp(.48rem,1.7vw,.58rem);
+    letter-spacing:.03em;cursor:pointer;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:2px}
+  #hotbar button .ico{font-size:clamp(.95rem,3.4vw,1.15rem)}
+  #hotbar button.on{background:var(--amber);color:var(--night);border-color:var(--amber)}
+  @media (orientation:landscape) and (max-height:520px){
+    #hotbar{left:auto;right:calc(8px + env(safe-area-inset-right));bottom:50%;
+      transform:translate(0,50%);flex-direction:column;max-width:none;
+      max-height:calc(100vh - 16px);overflow-y:auto;overflow-x:hidden}
+    #topbar{left:10px;transform:none}
+  }
+  #inspector{position:fixed;left:50%;transform:translateX(-50%);
+    bottom:calc(72px + env(safe-area-inset-bottom));z-index:11;
+    width:min(350px,calc(100vw - 20px));padding:.9rem 1rem;display:none;
+    font-size:.84rem;line-height:1.45}
+  @media (orientation:landscape) and (max-height:520px){#inspector{left:10px;transform:none;bottom:10px}}
+  #inspector h3{font-size:1rem;color:var(--amber)}
+  #inspector h3 small{color:var(--parchment-dim);font-weight:400;font-size:.72rem}
+  #inspector .traits{color:var(--amber-dim);font-family:ui-monospace,monospace;font-size:.64rem;letter-spacing:.05em;text-transform:uppercase;margin-top:.1rem}
+  #inspector .thought{font-style:italic;color:var(--parchment-dim);margin-top:.3rem}
+  #inspector .fam,#inspector .mem{font-size:.74rem;color:var(--parchment-dim);margin-top:.35rem}
+  #inspector .fam b,#inspector .mem b{color:var(--parchment)}
+  #inspector .bars{display:flex;gap:8px;margin-top:.5rem}
+  #inspector .bar{flex:1}
+  #inspector .bar span{font-size:.58rem;font-family:ui-monospace,monospace;color:var(--parchment-dim)}
+  #inspector .bar i{display:block;height:5px;border-radius:3px;background:rgba(239,230,210,.15);overflow:hidden}
+  #inspector .bar i b{display:block;height:100%;background:var(--amber);border-radius:3px}
+  #inspector .close{position:absolute;top:6px;right:10px;cursor:pointer;color:var(--parchment-dim)}
+  #chronicle{position:fixed;top:calc(58px + env(safe-area-inset-top));right:8px;z-index:9;
+    width:min(258px,62vw);max-height:44vh;overflow-y:auto;padding:.7rem .9rem;
+    font-size:.73rem;line-height:1.5;display:none;color:var(--parchment-dim)}
+  #chronicle div{margin-bottom:.45rem;border-left:2px solid var(--amber-dim);padding-left:.5rem}
+  #chronicle b{color:var(--parchment)}
+  #chronicle .era{border-left-color:var(--amber);color:var(--parchment)}
+  #banner{position:fixed;top:calc(56px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);
+    z-index:12;padding:.5rem 1.2rem;font-family:ui-monospace,monospace;font-size:.72rem;
+    color:var(--amber);opacity:0;transition:opacity .5s;pointer-events:none;white-space:nowrap;text-align:center}
+  #banner.show{opacity:1}
+  #modal{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;
+    background:rgba(5,8,7,.72);padding:1rem}
+  #modal .card{max-width:370px;padding:1.5rem 1.4rem;text-align:center}
+  #modal h3{color:var(--amber);margin-bottom:.5rem;font-size:1.08rem}
+  #modal p{font-size:.85rem;color:var(--parchment-dim);line-height:1.55;font-style:italic}
+  #modal .opts{display:flex;gap:.6rem;margin-top:1.1rem}
+  #modal button{flex:1;padding:.65rem .5rem;border-radius:9px;border:1px solid var(--glass-line);
+    background:rgba(239,230,210,.07);color:var(--parchment);cursor:pointer;
+    font-family:ui-monospace,monospace;font-size:.62rem;letter-spacing:.08em;line-height:1.4}
+  #modal button.primary{background:var(--amber);color:var(--night);border-color:var(--amber)}
+</style>
+</head>
+<body>
+<div id="world"></div>
+
+<div id="topbar" class="glass">
+  <span id="season-pill">🌱 Spring, Y1</span>
+  <span>🌰 <b id="r-food">0</b></span>
+  <span>🪵 <b id="r-timber">0</b></span>
+  <span>👥 <b id="r-pop">0</b></span>
+  <span class="demand" id="d-house">🏠</span>
+  <span class="demand" id="d-farm">🌾</span>
+</div>
+
+<div id="hotbar" class="glass">
+  <button id="b-zone"><span class="ico">🖌️</span><span id="zone-label">Zoning off</span></button>
+  <button id="b-prio"><span class="ico">⚖️</span><span id="prio-label">Balanced</span></button>
+  <button id="b-chron"><span class="ico">📜</span>Chronicle</button>
+  <button id="b-speed"><span class="ico">⏩</span><span id="speed-label">1x</span></button>
+  <button id="b-debug"><span class="ico">🧠</span>Debug</button>
+</div>
+
+<div id="inspector" class="glass">
+  <span class="close" id="ins-close">✕</span>
+  <h3><span id="ins-name">—</span> <small id="ins-age"></small></h3>
+  <div class="traits" id="ins-traits">—</div>
+  <div class="thought" id="ins-thought">—</div>
+  <div class="fam" id="ins-fam"></div>
+  <div class="mem" id="ins-mem"></div>
+  <div class="bars">
+    <div class="bar"><span>Food</span><i><b id="bar-food"></b></i></div>
+    <div class="bar"><span>Rest</span><i><b id="bar-rest"></b></i></div>
+    <div class="bar"><span>Warmth</span><i><b id="bar-warm"></b></i></div>
+  </div>
+</div>
+
+<div id="chronicle" class="glass"></div>
+<div id="banner" class="glass"></div>
+
+<div id="modal">
+  <div class="card glass">
+    <h3 id="m-title"></h3>
+    <p id="m-text"></p>
+    <div class="opts">
+      <button class="primary" id="m-a"></button>
+      <button id="m-b"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.2/pixi.min.js"></script>
+<script>
+/* =====================================================================
+   OAKENFALL — LIVING VALLEY. Phases 1-3 in one file.
+   SIM (pure logic) · RENDER (PixiJS adapter) · HUD (DOM)
+   Transplant note: SIM has zero rendering calls; port it wholesale and
+   rewrite RENDER against the main game's sprites.
+   ===================================================================== */
+
+/* ---------- tunables (shrunk timescale for testing; scale up to ship) ---------- */
+const SEASON_LEN = 180;                 // seconds per season (spec ships 7 min)
+const YEAR = SEASON_LEN*4;
+const ADULT_AGE = 1.5, ELDER_BEFORE = 1.4;   // in years / years-before-lifespan
+const LIFESPAN_BASE = 6;                // in-game years
+const POP_CAP = 18;
+
+/* ---------- helpers ---------- */
+const TILE_W=72, TILE_H=36, GRID=11;
+const iso={to:(x,y)=>({x:(x-y)*TILE_W/2,y:(x+y)*TILE_H/2}),
+           from:(ix,iy)=>({x:iy/TILE_H+ix/TILE_W,y:iy/TILE_H-ix/TILE_W})};
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const rand=(a,b)=>a+Math.random()*(b-a);
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+/* ================================================================
+   SIM
+   ================================================================ */
+const FIRSTNAMES=['Bram','Wren','Odo','Sana','Tomas','Sarah','Edda','Finn','Mabel','Rook','Isolde','Pip','Greta','Alder','Nell','Cormac','Tilda','Bors','June','Hale','Ivo','Petra','Osric','Lark'];
+const SURNAMES=['Ashdown','Thorn','Millbrook','Oakes','Fenwick','Harrow','Bywater'];
+const TRAITS={
+  Lazy:'naps mid-work', Diligent:'works longer', Glutton:'eats early and often',
+  Hardy:'shrugs off the cold', Chilly:'seeks the fire', Social:'drifts toward company',
+  Loner:'wanders the edges', Forager:'gathers faster', EarlyRiser:'first one working',
+  NightOwl:'works late', Stargazer:'stops to watch the night sky', Whistler:'whistles while walking',
+};
+const SEASONS=[
+  {name:'Spring',ico:'🌱',warm:1.0,farm:1.0,tint:0xFFFFFF},
+  {name:'Summer',ico:'☀️',warm:0.6,farm:1.3,tint:0xFFF3DC},
+  {name:'Autumn',ico:'🍂',warm:1.2,farm:1.5,tint:0xFFD9B0},
+  {name:'Winter',ico:'❄️',warm:2.2,farm:0.0,tint:0xBFD0E8},
+];
+const sim={
+  time:0, speed:1,
+  seasonIdx:0, seasonT:0, year:1,
+  weather:'clear', weatherT:0, workMult:1,
+  resources:{food:35, timber:14},
+  priority:'balanced',
+  villagers:[], buildings:[], memorials:[],
+  zones:{},                    // 'x,y' -> 'grove'|'farm'|'homes'
+  chronicle:[], usedNames:new Set(), momentFired:new Set(),
+  blizzard:null,               // {phase:'warn'|'active', t, choice}
+  eraStats:{born:0,died:0,built:0,weddings:0},
+  hiddenAt:null,
+};
+function log(text,cls){
+  sim.chronicle.unshift({text,cls});
+  if(sim.chronicle.length>80)sim.chronicle.pop();
+  ui.renderChronicle();
+  if(cls!=='quiet')ui.banner(text);
+}
+
+/* ---- map ---- */
+const tiles={};
+for(let x=0;x<GRID;x++)for(let y=0;y<GRID;y++){
+  const water=(x>=8&&y<=2)||(x===7&&y===2)||(x===8&&y===3);
+  const forest=!water&&(x<=1||y<=1||x>=9||y>=9)&&!(x>=8&&y<=3);
+  tiles[x+','+y]={x,y,kind:water?'water':forest?'forest':'grass',building:null};
+}
+const CENTER={x:5,y:5};
+const tileAt=(x,y)=>tiles[x+','+y]||null;
+const freeGrass=t=>t&&t.kind==='grass'&&!t.building;
+
+/* ---- buildings ---- */
+let bSeq=0;
+function addBuilding(kind,x,y,state='done'){
+  const b={id:'b'+(bSeq++),kind,x,y,state,progress:0,owner:null,stage:1,needAcc:0,needN:0};
+  sim.buildings.push(b); tileAt(x,y).building=b;
+  render.addBuilding(b); return b;
+}
+function findBuildSite(zoneKind){
+  const near=t=>[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>{
+    const n=tileAt(t.x+dx,t.y+dy); return n&&n.building&&n.building.state==='done';});
+  const zoned=Object.entries(sim.zones).filter(([k,z])=>z===zoneKind).map(([k])=>tiles[k]).filter(freeGrass);
+  if(zoned.length){
+    zoned.sort((a,b)=>(Math.abs(a.x-CENTER.x)+Math.abs(a.y-CENTER.y))-(Math.abs(b.x-CENTER.x)+Math.abs(b.y-CENTER.y)));
+    return zoned.find(near)||zoned[0];
+  }
+  for(let r=1;r<GRID;r++)for(let dx=-r;dx<=r;dx++)for(let dy=-r;dy<=r;dy++){
+    if(Math.max(Math.abs(dx),Math.abs(dy))!==r)continue;
+    const t=tileAt(CENTER.x+dx,CENTER.y+dy);
+    if(freeGrass(t)&&near(t))return t;
+  }
+  return null;
+}
+
+/* ---- villagers ---- */
+let vSeq=1;
+function makeName(surname){
+  const free=FIRSTNAMES.filter(n=>!sim.usedNames.has(n));
+  const first=free.length?pick(free):'Settler'+vSeq;
+  sim.usedNames.add(first);
+  return {first, sur: surname||pick(SURNAMES)};
+}
+function spawnVillager(opts={}){
+  const rng=mulberry32(vSeq*7919+3);
+  const nm=makeName(opts.surname);
+  const keys=Object.keys(TRAITS);
+  const conflict={Lazy:'Diligent',Diligent:'Lazy',Social:'Loner',Loner:'Social',Hardy:'Chilly',Chilly:'Hardy'};
+  let t1,t2;
+  if(opts.inherit){ t1=Math.random()<.5?pick(opts.inherit):keys[Math.floor(rng()*keys.length)]; }
+  else t1=keys[Math.floor(rng()*keys.length)];
+  do{ t2=(opts.inherit&&Math.random()<.5)?pick(opts.inherit):keys[Math.floor(rng()*keys.length)];
+  }while(t2===t1||conflict[t1]===t2);
+  const v={
+    id:'v'+(vSeq++), first:nm.first, sur:nm.sur,
+    name:nm.first+' '+nm.sur,
+    traits:[t1,t2],
+    age:opts.age??rand(1.8,3.2), lifespan:LIFESPAN_BASE*rand(0.85,1.15),
+    stage:'adult',
+    needs:{food:rand(65,90),rest:rand(65,90),warmth:rand(70,95)},
+    jitter:{speed:0.85+rng()*0.3,decay:0.85+rng()*0.3,work:0.85+rng()*0.3},
+    pos:opts.pos||{x:CENTER.x+rand(-1,1),y:CENTER.y+rand(-1,1)},
+    target:null,task:'Idle',taskT:0,taskMin:0,taskData:null,
+    home:null,partner:null,parents:opts.parents||null,children:[],
+    relations:[],   // {id, type:'friend'|'rival', s}
+    memories:[], emote:'',eatCooldown:0,thought:'taking in the valley',
+    stuckT:0,lastPos:{x:0,y:0},mourn:0,
+  };
+  if(v.traits.includes('Hardy'))v.lifespan+=0.8;
+  if(v.age<ADULT_AGE)v.stage='child';
+  sim.villagers.push(v); render.addVillager(v);
+  return v;
+}
+const byId=id=>sim.villagers.find(v=>v.id===id);
+const has=(v,t)=>v.traits.includes(t);
+const adults=()=>sim.villagers.filter(v=>v.stage!=='child');
+function remember(v,text){v.memories.unshift(text);if(v.memories.length>4)v.memories.pop()}
+
+/* ---- relationships ---- */
+function relTo(v,o){return v.relations.find(r=>r.id===o.id)}
+function bumpRel(v,o,amount){
+  if(v.stage==='child'||o.stage==='child')return;
+  let r=relTo(v,o);
+  if(!r){
+    if(v.relations.length>=5)return;
+    const rivalry=(has(v,'Diligent')&&has(o,'Lazy'))||(has(v,'Lazy')&&has(o,'Diligent'));
+    r={id:o.id,type:rivalry?'rival':'friend',s:0}; v.relations.push(r);
+  }
+  const mult=r.type==='rival'?-0.6:(has(v,'Social')?1.5:has(v,'Loner')?0.6:1);
+  r.s=clamp(r.s+amount*mult,-100,100);
+  if(r.type==='friend'&&r.s>40&&!sim.momentFired.has('fr'+[v.id,o.id].sort().join())){
+    sim.momentFired.add('fr'+[v.id,o.id].sort().join());
+    log(`<b>${v.first}</b> and <b>${o.first}</b> became fast friends.`);
+    remember(v,`became friends with ${o.first}`); remember(o,`became friends with ${v.first}`);
+  }
+  if(r.type==='rival'&&r.s<-25&&!sim.momentFired.has('rv'+[v.id,o.id].sort().join())){
+    sim.momentFired.add('rv'+[v.id,o.id].sort().join());
+    log(`<b>${v.first}</b> and <b>${o.first}</b> can't stand each other's pace of work.`);
+  }
+}
+let relAcc=0;
+function relationsTick(dt){
+  relAcc+=dt; if(relAcc<10)return; relAcc=0;
+  const vs=sim.villagers;
+  for(let i=0;i<vs.length;i++)for(let j=i+1;j<vs.length;j++){
+    const a=vs[i],b=vs[j];
+    if(Math.hypot(a.pos.x-b.pos.x,a.pos.y-b.pos.y)<1.3){
+      bumpRel(a,b,6); bumpRel(b,a,6);
+    }
+  }
+}
+/* courtship + births, rolled per season */
+function shareParent(a,b){
+  if(!a.parents||!b.parents)return false;
+  return a.parents.some(p=>b.parents.includes(p));
+}
+function seasonSocial(){
+  const gov=clamp((POP_CAP-sim.villagers.length)/POP_CAP,0,1);
+  /* weddings */
+  for(const v of adults()){
+    if(v.partner)continue;
+    const cand=v.relations.filter(r=>r.type==='friend'&&r.s>60).map(r=>byId(r.id))
+      .filter(o=>o&&o.stage!=='child'&&!o.partner&&!shareParent(o,v));
+    if(cand.length&&Math.random()<0.6){
+      const o=cand[0];
+      v.partner=o.id;o.partner=v.id;
+      o.sur=v.sur;o.name=o.first+' '+o.sur;
+      const home=v.home||o.home;
+      if(home){v.home=home;o.home=home;home.owner=v.id;}
+      sim.eraStats.weddings++;
+      log(`🎉 <b>${v.first}</b> and <b>${o.first}</b> were wed beneath the oak.`);
+      remember(v,`married ${o.first}`);remember(o,`married ${v.first}`);
+      sim.villagers.forEach(x=>x.emote='🎉');
+    }
+  }
+  /* births */
+  for(const v of adults()){
+    if(!v.partner||!v.home)continue;
+    const o=byId(v.partner); if(!o||o.id<v.id)continue;   // one roll per couple
+    if(sim.resources.food>sim.villagers.length*5&&Math.random()<0.55*gov){
+      const c=spawnVillager({age:0,surname:v.sur,parents:[v.id,o.id],
+        inherit:[...v.traits,...o.traits],pos:{x:v.home.x,y:v.home.y}});
+      c.home=v.home;v.children.push(c.id);o.children.push(c.id);
+      sim.eraStats.born++;
+      log(`👶 A child was born to the ${v.sur}s — welcome, <b>${c.first}</b>.`);
+      remember(v,`welcomed ${c.first}`);remember(o,`welcomed ${c.first}`);
+    }
+  }
+  /* migration */
+  if(Math.random()<0.8*gov&&sim.resources.food>40){
+    const nv=spawnVillager({pos:{x:0.3,y:9.6}});
+    log(`<b>${nv.first} ${nv.sur}</b> arrived, drawn by the smoke on the horizon.`);
+    remember(nv,'arrived with everything they owned');
+  }
+}
+
+/* ---- aging & death ---- */
+function agingTick(dt){
+  const dy=dt/YEAR;
+  for(const v of [...sim.villagers]){
+    v.age+=dy;
+    v.mourn=Math.max(0,v.mourn-dt);
+    if(v.stage==='child'&&v.age>=ADULT_AGE){
+      v.stage='adult';
+      log(`<b>${v.first} ${v.sur}</b> came of age and joined the workers.`);
+      remember(v,'came of age');
+    } else if(v.stage==='adult'&&v.age>=v.lifespan-ELDER_BEFORE){
+      v.stage='elder';
+      log(`<b>${v.first}</b> is an elder now — slower, and wiser.`,'quiet');
+    } else if(v.age>=v.lifespan){
+      passVillager(v);
+    }
+  }
+}
+function passVillager(v){
+  /* cleanup EVERY reference — the dangling-id trap */
+  sim.villagers=sim.villagers.filter(x=>x!==v);
+  render.removeVillager(v);
+  sim.villagers.forEach(o=>{
+    o.relations=o.relations.filter(r=>r.id!==v.id);
+    if(o.partner===v.id){o.partner=null;o.mourn=SEASON_LEN;remember(o,`lost ${v.first}`);}
+    if(o.parents&&o.parents.includes(v.id))o.mourn=Math.max(o.mourn,SEASON_LEN*0.5);
+  });
+  if(v.home&&v.home.owner===v.id){
+    const heir=sim.villagers.find(o=>o.home===v.home);
+    v.home.owner=heir?heir.id:null;
+  }
+  if(ui.inspected===v)ui.closeInspect();
+  sim.eraStats.died++;
+  const mem=v.memories.length?` They say ${v.first} never forgot the day they ${v.memories[v.memories.length-1]}.`:'';
+  log(`🕊️ <b>${v.first} ${v.sur}</b> passed peacefully at ${Math.floor(v.age*12)} seasons old.${mem}`);
+  /* memorial grove */
+  const spot={x:2+sim.memorials.length%6,y:10};
+  sim.memorials.push({name:v.first,x:spot.x,y:spot.y});
+  render.addMemorial(spot);
+}
+
+/* ---- utility AI ---- */
+const CRIT=85;
+const urgency=n=>{const d=(100-n)/100;return d*d*100};
+function scoreActions(v){
+  const R=sim.resources, pr=sim.priority;
+  const list=[];
+  let eat=urgency(v.needs.food)*(has(v,'Glutton')?1.5:1);
+  if(R.food<1||v.eatCooldown>0)eat=0;
+  list.push({name:'Eat',score:eat});
+  list.push({name:'Rest',score:urgency(v.needs.rest)*(has(v,'Lazy')?1.5:1)});
+  list.push({name:'Warm',score:urgency(v.needs.warmth)*(has(v,'Chilly')?1.6:has(v,'Hardy')?0.5:1)
+    +(sim.blizzard&&sim.blizzard.phase==='active'?25:0)});
+  if(v.stage==='child'){
+    list.push({name:'Play',score:35});
+    return list.sort((a,b)=>b.score-a.score);
+  }
+  const wm=sim.workMult*(v.stage==='elder'?0.6:1);
+  const glut=foodGlut();
+  let forage=40*(has(v,'Diligent')?1.4:1)*v.jitter.work*wm*(0.3+0.7*glut);
+  if(pr==='food')forage+=25; if(pr==='build')forage-=10;
+  if(R.food<sim.villagers.length*4)forage+=30;
+  list.push({name:'Forage',score:forage});
+  const farms=sim.buildings.filter(b=>b.kind==='farm'&&b.state==='done');
+  if(farms.length&&SEASONS[sim.seasonIdx].farm>0)
+    list.push({name:'Farm',score:(44+(pr==='food'?20:0))*v.jitter.work*wm*(0.3+0.7*glut)});
+  let chop=36*(has(v,'Diligent')?1.3:1)*v.jitter.work*wm;
+  if(pr==='build')chop+=25; if(pr==='food')chop-=10;
+  if(R.timber>70)chop-=20;
+  list.push({name:'Chop',score:chop});
+  const pending=sim.buildings.find(b=>b.state==='building');
+  const homeless=adults().filter(x=>!x.home).length;
+  const farmWanted=farms.length<Math.floor(sim.villagers.length/4)&&demand().farm;
+  let build=0;
+  if(pending)build=55;
+  else if(homeless>0&&R.timber>=20)build=50;
+  else if(farmWanted&&R.timber>=10)build=46;
+  if(pr==='build')build+=20;
+  list.push({name:'Build',score:build});
+  list.push({name:'Wander',score:8+(has(v,'Social')?6:0)+(has(v,'Loner')?6:0)});
+  return list.sort((a,b)=>b.score-a.score);
+}
+function demand(){
+  return {
+    house: adults().some(v=>!v.home),
+    farm: sim.resources.food<sim.villagers.length*8&&SEASONS[sim.seasonIdx].farm>0,
+  };
+}
+function walkableNear(x,y){
+  /* clamp to a reachable non-water tile center-ish point */
+  let bx=clamp(Math.round(x),1,GRID-2), by=clamp(Math.round(y),1,GRID-2);
+  if(tileAt(bx,by)&&tileAt(bx,by).kind!=='water')return {x:bx+rand(-0.3,0.3),y:by+rand(-0.3,0.3)};
+  /* search outward for the nearest walkable */
+  for(let r=1;r<4;r++)for(let dx=-r;dx<=r;dx++)for(let dy=-r;dy<=r;dy++){
+    const t=tileAt(clamp(bx+dx,1,GRID-2),clamp(by+dy,1,GRID-2));
+    if(t&&t.kind!=='water')return {x:t.x+rand(-0.3,0.3),y:t.y+rand(-0.3,0.3)};
+  }
+  return {x:CENTER.x,y:CENTER.y};
+}
+function startTask(v,name){
+  v.task=name;v.taskT=0;v.taskMin=rand(8,14);v.taskData=null;
+  const fire=sim.buildings.find(b=>b.kind==='fire');
+  const fallback={x:CENTER.x,y:CENTER.y};
+  const slot=b=>b?({x:b.x+rand(-0.6,0.6),y:b.y+rand(-0.6,0.6)}):({x:fallback.x+rand(-0.6,0.6),y:fallback.y+rand(-0.6,0.6)});
+  switch(name){
+    case 'Eat':v.target=slot(fire);v.thought='is hungry and heading to the fire';v.emote='🍞';break;
+    case 'Warm':v.target=slot(fire);v.thought='is warming up by the fire';v.emote='❄️';break;
+    case 'Rest':
+      if(has(v,'Lazy')&&Math.random()<0.5){v.target=null;v.thought='is napping right where they stood. Again.';}
+      else{v.target=v.home?slot(v.home):slot(fire);v.thought=v.home?'is heading home to rest':'is dozing by the fire';}
+      v.emote='💤';break;
+    case 'Forage':{
+      const groves=Object.entries(sim.zones).filter(([k,z])=>z==='grove').map(([k])=>tiles[k]);
+      const spots=groves.length?groves:Object.values(tiles).filter(t=>t.kind==='forest');
+      const s=pick(spots);v.target={x:s.x+rand(-0.35,0.35),y:s.y+rand(-0.35,0.35)};
+      v.thought='is gathering acorns';v.emote='🌰';break;}
+    case 'Farm':{
+      const f=pick(sim.buildings.filter(b=>b.kind==='farm'&&b.state==='done'));
+      v.taskData=f;v.target=slot(f);v.thought='is tending the fields';v.emote='🌾';break;}
+    case 'Chop':{
+      const s=pick(Object.values(tiles).filter(t=>t.kind==='forest'));
+      v.target={x:s.x+rand(-0.35,0.35),y:s.y+rand(-0.35,0.35)};v.thought='is cutting timber';v.emote='🪵';break;}
+    case 'Build':{
+      let site=sim.buildings.find(b=>b.state==='building');
+      if(!site){
+        const homeless=adults().some(x=>!x.home);
+        const kind=homeless&&sim.resources.timber>=20?'hut':'farm';
+        const cost=kind==='hut'?20:10;
+        if(sim.resources.timber<cost){startTask(v,'Wander');return}
+        const t=findBuildSite(kind==='hut'?'homes':'farm');
+        if(!t){startTask(v,'Wander');return}
+        sim.resources.timber-=cost;
+        site=addBuilding(kind,t.x,t.y,'building');
+        log(`<b>${v.first}</b> broke ground on a new ${kind}.`,'quiet');
+      }
+      v.taskData=site;v.target={x:site.x,y:site.y};
+      v.thought='is building';v.emote='🔨';break;}
+    case 'Play':{
+      v.target=walkableNear(v.pos.x+rand(-2,2),v.pos.y+rand(-2,2));
+      v.taskMin=3;v.thought='is playing chase between the huts';v.emote='✨';break;}
+    default:{
+      v.target=walkableNear(v.pos.x+rand(-2.5,2.5),v.pos.y+rand(-2.5,2.5));
+      const friends=v.relations.filter(r=>r.type==='friend'&&r.s>40).map(r=>byId(r.id)).filter(Boolean);
+      if(friends.length&&Math.random()<0.6){
+        const f=pick(friends);v.target=walkableNear(f.pos.x,f.pos.y);
+        v.thought=`is spending time with ${f.first}`;v.emote='💬';
+      } else if(has(v,'Social')){const o=pick(adults().filter(o=>o!==v));
+        if(o){v.target=walkableNear(o.pos.x,o.pos.y);}
+        v.thought='is looking for company';v.emote='💬';
+      } else if(has(v,'Stargazer')&&sim.seasonT/SEASON_LEN>0.7){
+        v.target=null;v.thought='stopped to watch the sky';v.emote='✨';
+      } else if(has(v,'Loner')){v.target=walkableNear(pick([1,GRID-2]),rand(1,GRID-2));v.thought='wants some quiet';v.emote='';}
+      else{v.thought='is stretching their legs';v.emote=has(v,'Whistler')?'♪':'';}
+    }
+  }
+}
+function decideTick(v){
+  const scores=scoreActions(v);
+  v.debugScores=scores.slice(0,3);
+  const top=scores[0];
+  const critical=Object.values(v.needs).some(n=>urgency(n)>CRIT);
+  const cur=scores.find(s=>s.name===v.task);
+  const curScore=cur?cur.score:0;
+  if(v.task==='Idle'||v.taskT>v.taskMin||critical){
+    if(top.name!==v.task&&top.score>curScore+(critical?0:20))startTask(v,top.name);
+    else if(v.task==='Idle')startTask(v,top.name);
+  }
+}
+function foodGlut(){ // diminishing returns: full stores kill the incentive to gather
+  const soft=Math.max(60,sim.villagers.length*30);
+  return clamp(1-(sim.resources.food-soft)/(soft*2),0.05,1);
+}
+function taskArrivedTick(v,dt){
+  const R=sim.resources;
+  const ration=sim.blizzard&&sim.blizzard.choice==='ration'?0.5:1;
+  switch(v.task){
+    case 'Eat':{
+      const amount=Math.min(R.food,dt*8*ration);
+      R.food-=amount;v.needs.food=clamp(v.needs.food+amount*3,0,100);
+      if(v.needs.food>90||R.food<=0){v.eatCooldown=60;startTask(v,'Idle');}break;}
+    case 'Warm':v.needs.warmth=clamp(v.needs.warmth+dt*10,0,100);
+      if(v.needs.warmth>92&&!(sim.blizzard&&sim.blizzard.phase==='active'))startTask(v,'Idle');break;
+    case 'Rest':v.needs.rest=clamp(v.needs.rest+dt*(v.home?7:4.5),0,100);
+      if(v.needs.rest>92)startTask(v,'Idle');break;
+    case 'Forage':R.food+=dt*(has(v,'Forager')?2.2:1.4)*v.jitter.work*sim.workMult*foodGlut();break;
+    case 'Farm':R.food+=dt*2.6*v.jitter.work*sim.workMult*SEASONS[sim.seasonIdx].farm*foodGlut();break;
+    case 'Chop':R.timber+=dt*0.9*v.jitter.work*sim.workMult;break;
+    case 'Build':{
+      const b=v.taskData;
+      if(!b||b.state==='done'){startTask(v,'Idle');break}
+      b.progress+=dt/(b.kind==='hut'?20:12);
+      render.updateBuilding(b);
+      if(b.progress>=1){
+        b.state='done';render.updateBuilding(b);
+        sim.eraStats.built++;
+        if(b.kind==='hut'){
+          const hm=adults().find(x=>!x.home);
+          if(hm){hm.home=b;b.owner=hm.id;
+            const p=hm.partner&&byId(hm.partner);if(p&&!p.home)p.home=b;
+            log(`A hut was finished — <b>${hm.first}</b> moved in.`);
+            remember(hm,'moved into a hut of their own');}
+          else log('A hut was finished.');
+        } else log('New fields were cut into the moss.');
+        remember(v,`built a ${b.kind}`);
+        startTask(v,'Idle');
+      }break;}
+    case 'Play':if(v.taskT>3)startTask(v,'Play');break;
+    case 'Wander':if(v.taskT>4)startTask(v,'Idle');break;
+  }
+}
+function needsTick(v,dt){
+  const d=v.jitter.decay, s=SEASONS[sim.seasonIdx];
+  const bliz=sim.blizzard&&sim.blizzard.phase==='active';
+  const warmMult=s.warm*(bliz?(sim.blizzard.choice==='burn'?1:3):1);
+  v.needs.food=clamp(v.needs.food-dt*0.45*d*(has(v,'Glutton')?1.3:1),0,100);
+  v.needs.rest=clamp(v.needs.rest-dt*0.35*d,0,100);
+  v.needs.warmth=clamp(v.needs.warmth-dt*0.22*d*warmMult*(has(v,'Hardy')?0.5:has(v,'Chilly')?1.4:1),0,100);
+  v.eatCooldown=Math.max(0,v.eatCooldown-dt);
+  if(v.needs.food<8&&!sim.momentFired.has(v.id+'hunger')){
+    sim.momentFired.add(v.id+'hunger');
+    log(`<b>${v.first}</b> went hungry — the stores ran dry.`);
+  }
+}
+function moveTick(v,dt){
+  if(!v.target){v.stuckT=0;v.progDist=null;return true}
+  const dx=v.target.x-v.pos.x,dy=v.target.y-v.pos.y;
+  const dist=Math.hypot(dx,dy);
+  if(dist<0.22){v.target=null;v.progDist=null;return true}
+  const sp=(v.stage==='elder'?0.75:v.stage==='child'?1.25:1.1)*v.jitter.speed*(v.task==='Wander'?0.7:1);
+  const step=Math.min(sp*dt,dist);
+  v.pos.x+=dx/dist*step;v.pos.y+=dy/dist*step;
+  /* stuck = failed to get meaningfully closer than our best-so-far within a time budget */
+  if(v.progDist==null||dist<v.progDist-0.25){v.progDist=dist;v.stuckT=0;}
+  else{
+    v.stuckT+=dt;
+    const budget=(dist/Math.max(sp,0.3))+4;   // expected travel time + slack
+    if(v.stuckT>budget){v.stuckT=0;v.progDist=null;v.target=null;startTask(v,'Idle');
+      if(typeof console!=='undefined'&&console.warn)console.warn('watchdog freed',v.first);}
+  }
+  return false;
+}
+
+/* ---- seasons, weather, disaster ---- */
+function seasonTick(dt){
+  sim.seasonT+=dt;
+  /* weather rolls */
+  sim.weatherT-=dt;
+  if(sim.weatherT<=0){
+    const winter=sim.seasonIdx===3;
+    sim.weather=winter?(Math.random()<0.6?'snow':'clear')
+                      :(Math.random()<0.3?'rain':'clear');
+    sim.weatherT=rand(40,90);
+    sim.workMult=sim.weather==='clear'?1:sim.weather==='rain'?0.8:0.7;
+    render.setWeather(sim.weather);
+  }
+  /* blizzard event: once, mid-winter */
+  if(sim.seasonIdx===3&&!sim.blizzard&&sim.seasonT>SEASON_LEN*0.35&&sim.year>=1&&sim.time>240){
+    sim.blizzard={phase:'warn',t:20,choice:null};
+    ui.modal('A blizzard is coming','The wind has turned. The village has moments to prepare.',
+      'Burn extra timber<br>(−15 🪵, stay warm)','Ration the food<br>(stores last, bellies grumble)',
+      c=>{sim.blizzard.choice=c==='a'?'burn':'ration';
+        if(c==='a')sim.resources.timber=Math.max(0,sim.resources.timber-15);
+        log(sim.blizzard.choice==='burn'
+          ?'The village chose to burn timber through the storm.'
+          :'The village chose to ration the stores.','quiet');});
+  }
+  if(sim.blizzard){
+    sim.blizzard.t-=dt;
+    if(sim.blizzard.phase==='warn'&&sim.blizzard.t<=0){
+      if(!sim.blizzard.choice)sim.blizzard.choice='ration';
+      ui.closeModal();
+      sim.blizzard.phase='active';sim.blizzard.t=50;
+      sim.weather='snow';render.setWeather('storm');
+      log('❄️ The blizzard struck Oakenfall.');
+    } else if(sim.blizzard.phase==='active'&&sim.blizzard.t<=0){
+      log('The blizzard passed. The village held.');
+      sim.villagers.forEach(v=>remember(v,'weathered the great blizzard'));
+      sim.blizzard='done';
+      render.setWeather(sim.weather='clear');
+    }
+  }
+  /* season change */
+  if(sim.seasonT>=SEASON_LEN){
+    sim.seasonT=0;
+    /* hut growth stages: resident thriving all season → cottage */
+    sim.buildings.filter(b=>b.kind==='hut'&&b.state==='done'&&b.stage===1).forEach(b=>{
+      if(b.needN>0&&b.needAcc/b.needN>70){
+        b.stage=2;render.updateBuilding(b);
+        const o=byId(b.owner);
+        log(`The ${o?o.sur+' ':''}hut grew into a cottage.`);
+      }
+      b.needAcc=0;b.needN=0;
+    });
+    sim.seasonIdx=(sim.seasonIdx+1)%4;
+    if(sim.seasonIdx===0){
+      sim.year++;
+      const e=sim.eraStats;
+      log(`<b>Year ${sim.year-1} in Oakenfall:</b> ${e.born} born, ${e.died} passed, ${e.built} raised, ${e.weddings} wed.`,'era');
+      sim.eraStats={born:0,died:0,built:0,weddings:0};
+    }
+    if(sim.seasonIdx!==3)sim.blizzard=null;
+    const s=SEASONS[sim.seasonIdx];
+    log(`${s.ico} ${s.name} came to the valley.`,'quiet');
+    ui.banner(`${s.ico} ${s.name}, Year ${sim.year}`);
+    render.setSeason(sim.seasonIdx);
+    seasonSocial();
+  }
+  /* accumulate resident wellbeing for growth stages (sampled) */
+  if(Math.random()<dt){
+    sim.buildings.filter(b=>b.kind==='hut'&&b.owner).forEach(b=>{
+      const o=byId(b.owner);if(!o)return;
+      b.needAcc+=(o.needs.food+o.needs.rest+o.needs.warmth)/3;b.needN++;
+    });
+  }
+}
+
+/* ---- master tick ---- */
+let aiAcc=0;
+function simTick(dt){
+  sim.time+=dt;
+  seasonTick(dt);
+  relationsTick(dt);
+  agingTick(dt);
+  aiAcc+=dt;
+  const decide=aiAcc>=0.25;if(decide)aiAcc=0;
+  sim.villagers.forEach(v=>{
+    needsTick(v,dt);
+    v.taskT+=dt;
+    const arrived=moveTick(v,dt);
+    if(arrived&&v.task!=='Idle')taskArrivedTick(v,dt);
+    if(decide)decideTick(v);
+  });
+}
+
+/* ---- offline ---- */
+function simulateAway(seconds){
+  const s=Math.min(seconds,12*3600);
+  const w=adults().length;
+  const foodGain=w*0.5*s*0.35*(SEASONS[sim.seasonIdx].farm>0?1:0.6);
+  const timberGain=w*0.5*s*0.14;
+  sim.resources.food+=foodGain;sim.resources.timber+=timberGain;
+  const lines=[`The village gathered ${Math.floor(foodGain)} 🌰 and ${Math.floor(timberGain)} 🪵.`];
+  let built=0;
+  while(sim.resources.timber>=20&&adults().some(v=>!v.home)&&built<2){
+    const t=findBuildSite('homes');if(!t)break;
+    sim.resources.timber-=20;
+    const b=addBuilding('hut',t.x,t.y,'done');
+    const hm=adults().find(v=>!v.home);
+    if(hm){hm.home=b;b.owner=hm.id;lines.push(`A hut went up — <b>${hm.first}</b> moved in.`);}
+    built++;
+  }
+  if(s>180){
+    const vs=adults();
+    if(vs.length>=2&&Math.random()<0.5){
+      const a=pick(vs),b=pick(vs.filter(x=>x!==a));
+      if(b){bumpRel(a,b,50);bumpRel(b,a,50);
+        lines.push(`<b>${a.first}</b> and <b>${b.first}</b> grew close while you were gone.`);}
+    }
+  }
+  lines.forEach(l=>sim.chronicle.unshift({text:l}));
+  ui.renderChronicle();
+  return lines;
+}
+
+/* ================================================================
+   RENDER
+   ================================================================ */
+const app=new PIXI.Application({resizeTo:window,antialias:true,backgroundColor:0x0B1410,
+  autoDensity:true,resolution:Math.min(window.devicePixelRatio||1,2)});
+document.getElementById('world').appendChild(app.view);
+const worldC=new PIXI.Container();app.stage.addChild(worldC);
+const groundL=new PIXI.Container(),propL=new PIXI.Container();propL.sortableChildren=true;
+worldC.addChild(groundL,propL);
+const weatherL=new PIXI.Container();app.stage.addChild(weatherL);
+const tintO=new PIXI.Graphics();tintO.blendMode=PIXI.BLEND_MODES.MULTIPLY;app.stage.addChild(tintO);
+
+function diamond(g,w,h,c,a=1){g.beginFill(c,a);g.moveTo(0,-h/2);g.lineTo(w/2,0);g.lineTo(0,h/2);g.lineTo(-w/2,0);g.closePath();g.endFill()}
+function blockG(g,w,h,d,top,l,r){
+  g.beginFill(l);g.moveTo(-w/2,0);g.lineTo(0,h/2);g.lineTo(0,h/2+d);g.lineTo(-w/2,d);g.closePath();g.endFill();
+  g.beginFill(r);g.moveTo(w/2,0);g.lineTo(0,h/2);g.lineTo(0,h/2+d);g.lineTo(w/2,d);g.closePath();g.endFill();
+  if(top!==null)diamond(g,w,h,top);
+}
+const GC=[0x3E6B44,0x44734A,0x39623F];
+const zoneOverlays={};
+Object.values(tiles).forEach(t=>{
+  const g=new PIXI.Graphics();
+  if(t.kind==='water')blockG(g,TILE_W,TILE_H,6,0x2A5866,0x1E4450,0x173741);
+  else blockG(g,TILE_W,TILE_H,10,GC[(t.x*7+t.y*13)%3],0x2B4A30,0x223B27);
+  const p=iso.to(t.x,t.y);g.x=p.x;g.y=p.y;groundL.addChild(g);
+  if(t.kind==='forest'){
+    const tr=new PIXI.Graphics();
+    tr.beginFill(0x4C331E);tr.drawRect(-3,-12,6,14);tr.endFill();
+    [[30,22,-16],[22,16,-26],[13,10,-34]].forEach(([w,h,dy],i)=>{
+      tr.beginFill(i%2?0x244A2D:0x2E5A38);
+      tr.moveTo(0,dy-h/2);tr.lineTo(w/2,dy);tr.lineTo(0,dy+h/2);tr.lineTo(-w/2,dy);tr.closePath();tr.endFill();
+    });
+    tr.x=p.x;tr.y=p.y-2;tr.zIndex=t.x+t.y;propL.addChild(tr);
+  }
+  const z=new PIXI.Graphics();
+  z.x=p.x;z.y=p.y;z.visible=false;groundL.addChild(z);
+  zoneOverlays[t.x+','+t.y]=z;
+});
+const ZONE_COLORS={grove:0x7FA653,farm:0xC9A84C,homes:0xFFB454};
+function refreshZones(){
+  Object.entries(zoneOverlays).forEach(([k,z])=>{
+    const kind=sim.zones[k];
+    z.clear();
+    if(kind){diamond(z,TILE_W-6,TILE_H-3,ZONE_COLORS[kind],0.22);z.visible=true}
+    else z.visible=false;
+  });
+}
+const render={
+  vSprites:{},bSprites:{},
+  addVillager(v){
+    const c=new PIXI.Container();
+    const g=new PIXI.Graphics();
+    const tunics=[0x8F6E36,0x6E4B62,0x4A6E8F,0x7A4E2A,0x5E7A3A];
+    const sc=v.stage==='child'?0.65:1;
+    g.beginFill(0xE8D9B8);g.drawCircle(0,-10*sc,3.4*sc);g.endFill();
+    g.beginFill(pick(tunics));g.drawRoundedRect(-3*sc,-7*sc,6*sc,8*sc,2);g.endFill();
+    const emote=new PIXI.Text('',{fontSize:12});emote.anchor.set(0.5);emote.y=-22*sc;
+    const dbg=new PIXI.Text('',{fontSize:8,fill:0xFFB454,fontFamily:'monospace'});
+    dbg.anchor.set(0.5);dbg.y=-33;dbg.visible=false;
+    c.addChild(g,emote,dbg);c.emote=emote;c.dbg=dbg;c.body=g;c.vscale=sc;
+    propL.addChild(c);this.vSprites[v.id]=c;
+  },
+  removeVillager(v){
+    const s=this.vSprites[v.id];
+    if(s){propL.removeChild(s);s.destroy({children:true});delete this.vSprites[v.id]}
+  },
+  growVillager(v){ /* child → adult: rebuild sprite */
+    this.removeVillager(v);this.addVillager(v);
+  },
+  addBuilding(b){
+    const c=new PIXI.Container();
+    const p=iso.to(b.x,b.y);c.x=p.x;c.y=p.y-2;c.zIndex=b.x+b.y+0.5;
+    propL.addChild(c);this.bSprites[b.id]=c;this.updateBuilding(b);
+  },
+  updateBuilding(b){
+    const c=this.bSprites[b.id];c.removeChildren();
+    const g=new PIXI.Graphics();
+    if(b.kind==='fire'){
+      g.beginFill(0xFFB454,0.15);g.drawEllipse(0,4,40,18);g.endFill();
+      g.beginFill(0x643F21);g.drawRoundedRect(-11,2,22,5,2);g.endFill();
+      g.beginFill(0xFF9838);g.moveTo(-6,4);g.quadraticCurveTo(-8,-8,0,-15);g.quadraticCurveTo(8,-8,6,4);g.closePath();g.endFill();
+    } else if(b.kind==='farm'){
+      if(b.state==='building'){diamond(g,(TILE_W-8)*b.progress,(TILE_H-4)*b.progress,0x6E4B2A,0.7);}
+      else{
+        diamond(g,TILE_W-8,TILE_H-4,0x6E4B2A);
+        g.lineStyle(2,0x59391F,1);
+        for(let i=-2;i<=2;i++){g.moveTo(i*10-16,-i*2+8);g.lineTo(i*10+16,-i*2-8);}
+        g.lineStyle(0);
+        for(let i=0;i<7;i++){const a=(i*97)%28-14,bb=(i*53)%12-6;
+          g.beginFill(0x7FA653);g.drawCircle(a,bb-2,2.2);g.endFill();}
+      }
+    } else if(b.state==='building'){
+      const h=Math.max(4,20*b.progress);
+      g.beginFill(0x8F6E36,0.5);g.drawRect(-20,-h,3,h);g.drawRect(17,-h,3,h);g.endFill();
+      blockG(g,44,22,h,null,0x643F21,0x53341B);
+      g.alpha=0.55+0.45*b.progress;
+    } else {
+      const cottage=b.stage===2;
+      blockG(g,cottage?48:44,23,cottage?26:20,null,cottage?0x6E4B2A:0x643F21,0x53341B);
+      g.beginFill(0x2A1E12);g.drawRect(5,9,9,11);g.endFill();
+      const rc1=cottage?0xC9A84C:0xB08A46, rc2=cottage?0xA8863A:0x8F6E36;
+      g.beginFill(rc1);g.moveTo(-27,0);g.lineTo(0,cottage?-24:-18);g.lineTo(0,10);g.closePath();g.endFill();
+      g.beginFill(rc2);g.moveTo(27,0);g.lineTo(0,cottage?-24:-18);g.lineTo(0,10);g.closePath();g.endFill();
+      if(cottage){g.beginFill(0xFFE2A8,0.9);g.drawRect(-14,4,6,6);g.endFill();}
+    }
+    c.addChild(g);
+  },
+  addMemorial(spot){
+    const g=new PIXI.Graphics();
+    g.beginFill(0x8D8A80);g.drawRoundedRect(-4,-8,8,10,2);g.endFill();
+    g.beginFill(0x4C331E);g.drawRect(-1.5,-20,3,10);g.endFill();
+    g.beginFill(0x2E5A38);g.drawCircle(0,-24,7);g.endFill();
+    const p=iso.to(spot.x,spot.y);
+    g.x=p.x;g.y=p.y-4;g.zIndex=spot.x+spot.y;
+    propL.addChild(g);
+  },
+  /* weather particles */
+  particles:[],weatherMode:'clear',
+  setWeather(mode){
+    this.weatherMode=mode;
+    weatherL.removeChildren();this.particles=[];
+    if(mode==='clear')return;
+    const n=mode==='storm'?110:60;
+    for(let i=0;i<n;i++){
+      const g=new PIXI.Graphics();
+      if(mode==='rain'){g.beginFill(0x9FB8D0,0.5);g.drawRect(0,0,1.2,9);g.endFill();}
+      else{g.beginFill(0xFFFFFF,0.8);g.drawCircle(0,0,rand(1,2.2));g.endFill();}
+      g.x=Math.random()*app.screen.width;g.y=Math.random()*app.screen.height;
+      weatherL.addChild(g);
+      this.particles.push({g,vy:mode==='rain'?rand(320,420):rand(35,70)*(mode==='storm'?2.2:1),
+        vx:mode==='rain'?-40:rand(-25,25)*(mode==='storm'?3:1),ph:Math.random()*6.28});
+    }
+  },
+  setSeason(idx){ /* tint handled per-frame */ },
+  frame(dt){
+    sim.villagers.forEach(v=>{
+      const s=this.vSprites[v.id];if(!s)return;
+      if((v.stage!=='child')!==(s.vscale===1))this.growVillager(v);
+      const sp=this.vSprites[v.id];
+      const p=iso.to(v.pos.x,v.pos.y);
+      sp.x=p.x;sp.y=p.y-2+(v.target?Math.abs(Math.sin(sim.time*8))*-1.5:0);
+      sp.zIndex=v.pos.x+v.pos.y+0.6;
+      sp.emote.text=v.mourn>0?'🕯️':v.emote;
+      sp.body.alpha=v.stage==='elder'?0.85:1;
+      sp.dbg.visible=debugOn;
+      if(debugOn&&v.debugScores)sp.dbg.text=v.debugScores.map(x=>x.name[0]+Math.round(x.score)).join(' ');
+    });
+    /* particles */
+    this.particles.forEach(pt=>{
+      pt.g.y+=pt.vy*dt;pt.g.x+=(pt.vx+Math.sin(sim.time+pt.ph)*10)*dt;
+      if(pt.g.y>app.screen.height+10){pt.g.y=-10;pt.g.x=Math.random()*app.screen.width}
+      if(pt.g.x<-10)pt.g.x=app.screen.width+8;
+      if(pt.g.x>app.screen.width+10)pt.g.x=-8;
+    });
+    /* season tint */
+    tintO.clear();tintO.beginFill(0xFFFFFF);
+    tintO.drawRect(0,0,app.screen.width,app.screen.height);tintO.endFill();
+    tintO.tint=SEASONS[sim.seasonIdx].tint;
+  },
+};
+function fit(){
+  const span=(GRID+1)*TILE_W;
+  const z=clamp(Math.min(app.screen.width/span,app.screen.height/(span*0.62)),0.5,1.2);
+  const f=iso.to(5,5);
+  worldC.scale.set(z);
+  worldC.x=app.screen.width/2-f.x*z;
+  worldC.y=app.screen.height/2-f.y*z;
+}
+window.addEventListener('resize',fit);fit();
+
+/* ================================================================
+   HUD
+   ================================================================ */
+let debugOn=false;
+const ZONE_MODES=[null,'grove','farm','homes'];
+const ZONE_LABELS={null:'Zoning off',grove:'🌲 Grove',farm:'🌾 Farmland',homes:'🏠 Homes'};
+let zoneModeIdx=0;
+const ui={
+  el:id=>document.getElementById(id),
+  inspected:null,bannerT:null,
+  renderTop(){
+    const s=SEASONS[sim.seasonIdx];
+    this.el('season-pill').textContent=`${s.ico} ${s.name}, Y${sim.year}`;
+    this.el('r-food').textContent=Math.floor(sim.resources.food);
+    this.el('r-timber').textContent=Math.floor(sim.resources.timber);
+    this.el('r-pop').textContent=sim.villagers.length;
+    const d=demand();
+    this.el('d-house').classList.toggle('hot',d.house);
+    this.el('d-farm').classList.toggle('hot',d.farm);
+  },
+  renderChronicle(){
+    this.el('chronicle').innerHTML=sim.chronicle.map(e=>`<div class="${e.cls||''}">${e.text}</div>`).join('');
+  },
+  banner(html){
+    const b=this.el('banner');b.innerHTML=html;b.classList.add('show');
+    clearTimeout(this.bannerT);this.bannerT=setTimeout(()=>b.classList.remove('show'),3200);
+  },
+  modal(title,text,aLabel,bLabel,cb){
+    this.el('m-title').textContent=title;this.el('m-text').textContent=text;
+    this.el('m-a').innerHTML=aLabel;this.el('m-b').innerHTML=bLabel;
+    this.el('modal').style.display='flex';
+    this.el('m-a').onclick=()=>{this.closeModal();cb('a')};
+    this.el('m-b').onclick=()=>{this.closeModal();cb('b')};
+  },
+  closeModal(){this.el('modal').style.display='none'},
+  inspect(v){
+    this.inspected=v;
+    this.el('ins-name').textContent=v.name;
+    const seasonsOld=Math.floor(v.age*4);
+    this.el('ins-age').textContent=`· ${v.stage}, ${seasonsOld} seasons`;
+    this.el('ins-traits').textContent=v.traits.map(t=>`${t} — ${TRAITS[t]}`).join('  ·  ');
+    this.el('ins-thought').textContent=`${v.first} ${v.thought}.`;
+    const partner=v.partner&&byId(v.partner);
+    const kids=v.children.map(byId).filter(Boolean);
+    const parents=(v.parents||[]).map(byId).filter(Boolean);
+    const friends=v.relations.filter(r=>r.type==='friend'&&r.s>40).map(r=>byId(r.id)).filter(Boolean);
+    const rivals=v.relations.filter(r=>r.type==='rival'&&r.s<-25).map(r=>byId(r.id)).filter(Boolean);
+    let fam='';
+    if(partner)fam+=`Partner of <b>${partner.first}</b>. `;
+    if(parents.length)fam+=`Child of <b>${parents.map(p=>p.first).join('</b> & <b>')}</b>. `;
+    if(kids.length)fam+=`Parent of <b>${kids.map(k=>k.first).join('</b>, <b>')}</b>. `;
+    if(friends.length)fam+=`Friends with <b>${friends.map(f=>f.first).join('</b>, <b>')}</b>. `;
+    if(rivals.length)fam+=`Rival of <b>${rivals.map(f=>f.first).join('</b>, <b>')}</b>.`;
+    this.el('ins-fam').innerHTML=fam||'New to the valley.';
+    this.el('ins-mem').innerHTML=v.memories.length?`Remembers: <b>${v.memories[0]}</b>`:'';
+    this.el('bar-food').style.width=v.needs.food+'%';
+    this.el('bar-rest').style.width=v.needs.rest+'%';
+    this.el('bar-warm').style.width=v.needs.warmth+'%';
+    this.el('inspector').style.display='block';
+  },
+  closeInspect(){this.el('inspector').style.display='none';this.inspected=null},
+};
+ui.el('ins-close').onclick=()=>ui.closeInspect();
+ui.el('b-chron').onclick=e=>{
+  const c=ui.el('chronicle');const on=c.style.display!=='block';
+  c.style.display=on?'block':'none';e.currentTarget.classList.toggle('on',on);
+};
+ui.el('b-debug').onclick=e=>{debugOn=!debugOn;e.currentTarget.classList.toggle('on',debugOn)};
+ui.el('b-zone').onclick=e=>{
+  zoneModeIdx=(zoneModeIdx+1)%ZONE_MODES.length;
+  const m=ZONE_MODES[zoneModeIdx];
+  ui.el('zone-label').innerHTML=ZONE_LABELS[m];
+  e.currentTarget.classList.toggle('on',!!m);
+  if(m)ui.banner(m==='grove'?'Tap forest to mark gathering groves'
+    :m==='farm'?'Tap grass to zone farmland'
+    :'Tap grass to zone home plots');
+};
+ui.el('b-speed').onclick=()=>{
+  sim.speed=sim.speed===1?4:sim.speed===4?16:1;
+  ui.el('speed-label').textContent=sim.speed+'x';
+};
+ui.el('b-prio').onclick=()=>{
+  sim.priority=sim.priority==='balanced'?'food':sim.priority==='food'?'build':'balanced';
+  ui.el('prio-label').textContent=sim.priority==='balanced'?'Balanced':sim.priority==='food'?'Food first':'Build first';
+  ui.banner('Priority: '+ui.el('prio-label').textContent);
+};
+let downAt=null;
+app.view.addEventListener('pointerdown',e=>downAt={x:e.clientX,y:e.clientY});
+window.addEventListener('pointerup',e=>{
+  if(!downAt)return;
+  const d=Math.hypot(e.clientX-downAt.x,e.clientY-downAt.y);downAt=null;
+  if(d>=10)return;
+  const r=app.view.getBoundingClientRect();
+  const g={x:(e.clientX-r.left)*(app.renderer.width/r.width),y:(e.clientY-r.top)*(app.renderer.height/r.height)};
+  const local=worldC.toLocal(g);
+  let best=null,bd=0.9;
+  sim.villagers.forEach(v=>{
+    const p=iso.to(v.pos.x,v.pos.y);
+    const dist=Math.hypot(local.x-p.x,(local.y-p.y)*2)/TILE_W;
+    if(dist<bd){bd=dist;best=v}
+  });
+  if(best){ui.inspect(best);return}
+  const cart=iso.from(local.x,local.y);
+  const t=tileAt(Math.round(cart.x),Math.round(cart.y));
+  const mode=ZONE_MODES[zoneModeIdx];
+  if(mode&&t){
+    const ok=mode==='grove'?t.kind==='forest':t.kind==='grass'&&!t.building;
+    if(ok){
+      const k=t.x+','+t.y;
+      sim.zones[k]===mode?delete sim.zones[k]:sim.zones[k]=mode;
+      refreshZones();
+    }
+  }
+});
+
+/* ================================================================
+   LOOP + AWAY
+   ================================================================ */
+let last=performance.now();
+app.ticker.add(()=>{
+  const now=performance.now();
+  const dt=Math.min(0.1,(now-last)/1000);last=now;
+  simTick(dt*sim.speed);
+  render.frame(dt);
+  ui.renderTop();
+  if(ui.inspected){
+    if(!sim.villagers.includes(ui.inspected))ui.closeInspect();
+    else ui.inspect(ui.inspected);
+  }
+});
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='hidden')sim.hiddenAt=Date.now();
+  else{
+    last=performance.now();
+    if(sim.hiddenAt){
+      const away=(Date.now()-sim.hiddenAt)/1000;sim.hiddenAt=null;
+      if(away>10){
+        const lines=simulateAway(away);
+        ui.modal('While you were away…',' ','Back to the valley','Read the chronicle',c=>{
+          if(c==='b'){ui.el('chronicle').style.display='block';ui.el('b-chron').classList.add('on')}
+        });
+        ui.el('m-text').innerHTML=lines.join('<br>');
+      }
+    }
+  }
+});
+
+/* founders */
+addBuilding('fire',CENTER.x,CENTER.y);
+for(let i=0;i<5;i++)spawnVillager({});
+log('Five settlers made camp in the valley.','era');
+ui.renderTop();
+</script>
+</body>
+</html>

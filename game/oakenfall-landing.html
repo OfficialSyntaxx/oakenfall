@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Oakenfall — Grow a civilization from a single acorn</title>
+<meta name="description" content="Oakenfall is an idle civilization simulator. Scroll from dawn to nightfall and watch the valley grow — then settle it yourself." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://oakenfall.netlify.app">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IM+Fell+English:ital@0;1&family=Alegreya+Sans:ital,wght@0,400;0,500;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --night:#0B1410;
+    --moss-deep:#14211A;
+    --amber:#FFB454;
+    --amber-dim:#C98A3B;
+    --parchment:#EFE6D2;
+    --parchment-dim:#BDB29A;
+    --glass:rgba(16,26,22,.52);
+    --glass-line:rgba(239,230,210,.14);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--night);
+    color:var(--parchment);
+    font-family:"Alegreya Sans",system-ui,sans-serif;
+    overflow-x:hidden;
+  }
+  ::selection{background:var(--amber);color:var(--night)}
+
+  /* ---------- fixed painted world ---------- */
+  #world{position:fixed;inset:0;z-index:0;pointer-events:none}
+
+  #veil{
+    position:fixed;inset:0;z-index:1;pointer-events:none;
+    background:
+      radial-gradient(120% 95% at 50% 42%, transparent 58%, rgba(6,10,8,.66) 100%),
+      linear-gradient(to top, rgba(6,10,8,.8), transparent 26%);
+    transition:background 1s ease, opacity 1s ease;
+  }
+  #veil.dark{background:rgba(3,5,7,.94)}
+
+  /* film grain */
+  #grain{
+    position:fixed;inset:-50%;z-index:5;pointer-events:none;opacity:.05;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation:grain 8s steps(10) infinite;
+  }
+  @keyframes grain{
+    0%,100%{transform:translate(0,0)} 10%{transform:translate(-2%,-3%)}
+    20%{transform:translate(3%,1%)} 30%{transform:translate(-1%,3%)}
+    40%{transform:translate(2%,-2%)} 50%{transform:translate(-3%,1%)}
+    60%{transform:translate(1%,2%)} 70%{transform:translate(-2%,-1%)}
+    80%{transform:translate(2%,3%)} 90%{transform:translate(-1%,-2%)}
+  }
+
+  /* ---------- chrome ---------- */
+  #topbar{
+    position:fixed;top:0;left:0;right:0;z-index:4;
+    display:flex;justify-content:space-between;align-items:center;
+    padding:calc(14px + env(safe-area-inset-top)) 26px 14px;
+    font-family:"IBM Plex Mono",monospace;font-size:.7rem;letter-spacing:.3em;
+    text-transform:uppercase;
+    transition:background .5s ease;
+  }
+  #topbar.scrolled{background:linear-gradient(rgba(6,10,8,.7),transparent)}
+  #topbar .mark{font-family:"IM Fell English SC",serif;font-size:1.05rem;letter-spacing:.12em;text-transform:none;color:var(--parchment)}
+  #topbar a{color:var(--parchment-dim);text-decoration:none;transition:color .3s}
+  #topbar a:hover{color:var(--amber)}
+
+  /* era rail — the sequence really is a sequence */
+  #rail{
+    position:fixed;right:22px;top:50%;transform:translateY(-50%);z-index:4;
+    display:flex;flex-direction:column;gap:26px;
+    font-family:"IBM Plex Mono",monospace;font-size:.6rem;letter-spacing:.22em;
+    text-transform:uppercase;
+  }
+  #rail .stop{display:flex;align-items:center;gap:10px;color:var(--parchment-dim);opacity:.45;transition:opacity .5s,color .5s}
+  #rail .stop::before{
+    content:"";width:7px;height:7px;border-radius:50%;
+    border:1px solid currentColor;transition:background .5s;
+  }
+  #rail .stop.lit{opacity:1;color:var(--amber)}
+  #rail .stop.lit::before{background:var(--amber);box-shadow:0 0 10px rgba(255,180,84,.6)}
+  #rail .stop span{writing-mode:vertical-rl;display:none}
+  @media (min-width:900px){ #rail .stop span{display:block} }
+
+  /* ---------- scroll story ---------- */
+  #story{position:relative;z-index:2}
+  section{min-height:100vh;display:flex;align-items:center;padding:12vh 7vw}
+
+  #hero{flex-direction:column;justify-content:center;text-align:center;min-height:100svh;position:relative}
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace;font-size:.7rem;letter-spacing:.38em;
+    text-transform:uppercase;color:var(--amber-dim);
+  }
+  #hero h1{
+    font-family:"IM Fell English SC",serif;font-weight:400;
+    font-size:clamp(3.4rem,11vw,8.5rem);
+    line-height:.95;letter-spacing:.05em;
+    color:var(--parchment);
+    text-shadow:0 2px 46px rgba(6,10,8,.95);
+    margin:.32em 0 .28em;
+    display:flex;justify-content:center;
+  }
+  #hero h1 span{display:inline-block;will-change:transform,opacity}
+  #hero p.lede{
+    font-size:clamp(1.05rem,2.2vw,1.35rem);
+    color:var(--parchment-dim);max-width:36ch;margin:0 auto;
+    font-style:italic;font-family:"IM Fell English",serif;
+    text-shadow:0 1px 18px rgba(6,10,8,.9);
+  }
+  #hero .acorn{margin:1.6rem auto 0;opacity:.8}
+  #scroll-cue{
+    position:absolute;bottom:5vh;left:50%;transform:translateX(-50%);
+    font-family:"IBM Plex Mono",monospace;font-size:.66rem;letter-spacing:.32em;
+    text-transform:uppercase;color:var(--parchment-dim);
+    display:flex;flex-direction:column;align-items:center;gap:.6rem;
+    transition:opacity .6s;
+  }
+  #scroll-cue::after{
+    content:"";width:1px;height:44px;
+    background:linear-gradient(var(--amber),transparent);
+    animation:drip 2.2s ease-in-out infinite;
+  }
+  @keyframes drip{0%{transform:scaleY(0);transform-origin:top}55%{transform:scaleY(1);transform-origin:top}56%{transform-origin:bottom}100%{transform:scaleY(0);transform-origin:bottom}}
+
+  .era{position:relative}
+  .era .panel{
+    position:relative;max-width:440px;
+    background:var(--glass);
+    border:1px solid var(--glass-line);
+    border-top:1px solid rgba(255,180,84,.35);
+    border-radius:14px;
+    padding:2.3rem 2.5rem 2.5rem;
+    backdrop-filter:blur(16px) saturate(1.2);
+    -webkit-backdrop-filter:blur(16px) saturate(1.2);
+    box-shadow:0 26px 70px rgba(0,0,0,.5);
+    overflow:hidden;
+  }
+  .era .ghost{
+    position:absolute;right:-8px;top:-34px;
+    font-family:"IM Fell English",serif;font-size:11rem;line-height:1;
+    color:var(--parchment);opacity:.055;pointer-events:none;user-select:none;
+  }
+  .era:nth-of-type(odd){justify-content:flex-start}
+  .era:nth-of-type(even){justify-content:flex-end}
+  .era .num{
+    font-family:"IBM Plex Mono",monospace;font-size:.68rem;letter-spacing:.3em;
+    color:var(--amber);text-transform:uppercase;
+  }
+  .era h2{
+    font-family:"IM Fell English SC",serif;font-weight:400;
+    font-size:clamp(1.9rem,4vw,2.7rem);line-height:1.05;
+    margin:.5rem 0 .9rem;
+  }
+  .era p{color:var(--parchment-dim);font-size:1.05rem;line-height:1.6}
+  .era .detail{
+    margin-top:1.4rem;padding-top:1.2rem;border-top:1px solid var(--glass-line);
+    font-family:"IBM Plex Mono",monospace;font-size:.76rem;line-height:1.8;
+    color:var(--parchment-dim);
+  }
+  .era .detail b{color:var(--parchment);font-weight:500}
+
+  #cta{flex-direction:column;justify-content:center;text-align:center;gap:1.4rem}
+  #cta h2{
+    font-family:"IM Fell English SC",serif;font-weight:400;
+    font-size:clamp(2.4rem,6vw,4.2rem);text-shadow:0 2px 34px rgba(6,10,8,.95);
+  }
+  #cta p{color:var(--parchment-dim);font-style:italic;font-family:"IM Fell English",serif;font-size:1.15rem}
+  #play-btn{
+    margin-top:.6rem;position:relative;
+    font-family:"IBM Plex Mono",monospace;font-size:.8rem;letter-spacing:.28em;
+    text-transform:uppercase;color:var(--night);
+    background:var(--amber);border:0;border-radius:999px;
+    padding:1.05rem 2.7rem;cursor:pointer;
+    box-shadow:0 0 0 1px rgba(255,180,84,.4),0 12px 44px rgba(255,180,84,.28);
+    transition:transform .25s ease,box-shadow .25s ease;
+  }
+  #play-btn:hover{transform:translateY(-2px);box-shadow:0 0 0 1px rgba(255,180,84,.6),0 18px 56px rgba(255,180,84,.4)}
+  #play-btn:focus-visible{outline:2px solid var(--parchment);outline-offset:4px}
+  #cta small{font-family:"IBM Plex Mono",monospace;font-size:.66rem;letter-spacing:.2em;color:var(--parchment-dim)}
+
+  /* launch panel (shown if the game URL isn't wired yet) */
+  #launch{
+    position:fixed;inset:0;z-index:6;display:none;
+    align-items:center;justify-content:center;padding:1.5rem;
+  }
+  #launch .card{
+    max-width:420px;text-align:center;
+    background:var(--glass);border:1px solid var(--glass-line);
+    border-top:1px solid rgba(255,180,84,.35);border-radius:14px;
+    padding:2.6rem 2.4rem;
+    backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+    box-shadow:0 30px 90px rgba(0,0,0,.6);
+  }
+  #launch h3{font-family:"IM Fell English SC",serif;font-weight:400;font-size:2rem;margin-bottom:.6rem}
+  #launch p{color:var(--parchment-dim);font-size:.98rem;line-height:1.6}
+  #launch button{
+    margin-top:1.6rem;font-family:"IBM Plex Mono",monospace;font-size:.68rem;
+    letter-spacing:.24em;text-transform:uppercase;color:var(--parchment);
+    background:transparent;border:1px solid var(--glass-line);border-radius:999px;
+    padding:.8rem 1.8rem;cursor:pointer;transition:border-color .3s,color .3s;
+  }
+  #launch button:hover{border-color:var(--amber);color:var(--amber)}
+
+  footer{
+    position:relative;z-index:2;text-align:center;padding:3rem 1rem 4rem;
+    font-family:"IBM Plex Mono",monospace;font-size:.64rem;letter-spacing:.26em;
+    text-transform:uppercase;color:var(--parchment-dim);
+  }
+
+  @media (max-width:640px){
+    .era{justify-content:center !important}
+    .era .panel{padding:1.8rem 1.5rem}
+    #rail{right:12px;gap:20px}
+    #topbar{padding-left:18px;padding-right:18px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto}
+    #scroll-cue::after{animation:none;transform:none}
+    #grain{animation:none}
+  }
+</style>
+</head>
+<body>
+
+<div id="world"></div>
+<div id="veil"></div>
+<div id="grain"></div>
+
+<nav id="topbar">
+  <div class="mark">Oakenfall</div>
+  <a href="#cta">Begin&nbsp;↓</a>
+</nav>
+
+<div id="rail" aria-hidden="true">
+  <div class="stop" data-at="0"><span>Dawn</span></div>
+  <div class="stop" data-at="0.16"><span>Embers</span></div>
+  <div class="stop" data-at="0.42"><span>Timber</span></div>
+  <div class="stop" data-at="0.66"><span>Stone</span></div>
+  <div class="stop" data-at="0.9"><span>Nightfall</span></div>
+</div>
+
+<!-- ================= SCROLL STORY ================= -->
+<main id="story">
+  <section id="hero">
+    <span class="eyebrow">An idle civilization simulator</span>
+    <h1 aria-label="Oakenfall"><span>O</span><span>a</span><span>k</span><span>e</span><span>n</span><span>f</span><span>a</span><span>l</span><span>l</span></h1>
+    <p class="lede">Grow a civilization from a single acorn — even while you're away.</p>
+    <svg class="acorn" width="26" height="34" viewBox="0 0 26 34" fill="none" aria-hidden="true">
+      <path d="M13 2c6 0 11 3 11 7H2c0-4 5-7 11-7z" fill="#7A4E2A"/>
+      <path d="M4 10h18c0 9-4 17-9 22C8 27 4 19 4 10z" fill="#C98A3B"/>
+      <path d="M13 0v3" stroke="#7A4E2A" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <div id="scroll-cue">Scroll from dawn to nightfall</div>
+  </section>
+
+  <section class="era" data-era="1">
+    <div class="panel">
+      <div class="ghost">I</div>
+      <span class="num">Era I &nbsp;·&nbsp; Embers</span>
+      <h2>It begins with a fire that refuses to go out.</h2>
+      <p>A clearing, two tents, and stubbornness. Your first settlers gather acorns by hand and feed the flame through the night. Nothing here is automatic yet — but it will be.</p>
+      <div class="detail"><b>Gather</b> — tap the land, earn your first acorns<br><b>Camp</b> — keep the fire lit to hold the clearing</div>
+    </div>
+  </section>
+
+  <section class="era" data-era="2">
+    <div class="panel">
+      <div class="ghost">II</div>
+      <span class="num">Era II &nbsp;·&nbsp; Timber</span>
+      <h2>Walls follow warmth.</h2>
+      <p>Huts rise where tents stood. Fields are cut into the moss. Your economy starts to breathe on its own — every hut produces while you watch, and keeps producing while you don't.</p>
+      <div class="detail"><b>Idle economy</b> — production runs on real time, not timers<br><b>Offline gain</b> — return to a richer valley, counted the instant you're back</div>
+    </div>
+  </section>
+
+  <section class="era" data-era="3">
+    <div class="panel">
+      <div class="ghost">III</div>
+      <span class="num">Era III &nbsp;·&nbsp; Stone</span>
+      <h2>Stone remembers what wood forgets.</h2>
+      <p>A mill turns above the rooftops, and a keep watches the valley you cleared. What was a campsite is now a town with a memory — and room, always, for one more building.</p>
+      <div class="detail"><b>Evolve</b> — buildings age through eras as your town grows<br><b>One valley</b> — the world you scrolled through is the world you play</div>
+    </div>
+  </section>
+
+  <section id="cta">
+    <h2>The valley is waiting.</h2>
+    <p>Raise a village. Weather the winters. Outlast the bandits.</p>
+    <button id="play-btn">Play Oakenfall</button>
+    <small>No download · runs in your browser · free to settle</small>
+  </section>
+</main>
+
+<div id="launch" role="dialog" aria-modal="true">
+  <div class="card">
+    <h3>The gates are still being carved.</h3>
+    <p>This is where the full game takes over. Point <code>GAME_URL</code> at your build and this button will carry settlers straight in.</p>
+    <button id="launch-back">Return to the valley</button>
+  </div>
+</div>
+
+<footer>Oakenfall · a settlement in your browser</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pixi.js/7.4.2/pixi.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script>
+/* =====================================================================
+   OAKENFALL — cinematic landing. Structured per the technical handover:
+   WORLD 1 (engine/WebGL) · WORLD 2 (DOM) · THE BRIDGE (store)
+   ===================================================================== */
+
+/* >>>>>>>>>> the real game — /play/ on the oakenfall project <<<<<<<<<< */
+/* Relative when this page lives on oakenfall.netlify.app (or a preview of it); absolute anywhere else. */
+const GAME_URL = /(^|--)oakenfall\.netlify\.app$/.test(location.hostname) ? "/play/" : "https://oakenfall.netlify.app/play/";
+
+/* ---------------- THE BRIDGE ---------------- */
+const store = {
+  state: { scrollProgress: 0, transitioning: false, lastTickTime: performance.now() },
+  listeners: new Set(),
+  set(patch){ Object.assign(this.state, patch); this.listeners.forEach(fn=>fn(this.state)); },
+  subscribe(fn){ this.listeners.add(fn); return ()=>this.listeners.delete(fn); }
+};
+
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------------- WORLD 1 : engine ---------------- */
+const TILE_W = 72, TILE_H = 36, GRID = 11;
+const isoMath = {
+  toIsometric:(x,y)=>({ x:(x-y)*TILE_W/2, y:(x+y)*TILE_H/2 }),
+  toCartesian:(ix,iy)=>({ x: iy/TILE_H + ix/TILE_W, y: iy/TILE_H - ix/TILE_W }),
+};
+function lerp(a,b,t){ return a+(b-a)*t; }
+function clamp01(t){ return t<0?0:t>1?1:t; }
+function smooth(t){ t=clamp01(t); return t*t*(3-2*t); }
+function hexToRgb(h){ const n=parseInt(h.slice(1),16); return [(n>>16)&255,(n>>8)&255,n&255]; }
+function mixHex(h1,h2,t){
+  const a=hexToRgb(h1), b=hexToRgb(h2);
+  return (Math.round(lerp(a[0],b[0],t))<<16)|(Math.round(lerp(a[1],b[1],t))<<8)|Math.round(lerp(a[2],b[2],t));
+}
+function mixHexStr(h1,h2,t){
+  const v = mixHex(h1,h2,t);
+  return '#'+v.toString(16).padStart(6,'0');
+}
+
+const app = new PIXI.Application({
+  resizeTo: window, antialias:true, backgroundAlpha:1, backgroundColor:0x0B1410,
+  autoDensity:true, resolution: Math.min(window.devicePixelRatio||1, 2),
+});
+document.getElementById('world').appendChild(app.view);
+const W = ()=>app.renderer.width/app.renderer.resolution*app.renderer.resolution; // logical px via renderer
+const SW = ()=>app.screen.width, SH = ()=>app.screen.height;
+
+/* ---- layer order ---- */
+const skySprite   = new PIXI.Sprite(PIXI.Texture.WHITE);
+const starLayer   = new PIXI.Container();
+const celestial   = new PIXI.Container();
+const cloudLayer  = new PIXI.Container();
+const ridgeFar    = new PIXI.Graphics();
+const ridgeNear   = new PIXI.Graphics();
+const worldContainer = new PIXI.Container();
+const leafLayer   = new PIXI.Container();
+const fireflyLayer= new PIXI.Container();
+const tintOverlay = new PIXI.Graphics();
+tintOverlay.blendMode = PIXI.BLEND_MODES.MULTIPLY;
+app.stage.addChild(skySprite, starLayer, celestial, cloudLayer, ridgeFar, ridgeNear,
+                   worldContainer, leafLayer, fireflyLayer, tintOverlay);
+
+/* ---- time-of-day keyframes: dawn → noon → dusk → night ---- */
+const todKeys = [
+  // p     sky top     sky mid     sky low     tint(mult)  stars sun  ridgeFar    ridgeNear
+  [0.00, '#1A2040', '#6B4059', '#E8874F',  0xFFE0C8, 0.30, 1, '#3A3550', '#241F33'],
+  [0.20, '#27567E', '#6F97A4', '#CFE0CE',  0xFFF6EA, 0.00, 1, '#38536B', '#25384A'],
+  [0.45, '#2A6A9E', '#78A6B5', '#C4DACA',  0xFFFFFF, 0.00, 1, '#3D5E78', '#294053'],
+  [0.68, '#2B2350', '#8F4A5C', '#E07A45',  0xFFCBA6, 0.15, 1, '#33294A', '#221B33'],
+  [0.88, '#070B18', '#101B30', '#1A2C42',  0x9BAED6, 1.00, 0, '#131B2C', '#0C1220'],
+  [1.00, '#05070F', '#0C1524', '#152538',  0x93A7CC, 1.00, 0, '#101827', '#0A101C'],
+];
+function tod(p){
+  let a=todKeys[0], b=todKeys[todKeys.length-1];
+  for(let i=0;i<todKeys.length-1;i++)
+    if(p>=todKeys[i][0]&&p<=todKeys[i+1][0]){a=todKeys[i];b=todKeys[i+1];break;}
+  const t = smooth((p-a[0])/Math.max(1e-6,b[0]-a[0]));
+  return {
+    top:mixHexStr(a[1],b[1],t), mid:mixHexStr(a[2],b[2],t), low:mixHexStr(a[3],b[3],t),
+    tint:mixHex('#'+a[4].toString(16).padStart(6,'0'),'#'+b[4].toString(16).padStart(6,'0'),t),
+    stars:lerp(a[5],b[5],t), sun:lerp(a[6],b[6],t),
+    ridgeFar:mixHex(a[7],b[7],t), ridgeNear:mixHex(a[8],b[8],t),
+  };
+}
+
+/* ---- sky gradient (canvas texture) ---- */
+const skyCanvas = document.createElement('canvas');
+skyCanvas.width = 16; skyCanvas.height = 512;
+const skyCtx = skyCanvas.getContext('2d');
+const skyTex = PIXI.Texture.from(skyCanvas);
+skySprite.texture = skyTex;
+let lastSkyP = -1;
+function redrawSky(p){
+  if(Math.abs(p-lastSkyP) < 0.0015 && lastSkyP>=0) return;
+  lastSkyP = p;
+  const c = tod(p);
+  const g = skyCtx.createLinearGradient(0,0,0,512);
+  g.addColorStop(0, c.top); g.addColorStop(0.55, c.mid); g.addColorStop(1, c.low);
+  skyCtx.fillStyle = g; skyCtx.fillRect(0,0,16,512);
+  skyTex.update();
+}
+
+/* ---- stars + shooting star ---- */
+const stars = [];
+for(let i=0;i<120;i++){
+  const g = new PIXI.Graphics();
+  const r = 0.6 + Math.random()*1.3;
+  g.beginFill(0xFFFFFF); g.drawCircle(0,0,r); g.endFill();
+  starLayer.addChild(g);
+  stars.push({g, fx:Math.random(), fy:Math.random()*0.62, ph:Math.random()*6.28, sp:0.4+Math.random()*1.4});
+}
+const shooter = new PIXI.Graphics();
+shooter.beginFill(0xFFFFFF); shooter.drawCircle(0,0,1.6); shooter.endFill();
+shooter.beginFill(0xFFFFFF,0.35); shooter.drawRoundedRect(0,-1,46,2,1); shooter.endFill();
+shooter.visible=false; starLayer.addChild(shooter);
+let shooterT = 0, shooterWait = 5;
+
+/* ---- sun & moon ---- */
+const sun = new PIXI.Container();
+const sunGlow = new PIXI.Graphics(); sunGlow.beginFill(0xFFD9A0,0.22); sunGlow.drawCircle(0,0,64); sunGlow.endFill();
+const sunCore = new PIXI.Graphics(); sunCore.beginFill(0xFFE9C4); sunCore.drawCircle(0,0,26); sunCore.endFill();
+sun.addChild(sunGlow,sunCore); celestial.addChild(sun);
+const moon = new PIXI.Container();
+const moonGlow = new PIXI.Graphics(); moonGlow.beginFill(0xCBD8F0,0.14); moonGlow.drawCircle(0,0,52); moonGlow.endFill();
+const moonCore = new PIXI.Graphics();
+moonCore.beginFill(0xE8EEF8); moonCore.drawCircle(0,0,20); moonCore.endFill();
+moonCore.beginFill(0xB9C6DE,0.55); moonCore.drawCircle(6,-4,5); moonCore.drawCircle(-5,6,3.4); moonCore.drawCircle(-8,-6,2.4); moonCore.endFill();
+moon.addChild(moonGlow,moonCore); celestial.addChild(moon);
+
+/* ---- clouds ---- */
+const clouds = [];
+function makeCloud(scale){
+  const c = new PIXI.Container();
+  const blobs = 3+Math.floor(Math.random()*3);
+  for(let i=0;i<blobs;i++){
+    const g = new PIXI.Graphics();
+    g.beginFill(0xFFFFFF);
+    g.drawEllipse(0,0, 46+Math.random()*46, 15+Math.random()*10);
+    g.endFill();
+    g.x = (i-blobs/2)*44 + Math.random()*20;
+    g.y = Math.random()*12-6;
+    c.addChild(g);
+  }
+  c.scale.set(scale);
+  c.alpha = 0.5*scale+0.18;
+  cloudLayer.addChild(c);
+  return c;
+}
+for(let i=0;i<7;i++){
+  const sc = 0.5+Math.random()*0.8;
+  const c = makeCloud(sc);
+  clouds.push({c, sp:(4+Math.random()*8)*sc, fy:0.06+Math.random()*0.3});
+  c.x = Math.random()*2000; c.y = 100;
+}
+
+/* ---- mountain ridges (drawn white, tinted per time of day) ---- */
+function drawRidge(g, seed, baseFrac, amp, jag){
+  g.clear(); g.beginFill(0xFFFFFF);
+  const w = SW()*1.3, h = SH();
+  const base = h*baseFrac;
+  g.moveTo(-w*0.15, h+2);
+  g.lineTo(-w*0.15, base);
+  const steps = 26;
+  for(let i=0;i<=steps;i++){
+    const x = -w*0.15 + (i/steps)*w;
+    const n = Math.sin(i*1.7+seed)*0.5 + Math.sin(i*0.53+seed*2.7)*0.35 + Math.sin(i*3.1+seed*0.9)*0.15*jag;
+    g.lineTo(x, base - Math.abs(n)*amp - n*amp*0.3);
+  }
+  g.lineTo(w*1.15, h+2);
+  g.closePath(); g.endFill();
+}
+function buildRidges(){
+  drawRidge(ridgeFar, 3.7, 0.52, SH()*0.16, 0.6);
+  drawRidge(ridgeNear, 8.1, 0.60, SH()*0.11, 1.0);
+}
+
+/* ---- ground + settlement (procedural, no assets) ---- */
+function diamond(g,w,h,color,alpha=1){
+  g.beginFill(color,alpha);
+  g.moveTo(0,-h/2); g.lineTo(w/2,0); g.lineTo(0,h/2); g.lineTo(-w/2,0);
+  g.closePath(); g.endFill();
+}
+function block(g,w,h,depth,top,left,right){
+  g.beginFill(left);
+  g.moveTo(-w/2,0); g.lineTo(0,h/2); g.lineTo(0,h/2+depth); g.lineTo(-w/2,depth); g.closePath(); g.endFill();
+  g.beginFill(right);
+  g.moveTo(w/2,0); g.lineTo(0,h/2); g.lineTo(0,h/2+depth); g.lineTo(w/2,depth); g.closePath(); g.endFill();
+  if(top!==null) diamond(g,w,h,top);
+}
+function roofShape(g,w,h,rise,colorL,colorR){
+  g.beginFill(colorL);
+  g.moveTo(-w/2,0); g.lineTo(0,-rise); g.lineTo(0,h/2-rise*0.15); g.lineTo(-w/2,0); g.closePath(); g.endFill();
+  g.beginFill(colorR);
+  g.moveTo(w/2,0); g.lineTo(0,-rise); g.lineTo(0,h/2-rise*0.15); g.lineTo(w/2,0); g.closePath(); g.endFill();
+}
+const C = {
+  grass:[0x3E6B44,0x44734A,0x39623F], grassSideL:0x2B4A30, grassSideR:0x223B27,
+  dirtTop:0x6E4B2A, water:0x2A5866,
+  woodL:0x643F21, woodR:0x53341B,
+  thatchL:0xB08A46, thatchR:0x8F6E36,
+  stone:0x8D8A80, stoneL:0x6F6C63, stoneR:0x5B584F,
+  slateL:0x4C5A5E, slateR:0x3B474A,
+  canvasL:0xC9BCA0, canvasR:0xA89B80,
+  pine:0x2E5A38, pineDark:0x244A2D, trunk:0x4C331E,
+};
+
+const groundLayer = new PIXI.Container();
+const propLayer = new PIXI.Container(); propLayer.sortableChildren = true;
+const fxLayer = new PIXI.Container();     // fog, shimmer, smoke, embers (world space)
+worldContainer.addChild(groundLayer, propLayer, fxLayer);
+
+const waterTiles = [];
+for(let x=0;x<GRID;x++)for(let y=0;y<GRID;y++){
+  const watery = (x>=8 && y<=2) || (x===7&&y===2) || (x===8&&y===3);
+  const g = new PIXI.Graphics();
+  if(watery){ block(g, TILE_W, TILE_H, 6, C.water, 0x1E4450, 0x173741); }
+  else {
+    const c = C.grass[(x*7+y*13)%3];
+    block(g, TILE_W, TILE_H, 10, c, C.grassSideL, C.grassSideR);
+  }
+  const p = isoMath.toIsometric(x,y);
+  g.x=p.x; g.y=p.y;
+  groundLayer.addChild(g);
+  if(watery) waterTiles.push(p);
+}
+
+function makeTree(){
+  const g = new PIXI.Graphics();
+  g.beginFill(C.trunk); g.drawRect(-3,-14,6,16); g.endFill();
+  [[34,26,-18],[26,20,-30],[16,13,-40]].forEach(([w,h,dy],i)=>{
+    g.beginFill(i%2? C.pineDark : C.pine);
+    g.moveTo(0,dy-h/2); g.lineTo(w/2,dy); g.lineTo(0,dy+h/2); g.lineTo(-w/2,dy); g.closePath(); g.endFill();
+  });
+  return g;
+}
+function makeTent(){
+  const g = new PIXI.Graphics();
+  g.beginFill(C.canvasL); g.moveTo(-20,4); g.lineTo(0,-24); g.lineTo(0,10); g.lineTo(-20,14); g.closePath(); g.endFill();
+  g.beginFill(C.canvasR); g.moveTo(20,4); g.lineTo(0,-24); g.lineTo(0,10); g.lineTo(20,14); g.closePath(); g.endFill();
+  g.beginFill(0x2A1E12); g.moveTo(0,10); g.lineTo(8,12); g.lineTo(0,-6); g.closePath(); g.endFill();
+  return g;
+}
+function makeFire(){
+  const c = new PIXI.Container();
+  const glow = new PIXI.Graphics(); glow.beginFill(0xFFB454,0.16); glow.drawEllipse(0,4,42,20); glow.endFill();
+  const logs = new PIXI.Graphics(); logs.beginFill(C.woodL); logs.drawRoundedRect(-12,2,24,5,2); logs.endFill();
+  const flame = new PIXI.Graphics();
+  flame.beginFill(0xFF9838); flame.moveTo(-7,4); flame.quadraticCurveTo(-9,-10,0,-18); flame.quadraticCurveTo(9,-10,7,4); flame.closePath(); flame.endFill();
+  flame.beginFill(0xFFD37A); flame.moveTo(-3.5,4); flame.quadraticCurveTo(-4,-5,0,-10); flame.quadraticCurveTo(4,-5,3.5,4); flame.closePath(); flame.endFill();
+  c.addChild(glow,logs,flame); c.flame=flame; c.glow=glow;
+  return c;
+}
+function makeHut(){
+  const g = new PIXI.Graphics();
+  block(g, 46, 23, 22, null, C.woodL, C.woodR);
+  g.beginFill(0x2A1E12); g.drawRect(6,10,10,12); g.endFill();
+  const r = new PIXI.Graphics(); roofShape(r, 56, 29, 20, C.thatchL, C.thatchR);
+  const chim = new PIXI.Graphics(); chim.beginFill(C.stoneL); chim.drawRect(-16,-24,6,12); chim.endFill();
+  const c = new PIXI.Container(); c.addChild(g,r,chim);
+  return c;
+}
+function makeFarm(){
+  const g = new PIXI.Graphics();
+  diamond(g, TILE_W-8, TILE_H-4, C.dirtTop);
+  g.lineStyle(2, 0x59391F, 1);
+  for(let i=-2;i<=2;i++){ g.moveTo(i*10-16, -i*2+8); g.lineTo(i*10+16, -i*2-8); }
+  g.lineStyle(0);
+  for(let i=0;i<7;i++){
+    const a=(i*97)%28-14, b=(i*53)%12-6;
+    g.beginFill(0x7FA653); g.drawCircle(a,b-2,2.2); g.endFill();
+  }
+  return g;
+}
+function makeMill(){
+  const c = new PIXI.Container();
+  const base = new PIXI.Graphics(); block(base, 40, 20, 44, null, C.stoneL, C.stoneR);
+  const r = new PIXI.Graphics(); roofShape(r, 46, 24, 22, C.slateL, C.slateR);
+  const bladeC = new PIXI.Container();
+  for(let i=0;i<4;i++){
+    const b = new PIXI.Graphics();
+    b.beginFill(0xD8CBAA,0.92); b.drawRoundedRect(-2.5,-34,5,30,2); b.endFill();
+    b.rotation = i*Math.PI/2;
+    bladeC.addChild(b);
+  }
+  bladeC.x=-14; bladeC.y=-26;
+  const hub = new PIXI.Graphics(); hub.beginFill(0x2A1E12); hub.drawCircle(0,0,3); hub.endFill();
+  hub.x=-14; hub.y=-26;
+  c.addChild(base,r,bladeC,hub); c.blades=bladeC;
+  return c;
+}
+function makeKeep(){
+  const c = new PIXI.Container();
+  const t = new PIXI.Graphics();
+  block(t, 44, 22, 58, C.stone, C.stoneL, C.stoneR);
+  t.beginFill(C.stone); t.drawRect(-22,-4,6,6); t.drawRect(16,-4,6,6); t.drawRect(-3,-8,6,6); t.endFill();
+  const flag = new PIXI.Graphics();
+  flag.lineStyle(2,0x4C331E); flag.moveTo(0,-8); flag.lineTo(0,-30); flag.lineStyle(0);
+  flag.beginFill(0xFFB454); flag.moveTo(0,-30); flag.lineTo(16,-26); flag.lineTo(0,-22); flag.closePath(); flag.endFill();
+  c.addChild(t,flag); c.flag=flag;
+  return c;
+}
+function makeVillager(){
+  const g = new PIXI.Graphics();
+  g.beginFill(0xE8D9B8); g.drawCircle(0,-9,3.2); g.endFill();
+  g.beginFill(0x8F6E36); g.drawRoundedRect(-2.8,-6.5,5.6,7.5,2); g.endFill();
+  return g;
+}
+
+function place(makeFn, gx, gy){
+  const s = makeFn();
+  const p = isoMath.toIsometric(gx,gy);
+  s.x=p.x; s.y=p.y-2; s.zIndex=gx+gy;
+  propLayer.addChild(s);
+  return s;
+}
+const eraItems = [];
+function eraPlace(makeFn, gx, gy, from, to){
+  const s = place(makeFn, gx, gy);
+  s.alpha=0; s.baseY=s.y; s.y=s.baseY+10;
+  eraItems.push({s, from, to});
+  return s;
+}
+
+/* forest ring — sways in the wind */
+const trees = [];
+[[0,0],[1,0],[0,1],[2,0],[0,3],[10,10],[9,10],[10,9],[10,6],[6,10],[0,7],[0,9],[1,10],[3,0],[10,4],[8,9],[1,6],[9,1]]
+  .forEach(([x,y],i)=>{
+    const t = place(makeTree, x, y);
+    t.scale.set(0.85+(i%3)*0.12);
+    t.swayPh = Math.random()*6.28;
+    trees.push(t);
+  });
+
+/* ERA I — embers */
+const fire1 = eraPlace(makeFire, 5, 5, 0.05, 0.16);
+eraPlace(makeTent, 4, 5, 0.10, 0.22);
+eraPlace(makeTent, 5, 4, 0.14, 0.26);
+const walker1 = eraPlace(makeVillager, 4, 6, 0.18, 0.28);
+/* ERA II — timber */
+const hutA = eraPlace(makeHut, 6, 5, 0.30, 0.40);
+const hutB = eraPlace(makeHut, 4, 7, 0.34, 0.44);
+eraPlace(makeFarm, 6, 7, 0.38, 0.48);
+eraPlace(makeFarm, 7, 6, 0.42, 0.52);
+const hutC = eraPlace(makeHut, 3, 4, 0.46, 0.56);
+const walker2 = eraPlace(makeVillager, 6, 6, 0.44, 0.54);
+/* ERA III — stone */
+const mill = eraPlace(makeMill, 7, 4, 0.58, 0.70);
+eraPlace(makeKeep, 4, 3, 0.66, 0.80);
+eraPlace(makeHut, 2, 6, 0.72, 0.82);
+const walker3 = eraPlace(makeVillager, 5, 6, 0.76, 0.84);
+const walkers = [
+  {s:walker1, cx:4, cy:6, r:0.7, sp:0.35, ph:0},
+  {s:walker2, cx:6, cy:6, r:0.9, sp:0.28, ph:2.1},
+  {s:walker3, cx:5, cy:6, r:0.6, sp:0.42, ph:4.4},
+];
+
+/* ---- fog banks (world space) ---- */
+const fogs = [];
+for(let i=0;i<5;i++){
+  const g = new PIXI.Graphics();
+  g.beginFill(0xDCE8E0, 0.05); g.drawEllipse(0,0, 180+Math.random()*140, 26); g.endFill();
+  const p = isoMath.toIsometric(2+Math.random()*7, 2+Math.random()*7);
+  g.x=p.x; g.y=p.y+10;
+  fxLayer.addChild(g);
+  fogs.push({g, sp:3+Math.random()*5, baseX:g.x});
+}
+
+/* ---- water shimmer ---- */
+const sparkles = [];
+waterTiles.forEach(p=>{
+  for(let i=0;i<2;i++){
+    const g = new PIXI.Graphics();
+    g.beginFill(0xFFFFFF); 
+    g.moveTo(0,-2); g.lineTo(3,0); g.lineTo(0,2); g.lineTo(-3,0); g.closePath(); g.endFill();
+    g.x = p.x + (Math.random()*36-18); g.y = p.y + (Math.random()*14-7);
+    g.alpha=0;
+    fxLayer.addChild(g);
+    sparkles.push({g, ph:Math.random()*6.28, sp:1.4+Math.random()*1.4});
+  }
+});
+
+/* ---- smoke + embers (world space, tied to their host's alpha) ---- */
+const emitters = [];
+function addSmoke(host, ox, oy, scale){
+  const c = new PIXI.Container();
+  c.x = host.x+ox; c.y = host.y+oy; c.zIndex = 999;
+  const parts = [];
+  for(let i=0;i<6;i++){
+    const g = new PIXI.Graphics();
+    g.beginFill(0xC9C4B8); g.drawCircle(0,0,5); g.endFill();
+    c.addChild(g);
+    parts.push({g, t:i/6, seed:Math.random()*6.28});
+  }
+  propLayer.addChild(c);
+  emitters.push({type:'smoke', c, parts, host, scale});
+}
+function addEmbers(host, ox, oy){
+  const c = new PIXI.Container();
+  c.x=host.x+ox; c.y=host.y+oy; c.zIndex=999;
+  const parts=[];
+  for(let i=0;i<10;i++){
+    const g = new PIXI.Graphics();
+    g.beginFill(0xFFB454); g.drawCircle(0,0,1.4+Math.random()); g.endFill();
+    g.blendMode = PIXI.BLEND_MODES.ADD;
+    c.addChild(g);
+    parts.push({g, t:Math.random(), seed:Math.random()*6.28, v:0.5+Math.random()*0.6});
+  }
+  propLayer.addChild(c);
+  emitters.push({type:'ember', c, parts, host});
+}
+addEmbers(fire1, 0, -6);
+addSmoke(fire1, 0, -10, 1.2);
+addSmoke(hutA, -16, -22, 0.8);
+addSmoke(hutB, -16, -22, 0.8);
+addSmoke(hutC, -16, -22, 0.8);
+
+/* ---- leaves (screen space) ---- */
+const leaves = [];
+for(let i=0;i<22;i++){
+  const g = new PIXI.Graphics();
+  const col = [0xC98A3B,0xB08A46,0x7FA653,0x8F6E36][i%4];
+  g.beginFill(col); g.moveTo(0,-4); g.quadraticCurveTo(4,-2,0,4); g.quadraticCurveTo(-4,-2,0,-4); g.endFill();
+  g.alpha = 0.5+Math.random()*0.4;
+  leafLayer.addChild(g);
+  leaves.push({g, fx:Math.random(), y:Math.random()*900, vy:16+Math.random()*26, ph:Math.random()*6.28, rot:(Math.random()-0.5)*3});
+}
+
+/* ---- fireflies (screen space, dusk/night only) ---- */
+const flies = [];
+for(let i=0;i<26;i++){
+  const g = new PIXI.Graphics();
+  g.beginFill(0xE7FF9C); g.drawCircle(0,0,1.7); g.endFill();
+  g.beginFill(0xE7FF9C,0.18); g.drawCircle(0,0,5); g.endFill();
+  g.blendMode = PIXI.BLEND_MODES.ADD;
+  fireflyLayer.addChild(g);
+  flies.push({g, fx:Math.random(), fy:0.45+Math.random()*0.5, ph:Math.random()*6.28, sp:0.4+Math.random()*0.8, blink:Math.random()*6.28});
+}
+
+/* ---- camera keyframes over scrollProgress ---- */
+const camKeys = [
+  [0.00, 0.92, 5.0, 5.0],
+  [0.18, 1.45, 4.6, 4.8],
+  [0.42, 1.25, 5.2, 5.8],
+  [0.66, 1.05, 5.4, 4.2],
+  [0.90, 0.86, 5.0, 5.0],
+  [1.00, 0.86, 5.0, 5.0],
+];
+function baseScale(){
+  const span=(GRID+1)*TILE_W;
+  return Math.min(1.15, Math.max(0.55, SW()/span));
+}
+function applyCamera(p){
+  let a=camKeys[0], b=camKeys[camKeys.length-1];
+  for(let i=0;i<camKeys.length-1;i++)
+    if(p>=camKeys[i][0]&&p<=camKeys[i+1][0]){a=camKeys[i];b=camKeys[i+1];break;}
+  const t = smooth((p-a[0])/Math.max(1e-6,b[0]-a[0]));
+  const zoom = lerp(a[1],b[1],t)*baseScale();
+  const focus = isoMath.toIsometric(lerp(a[2],b[2],t), lerp(a[3],b[3],t));
+  worldContainer.scale.set(zoom);
+  worldContainer.x = SW()/2 - focus.x*zoom;
+  worldContainer.y = SH()/2 - focus.y*zoom + SH()*0.06;
+}
+
+/* ---- layout / resize ---- */
+let lastTintColor = -1;
+function layout(){
+  skySprite.width = SW(); skySprite.height = SH();
+  stars.forEach(s=>{ s.g.x=s.fx*SW(); s.g.y=s.fy*SH(); });
+  buildRidges();
+  tintOverlay.clear(); tintOverlay.beginFill(0xFFFFFF); tintOverlay.drawRect(0,0,SW(),SH()); tintOverlay.endFill();
+  lastTintColor = -1;
+  if(!store.state.transitioning) applyCamera(store.state.scrollProgress);
+}
+window.addEventListener('resize', layout);
+
+/* ---- main loop ---- */
+let elapsed = 0;
+app.ticker.add(()=>{
+  const st = store.state;
+  const now = performance.now();
+  const dt = Math.min(0.1,(now-st.lastTickTime)/1000);
+  st.lastTickTime = now;
+  elapsed += dt;
+  const p = st.scrollProgress;
+  const c = tod(p);
+
+  /* sky, tint, ridges */
+  redrawSky(p);
+  if(c.tint !== lastTintColor){ tintOverlay.tint = c.tint; lastTintColor = c.tint; }
+  ridgeFar.tint = c.ridgeFar; ridgeNear.tint = c.ridgeNear;
+  ridgeFar.x = -p*SW()*0.05; ridgeNear.x = -p*SW()*0.10;
+
+  /* stars */
+  starLayer.alpha = 1;
+  stars.forEach(s=>{ s.g.alpha = c.stars*(0.4+0.6*Math.abs(Math.sin(elapsed*s.sp+s.ph))); });
+  if(c.stars>0.6 && !reduceMotion){
+    shooterWait -= dt;
+    if(shooterWait<=0 && !shooter.visible){
+      shooter.visible = true; shooterT = 0;
+      shooter.x = SW()*(0.15+Math.random()*0.6); shooter.y = SH()*(0.06+Math.random()*0.2);
+      shooter.rotation = 0.5+Math.random()*0.4;
+    }
+    if(shooter.visible){
+      shooterT += dt;
+      shooter.x += Math.cos(shooter.rotation)*520*dt;
+      shooter.y += Math.sin(shooter.rotation)*520*dt;
+      shooter.alpha = Math.max(0, 1-shooterT/0.9);
+      if(shooterT>0.9){ shooter.visible=false; shooterWait = 4+Math.random()*7; }
+    }
+  } else { shooter.visible=false; }
+
+  /* sun & moon arcs */
+  const sunT = clamp01(p/0.8);
+  sun.x = lerp(SW()*0.14, SW()*0.86, sunT);
+  sun.y = SH()*0.62 - Math.sin(Math.PI*sunT)*SH()*0.45;
+  sun.alpha = c.sun;
+  sunCore.tint = mixHex('#FFE9C4','#FF9645', Math.pow(Math.abs(sunT-0.5)*2,1.5));
+  const moonT = clamp01((p-0.72)/0.28);
+  moon.x = lerp(SW()*0.2, SW()*0.62, moonT);
+  moon.y = SH()*0.5 - Math.sin(Math.PI*clamp01(moonT*0.6+0.1))*SH()*0.3;
+  moon.alpha = smooth(moonT*1.6);
+
+  /* clouds */
+  clouds.forEach(o=>{
+    if(!reduceMotion) o.c.x += o.sp*dt;
+    if(o.c.x > SW()+240) o.c.x = -260;
+    o.c.y = o.fy*SH();
+    const tintC = mixHex('#FFFFFF', c.mid, 0.55);
+    o.c.children.forEach(ch=>ch.tint = tintC);
+  });
+
+  /* era items fade in with scroll */
+  eraItems.forEach(({s,from,to})=>{
+    const t = smooth((p-from)/(to-from));
+    s.alpha = t; s.y = s.baseY + (1-t)*10;
+  });
+
+  /* ambient world life */
+  if(!reduceMotion){
+    if(fire1.flame){ fire1.flame.scale.y = 1+Math.sin(elapsed*9)*0.12; fire1.glow.alpha = 0.16+Math.sin(elapsed*6)*0.05; }
+    if(mill.blades && mill.alpha>0.4) mill.blades.rotation += 0.4*dt;
+    trees.forEach(t=>{ t.rotation = Math.sin(elapsed*0.8+t.swayPh)*0.015; });
+    walkers.forEach(w=>{
+      if(w.s.alpha<0.3) return;
+      const a = elapsed*w.sp + w.ph;
+      const gp = isoMath.toIsometric(w.cx+Math.cos(a)*w.r, w.cy+Math.sin(a)*w.r);
+      w.s.x = gp.x; w.s.y = gp.y - 2 + Math.abs(Math.sin(a*6))*-1.5;
+    });
+    fogs.forEach(f=>{
+      f.g.x += f.sp*dt;
+      if(f.g.x > f.baseX+260) f.g.x = f.baseX-260;
+      f.g.alpha = 0.035 + 0.03*c.stars;
+    });
+  }
+  sparkles.forEach(s=>{
+    s.g.alpha = (0.10+0.16*Math.abs(Math.sin(elapsed*s.sp+s.ph))) * (0.4+0.6*c.sun+0.4*c.stars);
+  });
+
+  /* emitters */
+  if(!reduceMotion) emitters.forEach(em=>{
+    const hostA = em.host.alpha;
+    em.c.visible = hostA>0.05;
+    if(!em.c.visible) return;
+    em.parts.forEach(pt=>{
+      pt.t += dt*(em.type==='ember'? pt.v : 0.22);
+      if(pt.t>1) pt.t -= 1;
+      if(em.type==='smoke'){
+        pt.g.y = -pt.t*52*em.scale;
+        pt.g.x = Math.sin(pt.t*5+pt.seed)*5*em.scale;
+        pt.g.alpha = hostA*Math.sin(Math.PI*pt.t)*0.3;
+        const sc = (0.45+pt.t*1.5)*em.scale; pt.g.scale.set(sc);
+      } else {
+        pt.g.y = -pt.t*66;
+        pt.g.x = Math.sin(pt.t*9+pt.seed)*4;
+        pt.g.alpha = hostA*(1-pt.t)*(0.5+0.5*Math.sin(elapsed*14+pt.seed));
+      }
+    });
+  });
+
+  /* leaves */
+  if(!reduceMotion) leaves.forEach(l=>{
+    l.y += l.vy*dt;
+    if(l.y > SH()+10){ l.y = -12; l.fx = Math.random(); }
+    l.g.x = l.fx*SW() + Math.sin(elapsed*1.3+l.ph)*26;
+    l.g.y = l.y;
+    l.g.rotation += l.rot*dt;
+  });
+
+  /* fireflies */
+  const flyA = smooth((p-0.6)/0.18);
+  fireflyLayer.alpha = flyA;
+  if(flyA>0 && !reduceMotion) flies.forEach(f=>{
+    f.g.x = f.fx*SW() + Math.sin(elapsed*f.sp+f.ph)*46 + Math.sin(elapsed*0.31+f.ph*2)*70;
+    f.g.y = f.fy*SH() + Math.cos(elapsed*f.sp*0.8+f.ph)*30;
+    f.g.alpha = 0.25+0.75*Math.abs(Math.sin(elapsed*1.6+f.blink));
+  });
+
+  if(!st.transitioning) applyCamera(p);
+});
+
+/* ---------------- WORLD 2 : DOM ---------------- */
+gsap.registerPlugin(ScrollTrigger);
+
+/* scroll → store (spec Phase 3) */
+ScrollTrigger.create({
+  trigger:'#story', start:'top top', end:'bottom bottom', scrub:0.6,
+  onUpdate:self=>{ store.set({ scrollProgress:self.progress }); }
+});
+
+/* hero entrance */
+if(!reduceMotion){
+  gsap.from('#hero h1 span',{opacity:0, y:44, rotateX:40, stagger:0.055, duration:1.1, ease:'power3.out', delay:0.2});
+  gsap.from('#hero .eyebrow, #hero .lede, #hero .acorn',{opacity:0, y:16, stagger:0.15, duration:0.9, delay:0.8});
+}
+
+/* panels */
+document.querySelectorAll('.era .panel').forEach(panel=>{
+  gsap.from(panel,{
+    opacity:0, y:reduceMotion?0:54, duration:1,
+    scrollTrigger:{ trigger:panel, start:'top 78%', toggleActions:'play none none reverse' }
+  });
+});
+gsap.from('#cta > *',{
+  opacity:0, y:reduceMotion?0:30, stagger:0.12, duration:0.9,
+  scrollTrigger:{ trigger:'#cta', start:'top 65%' }
+});
+
+/* chrome reactions */
+const cue = document.getElementById('scroll-cue');
+const topbar = document.getElementById('topbar');
+const railStops = [...document.querySelectorAll('#rail .stop')];
+store.subscribe(st=>{
+  cue.style.opacity = st.scrollProgress>0.03 ? 0 : 1;
+  topbar.classList.toggle('scrolled', st.scrollProgress>0.02);
+  railStops.forEach(el=>{
+    el.classList.toggle('lit', st.scrollProgress >= parseFloat(el.dataset.at));
+  });
+});
+
+/* ---------------- Seamless play transition (spec Phase 5) ---------------- */
+const veil = document.getElementById('veil');
+const launch = document.getElementById('launch');
+document.getElementById('play-btn').addEventListener('click', ()=>{
+  store.state.transitioning = true;
+  const tl = gsap.timeline();
+  tl.to('#story, #topbar, #rail',{opacity:0, duration:0.55, ease:'power2.in'});      // 1. DOM fades
+  const zoom = 1.6*baseScale();
+  const focus = isoMath.toIsometric(5,5);
+  tl.to(worldContainer.scale,{x:zoom, y:zoom, duration:1.5, ease:'power2.inOut'},'<0.15'); // 2. camera dives
+  tl.to(worldContainer,{
+    x:()=>SW()/2 - focus.x*zoom,
+    y:()=>SH()/2 - focus.y*zoom,
+    duration:1.5, ease:'power2.inOut'
+  },'<');
+  tl.add(()=>veil.classList.add('dark'), '-=0.5');
+  tl.add(()=>{                                                                        // 3. hand off to the real game
+    if(GAME_URL){ window.location.href = GAME_URL; return; }
+    launch.style.display='flex';
+    gsap.from('#launch .card',{opacity:0, y:20, scale:0.96, duration:0.7, ease:'power2.out'});
+  }, '+=0.25');
+});
+document.getElementById('launch-back').addEventListener('click', ()=>{
+  launch.style.display='none';
+  veil.classList.remove('dark');
+  gsap.to('#story, #topbar, #rail',{opacity:1, duration:0.6});
+  store.state.transitioning = false;
+  ScrollTrigger.refresh();
+});
+
+layout();
+applyCamera(0);
+</script>
+</body>
+</html>
