@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.28.0
+Fire — a new disaster. Timber buildings can catch fire (far more likely in a dry
+summer, rare in winter or rain). A blaze steadily damages its building and, left
+unchecked, spreads to nearby timber structures; if it consumes a building
+entirely, that building is lost and the hold's morale takes a hit. Fight it by
+tapping the burning building and flinging water (a bucket brigade); nearby
+settlers, rain, storms, and winter all help put it out. Rewards spacing timber
+buildings apart and keeping people close. Disabled in Peaceful mode. Fires are
+transient (not saved), though any fire damage to a building's condition is.
+
 ## 1.27.0
 Villager skill growth. Settlers now accumulate experience in whatever role they
 work, rising through tiers — Skilled (+8% output) and Master (+18%) — that speed
