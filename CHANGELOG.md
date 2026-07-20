@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.19.2
+Child sprite scaling — settlers in the child stage now render ~0.68x across
+all villager draw paths (sprite, fallback sprite, and canvas), with shadow
+and mood-bubble scaled to match, so children are visibly smaller until they
+come of age. Purely visual.
+
 ## 1.19.1
 Chronicle polish. Every chronicle moment now draws from several varied
 phrasings so the hold's story reads written rather than logged, and a new
