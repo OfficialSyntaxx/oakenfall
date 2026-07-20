@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.30.0
+Redeem codes — the foundation for supporting Oakenfall. Cosmetic packs bought on
+the website can be unlocked in-game (⚙ → 🎁 Redeem) with a signed code that the
+game verifies **offline** against an embedded public key, so the hard "zero
+network requests at runtime" rule still holds and codes can't be forged. The
+first SKUs are strictly cosmetic (a Patron plaque and premium banner dyes) —
+never anything pay-to-win. Unlocks persist in saves. A companion Netlify signing
+function (`sign-unlock.js`) and `MONETIZATION.md` document the storefront setup;
+the private signing key lives only in the site's environment. This ships the
+plumbing; wiring a specific storefront (Stripe/Gumroad/itch) is the next step.
+
 ## 1.29.0
 Three additions that deepen the fire, skill, and weather systems.
 
