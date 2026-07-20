@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.21.0
+Deeds. The hold can now earn 14 one-time achievements — A Roof Raised, Hamlet,
+Township, First Winter, Iron Heart, Bridge Builder, Full Granary, Timber Baron,
+A Match Made, New Life, Grey Hairs, Remembered, Held the Gate, and Scholar —
+shown as parchment badges in the Journal tab (locked ones greyed with their
+requirement). Each is announced with a toast when earned and written into the
+Chronicle. Earned deeds persist in saves.
+
 ## 1.20.0
 Villager roster. The Hold Menu gains a "Folk" tab listing every settler,
 sortable by role, morale, or name, each row showing their life stage, trait,
