@@ -1,0 +1,170 @@
+<!-- title: The Oakenfall Wiki -->
+<!-- desc: A searchable wiki for Oakenfall — buildings, roles, traits, research, seasons, fire, climate, trade, and every system in the game. -->
+<!-- slug: wiki -->
+
+<section class="district wiki">
+  <p class="district-kicker">The great library</p>
+  <h2>The Oakenfall Wiki</h2>
+  <p>Everything the hold knows, in one place. Search a term or filter by chapter — buildings, folk, research, seasons, fire, trade, and every system beneath the pines.</p>
+
+  <div class="wiki-search">
+    <input type="search" id="wikiSearch" placeholder="Search the wiki — “bridge”, “morale”, “fire”…" aria-label="Search the wiki" autocomplete="off">
+    <span class="wiki-count" id="wikiCount" role="status" aria-live="polite"></span>
+  </div>
+  <div class="wiki-cats" id="wikiCats" role="tablist" aria-label="Wiki categories"></div>
+
+  <div class="wiki-grid" id="wikiGrid"></div>
+  <p class="wiki-empty" id="wikiEmpty" hidden>No entries match that search. Try another term.</p>
+</section>
+
+<script>
+(function(){
+  // ── Wiki content. Each entry: {cat, ic, title, body, tags} ──
+  var W = [
+    // Getting started
+    {cat:'Basics', ic:'⛩', title:'What is Oakenfall?', body:'A dark-medieval isometric city-builder that lives in a single HTML file. Raise a hold from nothing, feed and defend it, and survive the turning seasons. Touch-first, offline, no accounts.', tags:'intro start begin about single file'},
+    {cat:'Basics', ic:'🕹', title:'Controls', body:'Drag to pan the map, pinch or scroll to zoom, double-tap to zoom in. Tap a building, settler, or tile to open its panel. The build button (🔨) opens the construction menu. The speed button cycles 1× → 2× → pause.', tags:'controls pan zoom tap touch mouse speed pause camera'},
+    {cat:'Basics', ic:'💾', title:'Saving & offline progress', body:'The hold autosaves and can be saved from the ⚙ menu. Close the game and your settlers keep working at a reduced pace (except in Iron Winter) — you return to stocked shelves, within reason.', tags:'save load offline autosave progress storage'},
+    {cat:'Basics', ic:'🎯', title:'Goals, bounties & coins', body:'Goals (long-term) and daily bounties (short-term) both pay coins when completed. Spend coins in the Hold Shop on feasts, healers, repairs, rations, and trade routes. Reach hold tiers to unlock more.', tags:'goals quests bounties coins shop economy currency'},
+
+    // Buildings
+    {cat:'Buildings', ic:'🏚️', title:'House', body:'Shelters settlers — adds +3 population capacity. Your first priority: no roof means no room for new arrivals. Cost: 30 wood.', tags:'house home shelter population capacity housing'},
+    {cat:'Buildings', ic:'🏛️', title:'Manor', body:'A grand timber-framed hall sheltering +6 settlers in comfort. Requires the Timber Framing research. Cost: 40 wood, 10 stone, 25 planks.', tags:'manor housing capacity framing tech grand hall'},
+    {cat:'Buildings', ic:'🪓', title:'Forestry Camp', body:'Assign a Lumberjack here to fell timber from the woods. The backbone of your economy — wood builds almost everything. Cost: 40 wood, 10 stone.', tags:'forestry camp lumberjack wood timber gather'},
+    {cat:'Buildings', ic:'⛏️', title:'Mining Post', body:'Assign a Miner to delve stone from outcrops. Stone gates your sturdier buildings and research. Cost: 30 wood, 20 stone.', tags:'mining post miner stone quarry gather'},
+    {cat:'Buildings', ic:'🎣', title:'Fishing Hut', body:'Built along the river; assign a Fisher to net food. Fishing halts when the river freezes in winter. Cost: 35 wood, 5 stone.', tags:'fishing hut fisher food river water winter freeze'},
+    {cat:'Buildings', ic:'🏹', title:'Hunting Cabin', body:'Built near the wilds; assign a Hunter to track game for meat (food). Cost: 35 wood.', tags:'hunting cabin hunter meat food wilds game'},
+    {cat:'Buildings', ic:'🌾', title:'Farm', body:'Assign a Farmer to tend crops through the seasons. +15% yield beside the river (irrigation). Crops follow the seasons and stop yielding in winter. Cost: 35 wood.', tags:'farm farmer crops food seasons irrigation river'},
+    {cat:'Buildings', ic:'🏺', title:'Granary', body:'Raises storage limits for wood, stone, and food by 90 each. Build it before your stores overflow. Cost: 45 wood, 15 stone.', tags:'granary storage capacity limit stockpile'},
+    {cat:'Buildings', ic:'🪚', title:'Sawmill', body:'Processes 4 wood into 2 planks every cycle. Planks unlock finer construction (Manor, Bakery, Guard Post). Runs 12% faster beside a road linked to the Town Center. Cost: 50 wood, 20 stone.', tags:'sawmill planks processor wood logistics road chain'},
+    {cat:'Buildings', ic:'🌬️', title:'Windmill', body:'Grinds 5 food into 3 flour each cycle; its sails turn day and night. Flour feeds the Bakery. Cost: 45 wood, 25 stone, 8 planks.', tags:'windmill flour processor food grain chain'},
+    {cat:'Buildings', ic:'🍞', title:'Bakery', body:'Bakes 2 flour into 3 bread each cycle. Bread fills bellies better than raw fare and lifts morale when it sits in the stores. Cost: 35 wood, 15 stone, 12 planks.', tags:'bakery bread flour processor food morale chain'},
+    {cat:'Buildings', ic:'🍺', title:'Tavern', body:'Warmth and ale ease the toil — settlers tire 20% slower (30% with Oaken Ale research), and it lifts morale. Cost: 55 wood, 10 stone.', tags:'tavern ale morale fatigue rest social'},
+    {cat:'Buildings', ic:'⚖️', title:'Trading Post', body:'Exchange surplus goods at fixed rates, improved when a merchant is visiting. Required to broker recurring trade routes. Cost: 50 wood, 10 stone.', tags:'trading post trade merchant coins routes exchange'},
+    {cat:'Buildings', ic:'🗼', title:'Watchtower', body:'Wardens watch the treeline, cutting wolf-raid risk sharply. Cost: 40 wood, 25 stone.', tags:'watchtower defense wolves raids warden'},
+    {cat:'Buildings', ic:'🛡️', title:'Guard Post', body:'Assign a Guard to drive off bandits before they reach the stores. A Guard Post within 3 tiles of a bridge keeps that crossing “watched”. Cost: 40 wood, 20 stone, 6 planks.', tags:'guard post guard bandits defense bridge watched raids'},
+    {cat:'Buildings', ic:'🪵', title:'Palisade', body:'A wall of sharpened timber that blocks passage and slows raiders. Ring your hold for safety. Cheap: 12 wood.', tags:'palisade wall defense raiders barrier'},
+    {cat:'Buildings', ic:'⛲', title:'Well', body:'A stone well that acts as a firebreak: timber within ~3.5 tiles rarely catches fire and douses fast. Space wells through your timber to plan against fire. Cost: 10 wood, 24 stone.', tags:'well fire firebreak water douse defense disaster'},
+    {cat:'Buildings', ic:'🛤️', title:'Road', body:'Paved path — settlers move 30% faster on roads, and processors beside a road linked to the Town Center work 12% faster (logistics). Cost: 8 stone.', tags:'road logistics speed movement processor path'},
+    {cat:'Buildings', ic:'🌉', title:'Bridge', body:'A plank span over the river, opening the far bank\'s timber, stone, and hunting grounds. But every bridge is a door raiders can use, and each erodes the river\'s moat bonus. Cost: 20 wood, 6 planks.', tags:'bridge river crossing raiders moat defense far bank'},
+    {cat:'Buildings', ic:'🏰', title:'Town Center', body:'The heart of the hold, where settlers eat and sleep and where research is conducted. It never decays and cannot be demolished.', tags:'town center hall research sleep eat core'},
+
+    // Roles
+    {cat:'Folk', ic:'💤', title:'Idle settlers', body:'Unassigned folk wander, socialise, gather at the hearth after dark, and rush to fight fires with buckets. Assign them a role from their panel, or use “put all idle settlers to work”.', tags:'idle unassigned villager assign work bucket'},
+    {cat:'Folk', ic:'🪓', title:'Lumberjack, Miner, Fisher, Hunter', body:'Gatherers work a real spot on the map and haul the load home by hand. Each needs its building (Forestry Camp, Mining Post, Fishing Hut, Hunting Cabin).', tags:'lumberjack miner fisher hunter gatherer roles work'},
+    {cat:'Folk', ic:'🌾', title:'Farmer', body:'Tends a Farm through the sowing, growing, and harvest of each season, racing the frost. A full granary is the difference between a hard winter and a funeral.', tags:'farmer farm crops food seasons harvest'},
+    {cat:'Folk', ic:'🛡️', title:'Guard', body:'Stationed at a Guard Post, Guards drive off bandits before they reach the stores. Drilled Militia research makes each count double.', tags:'guard defense bandits militia post'},
+    {cat:'Folk', ic:'⭐', title:'Skill growth & mastery', body:'Settlers get better at a role the longer they work it, rising from Skilled (+8% output) to Master (+18%). A Master working near a novice of the same trade teaches them twice as fast (apprenticeship). Losing a Master costs the hold real productivity.', tags:'skill mastery master skilled apprentice apprenticeship experience proficiency veteran'},
+    {cat:'Folk', ic:'💞', title:'Families & generations', body:'Settlers befriend, form rivalries, court and wed (often a close friend), and raise children who come of age and join the workforce. Elders work at reduced pace; the aged pass and are interred in the memorial grove.', tags:'family wedding marriage children birth elder aging death memorial relationships generations'},
+    {cat:'Folk', ic:'😊', title:'Morale', body:'Morale is a slow tide raised by bread, taverns, families, hearths, festivals, and safety — and drained by hunger, illness, raids, overcrowding, and hard climate. A settler who loses heart for too long leaves the hold for good.', tags:'morale happiness leave mood tavern bread hunger'},
+    {cat:'Folk', ic:'🤧', title:'Illness', body:'Settlers can fall ill, working slower until they recover. Herbal Lore research makes illness rarer and shorter; a Healer (shop or wandering event) cures everyone at once.', tags:'illness sick disease healer herbs cure health'},
+
+    // Traits
+    {cat:'Traits', ic:'🛡️', title:'Hardy', body:'Tires 20% slower — and lives a little longer.', tags:'trait hardy fatigue lifespan'},
+    {cat:'Traits', ic:'💨', title:'Swift', body:'Moves 20% faster across the map.', tags:'trait swift speed movement'},
+    {cat:'Traits', ic:'🍖', title:'Glutton', body:'Hungers 30% faster — a heavier draw on your food.', tags:'trait glutton hunger food'},
+    {cat:'Traits', ic:'⚒️', title:'Diligent', body:'Works 20% faster. Occasionally clashes with a Glutton (rivalry).', tags:'trait diligent work productivity'},
+    {cat:'Traits', ic:'🤧', title:'Frail', body:'Tires 25% faster and is more prone to illness; seeks warmth in winter.', tags:'trait frail fatigue illness winter'},
+    {cat:'Traits', ic:'🍀', title:'Lucky', body:'Rarely singled out by wolf raids, and forms bonds a touch faster.', tags:'trait lucky raids wolves relationships'},
+    {cat:'Traits', ic:'🦁', title:'Brave (legacy)', body:'Earned by standing through a raid — loses only half morale to attacks. Never rolled at spawn.', tags:'trait brave legacy raid morale earned'},
+    {cat:'Traits', ic:'🕯️', title:'Steadfast (legacy)', body:'Earned when a partner leaves or passes — carries their memory with steadier morale. Never rolled at spawn.', tags:'trait steadfast legacy partner morale earned'},
+
+    // Research
+    {cat:'Research', ic:'🔬', title:'How research works', body:'Conducted at the Town Center (or the Research tab of the Hold Menu) along the ancient oak\'s nine branches. Each tech costs resources and time; some require an earlier tech first.', tags:'research tech tree oak branches science town center'},
+    {cat:'Research', ic:'🪓', title:'Sharpened Tools', body:'+15% wood & stone yield. A strong early pick. Unlocks Oaken Ale and Timber Framing.', tags:'research tools yield wood stone'},
+    {cat:'Research', ic:'🌱', title:'Crop Rotation', body:'+20% farm yield — food security through the year.', tags:'research crops farm food yield'},
+    {cat:'Research', ic:'🧱', title:'Stone Masonry', body:'Buildings cost 15% less stone. Unlocks Deep Cellars.', tags:'research masonry stone cost cheaper'},
+    {cat:'Research', ic:'🌿', title:'Herbal Lore', body:'Illness is rarer and passes 40% faster.', tags:'research herbs illness health'},
+    {cat:'Research', ic:'🍺', title:'Oaken Ale', body:'Improves the Tavern rest bonus (settlers tire 30% slower). Requires Sharpened Tools.', tags:'research ale tavern fatigue rest'},
+    {cat:'Research', ic:'🏺', title:'Deep Cellars', body:'+60 storage for every resource. Requires Stone Masonry.', tags:'research cellars storage capacity'},
+    {cat:'Research', ic:'⚔️', title:'Drilled Militia', body:'Guards count double against bandits.', tags:'research militia guards bandits defense'},
+    {cat:'Research', ic:'🔥', title:'Hearthfires', body:'Warm hearths lift every settler\'s spirits (+8 morale).', tags:'research hearth morale warmth'},
+    {cat:'Research', ic:'🏛️', title:'Timber Framing', body:'Unlocks the Manor — grand housing for 6 settlers. Requires Sharpened Tools.', tags:'research framing manor housing'},
+
+    // Systems
+    {cat:'Systems', ic:'🍂', title:'Seasons', body:'Spring (planting, births), Summer (fast, dry work — bountiful yields but fire risk), Autumn (harvest before the frost), Winter (yields thin, morale dips, the river freezes, wolves close in). Three day/night cycles per season.', tags:'seasons spring summer autumn winter cycle year'},
+    {cat:'Systems', ic:'🌧️', title:'Weather', body:'Rolled each dawn: clear, rain (crops drink deep, boots drag), storm (slower, more tiring), or snow (winter). Weather also affects how easily fire catches and spreads.', tags:'weather rain storm snow clear dawn'},
+    {cat:'Systems', ic:'🏜️', title:'Climate spells', body:'Multi-day conditions over daily weather. Droughts raise fire risk and wither crops; cold snaps drain food and stamina; fair spells make crops and spirits thrive. Announced, temporary, shown beside the season in the clock. (Off in Iron Winter.)', tags:'climate drought cold snap fair spell weather disaster event'},
+    {cat:'Systems', ic:'🔥', title:'Fire', body:'Timber buildings can catch — likely in dry summer, rare in winter or rain. A blaze damages its building and spreads to neighbours; a building burned to nothing is lost. Tap it to fling water (bucket brigade); nearby settlers, rain, winter, and Wells help douse. Space timber apart and keep Wells close. Disabled in Peaceful.', tags:'fire disaster burn spread bucket well douse timber'},
+    {cat:'Systems', ic:'🐺', title:'Wolves & bandit raids', body:'Wolves prowl the treeline and bandits raid the roads and unwatched bridges. Watchtowers cut wolf risk; Guard Posts and Palisades stop bandits; the river is a natural moat. Survivors can become Brave.', tags:'wolves bandits raids defense watchtower guard palisade moat attack'},
+    {cat:'Systems', ic:'🌊', title:'The river, fords & winter freeze', body:'The river splits the hold. Two shallow fords let settlers wade slowly with no bridge. In winter it freezes solid — anything can cross the ice (the moat is gone) and fishing halts until the thaw.', tags:'river ford bridge moat winter freeze ice water crossing'},
+    {cat:'Systems', ic:'🛠️', title:'Building decay & repair', body:'Buildings weather over time. Below 35 condition their bonuses stop entirely. Repair them with wood from the building panel, or “Mend the Hold” in the shop. Patch roofs in autumn, not in a blizzard.', tags:'decay repair condition maintenance worn mend'},
+    {cat:'Systems', ic:'🎊', title:'Seasonal festivals', body:'Once a year, as spring returns, the hold chooses one lasting blessing: Harvest Feast (+20% food yield), Rite of Courage (+8 morale, raids sting less), or Craftsmen\'s Fair (+15% work speed). It holds until the next year\'s festival.', tags:'festival boon blessing harvest courage craft yearly choice'},
+    {cat:'Systems', ic:'🐫', title:'Trade routes', body:'With a Trading Post, agree to recurring caravan contracts: deliver a set amount of a good every few days for coins, auto-paid at dawn. Miss twice and the route breaks with a morale knock. Up to three at once.', tags:'trade routes caravan contract coins merchant delivery economy'},
+    {cat:'Systems', ic:'🏅', title:'Deeds', body:'Fourteen one-time achievements (First Winter, Bridge Builder, Full Granary, Master of the Craft, and more), shown as parchment badges in the Journal. Each grants a coin (or resource) reward and is recorded in the Chronicle.', tags:'deeds achievements badges journal rewards goals'},
+    {cat:'Systems', ic:'📜', title:'The Chronicle', body:'A dated story of your hold\'s life — foundings, friendships, weddings, births, comings-of-age, passings, fires, festivals, and the turning seasons — readable in the Journal and worth a screenshot.', tags:'chronicle history story journal record log'},
+    {cat:'Systems', ic:'📊', title:'Statistics & the Folk roster', body:'The Journal holds a Statistics view (settlers, provisions, and timber over time) and an Events inbox. The Folk tab lists every settler, sortable by role, morale, or name — tap one to find them on the map.', tags:'statistics graph roster folk events inbox journal population'},
+    {cat:'Systems', ic:'🏕️', title:'Hold tiers', body:'As your settlement grows it rises through tiers — outpost to camp to village to true hold — opening the shop, daily bounties, and grander construction.', tags:'tier hold growth outpost village progression rank'},
+
+    // Modes & resources
+    {cat:'Modes', ic:'🌲', title:'Settler', body:'The classic Oakenfall experience — seasons, wolves, bandits, and bounties, at a forgiving pace.', tags:'mode settler classic default'},
+    {cat:'Modes', ic:'🕊️', title:'Peaceful', body:'No wolves, no bandits, no decay, no fire. Build in tranquillity — but bounties pay half.', tags:'mode peaceful safe relaxed no combat'},
+    {cat:'Modes', ic:'❄️', title:'Iron Winter', body:'Endless winter. Yields are thin, fatigue bites, wolves are bold, decay is fast, and there\'s no offline progress. For veterans.', tags:'mode iron winter hard difficult challenge'},
+    {cat:'Modes', ic:'⚖️', title:'Merchant', body:'Trade is king — richer rates, frequent merchants, double bounties. But wolves smell profit.', tags:'mode merchant trade coins economy'},
+    {cat:'Resources', ic:'🪵', title:'Wood, Stone & Planks', body:'Wood is the foundation of nearly every build; stone gates sturdier structures; planks (from the Sawmill) unlock finer construction. Storage is capped — raise it with Granaries and Deep Cellars.', tags:'resources wood stone planks materials storage'},
+    {cat:'Resources', ic:'🌾', title:'Food, Flour & Bread', body:'Food (from farms, fishing, hunting, foraging) keeps settlers fed and enables births. The Windmill turns food to flour and the Bakery flour to bread — bread fills bellies better and lifts morale.', tags:'resources food flour bread hunger farming chain'},
+    {cat:'Resources', ic:'💰', title:'Coins', body:'Earned from goals, daily bounties, deeds, and trade routes. Spent in the Hold Shop. Not gathered from the land — they come from a well-run, well-traded hold.', tags:'resources coins currency shop economy money'},
+
+    // Tips
+    {cat:'Tips', ic:'1️⃣', title:'Wood before glory', body:'Your first autumn is for firewood and food, not monuments. A cold settler is unhappy; a hungry one starts packing.', tags:'tips strategy early game wood food winter'},
+    {cat:'Tips', ic:'2️⃣', title:'Space your timber, dig your wells', body:'Fire spreads between adjacent timber buildings. Leave gaps, pave stone roads as breaks, and keep a Well near clusters — especially in a dry summer or drought.', tags:'tips fire well timber spacing strategy'},
+    {cat:'Tips', ic:'3️⃣', title:'Grow your Masters', body:'Keep settlers in the same role to build mastery, and station a Master beside newcomers so they learn twice as fast. A veteran workforce out-produces a shuffled one.', tags:'tips skill master apprentice strategy productivity'},
+    {cat:'Tips', ic:'4️⃣', title:'Watch morale and the crossings', body:'Taverns, bread, families, and safety keep hearts high. Guard your bridges (a Guard Post within 3 tiles keeps them watched) and ring the hold before winter, when the frozen river stops being a moat.', tags:'tips morale defense bridge winter strategy'},
+  ];
+
+  var CATS = [];
+  W.forEach(function(e){ if(CATS.indexOf(e.cat)<0) CATS.push(e.cat); });
+
+  var grid = document.getElementById('wikiGrid');
+  var catsEl = document.getElementById('wikiCats');
+  var searchEl = document.getElementById('wikiSearch');
+  var countEl = document.getElementById('wikiCount');
+  var emptyEl = document.getElementById('wikiEmpty');
+  var activeCat = 'All';
+  var query = '';
+
+  // build category chips
+  var allCats = ['All'].concat(CATS);
+  catsEl.innerHTML = allCats.map(function(c){
+    return '<button class="wiki-chip'+(c==='All'?' sel':'')+'" data-cat="'+c+'">'+c+'</button>';
+  }).join('');
+  catsEl.querySelectorAll('[data-cat]').forEach(function(b){
+    b.addEventListener('click', function(){
+      activeCat = b.dataset.cat;
+      catsEl.querySelectorAll('.wiki-chip').forEach(function(x){ x.classList.toggle('sel', x===b); });
+      render();
+    });
+  });
+
+  function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function hl(text, q){
+    var e = esc(text);
+    if(!q) return e;
+    try {
+      var re = new RegExp('('+q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','ig');
+      return e.replace(re, '<mark>$1</mark>');
+    } catch(_) { return e; }
+  }
+
+  function render(){
+    var q = query.trim().toLowerCase();
+    var shown = W.filter(function(e){
+      if(activeCat!=='All' && e.cat!==activeCat) return false;
+      if(!q) return true;
+      return (e.title+' '+e.body+' '+e.tags+' '+e.cat).toLowerCase().indexOf(q) >= 0;
+    });
+    grid.innerHTML = shown.map(function(e){
+      return '<article class="wiki-card">'+
+        '<h3><span class="wiki-ic" aria-hidden="true">'+e.ic+'</span> '+hl(e.title,q)+'</h3>'+
+        '<p class="wiki-cat-tag">'+esc(e.cat)+'</p>'+
+        '<p>'+hl(e.body,q)+'</p>'+
+      '</article>';
+    }).join('');
+    emptyEl.hidden = shown.length>0;
+    countEl.textContent = shown.length + (shown.length===1?' entry':' entries');
+  }
+
+  searchEl.addEventListener('input', function(){ query = searchEl.value; render(); });
+  render();
+})();
+</script>

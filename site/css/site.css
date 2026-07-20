@@ -419,3 +419,48 @@ html[data-season="Winter"] .hero-scene .foliage-dark{ fill:#6d7a7c; }
 .deed-badge.earned{ opacity:1; background:linear-gradient(180deg,rgba(42,33,19,.7),rgba(28,21,13,.7)); border-color:var(--amber-dim,#7a5220); }
 .deed-badge .db-ic{ font-size:1.7rem; line-height:1; }
 .deed-badge .db-name{ font-family:'Cinzel',serif; font-size:.72rem; color:var(--amber,#e7a23d); line-height:1.2; }
+
+/* ---------- Footer signature: animated gradient "Made by Syntaxx" ---------- */
+.made-by{ margin-top:.9rem; font-size:.9rem; letter-spacing:.02em; opacity:.9; }
+.made-by-name{
+  font-family:'Cinzel',serif; font-weight:700; letter-spacing:.04em;
+  background:linear-gradient(90deg,#e8a13c,#f2c069,#6d854c,#8fa5c4,#c8982c,#e8a13c);
+  background-size:300% 100%;
+  -webkit-background-clip:text; background-clip:text;
+  -webkit-text-fill-color:transparent; color:transparent;
+  animation:syntaxx-shimmer 6s linear infinite;
+}
+@keyframes syntaxx-shimmer{ 0%{ background-position:0% 50%; } 100%{ background-position:300% 50%; } }
+@media (prefers-reduced-motion: reduce){
+  .made-by-name{ animation:none; background-position:0 50%; }
+}
+
+/* ---------- The Wiki ---------- */
+.wiki-search{ position:relative; display:flex; align-items:center; gap:.8rem; margin:1.4rem 0 .8rem; flex-wrap:wrap; }
+.wiki-search input{
+  flex:1 1 20rem; min-width:0; font-family:var(--f-body); font-size:1rem; color:var(--parchment);
+  background:var(--ground-2); border:1px solid var(--iron-lit); border-radius:10px;
+  padding:.75rem 1rem; min-height:44px;
+}
+.wiki-search input::placeholder{ color:var(--text-dim); }
+.wiki-search input:focus{ outline:none; border-color:var(--amber); box-shadow:0 0 0 2px rgba(232,161,60,.25); }
+.wiki-count{ font-size:.85rem; color:var(--text-dim); font-family:var(--f-display); letter-spacing:.03em; white-space:nowrap; }
+.wiki-cats{ display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:1.4rem; }
+.wiki-chip{
+  font-family:var(--f-display); font-size:.82rem; letter-spacing:.03em; color:var(--text-dim);
+  background:var(--ground-2); border:1px solid var(--iron); border-radius:16px;
+  padding:.4rem .85rem; min-height:34px; cursor:pointer; transition:color .15s, border-color .15s, background .15s;
+}
+.wiki-chip:hover{ color:var(--parchment); border-color:var(--iron-lit); }
+.wiki-chip.sel{ color:var(--ink); background:linear-gradient(180deg,var(--amber),var(--amber-soft)); border-color:var(--amber); }
+.wiki-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(15.5rem,1fr)); gap:1rem; }
+.wiki-card{
+  background:linear-gradient(180deg,rgba(36,29,18,.6),rgba(21,18,12,.6));
+  border:1px solid var(--iron); border-radius:12px; padding:1.1rem 1.15rem;
+}
+.wiki-card h3{ font-size:1.05rem; margin:0 0 .15rem; display:flex; align-items:baseline; gap:.45rem; }
+.wiki-ic{ font-size:1.1rem; }
+.wiki-card p{ margin:.35rem 0 0; font-size:.92rem; color:var(--text); line-height:1.5; }
+.wiki-cat-tag{ font-family:var(--f-display); font-size:.68rem; letter-spacing:.08em; text-transform:uppercase; color:var(--amber-soft); opacity:.85; }
+.wiki-card mark{ background:rgba(232,161,60,.28); color:var(--parchment); border-radius:2px; padding:0 .1em; }
+.wiki-empty{ margin-top:1.5rem; color:var(--text-dim); font-style:italic; }
