@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.23.0
+Seasonal festivals. Once a year, at the turn into spring, the hold holds a
+festival and you choose one of three lasting blessings: Harvest Feast (+20%
+food yield from farms and foragers), Rite of Courage (+8 morale and half the
+morale loss from raids), or Craftsmen's Fair (+15% work speed for every
+settler). The chosen blessing lasts until the next year's festival, is written
+into the Chronicle, and is shown in the Journal tab. A genuine yearly decision
+point. Persists in saves.
+
 ## 1.22.0
 Statistics. A new "📊 Statistics" view (from the Journal tab) charts settlers,
 provisions, and timber over the last 60 days as a line graph, alongside
