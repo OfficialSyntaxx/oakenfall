@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.27.0
+Villager skill growth. Settlers now accumulate experience in whatever role they
+work, rising through tiers — Skilled (+8% output) and Master (+18%) — that speed
+their labour. Proficiency is shown in the settler sheet and the Folk roster, a
+promotion is announced with a toast, and experience persists in saves (per
+role), so a long-serving veteran is genuinely valuable and their passing costs
+the hold real productivity. A new "Master of the Craft" deed marks the first
+settler to top out.
+
 ## 1.26.0
 Deed rewards. Earning a deed now grants a one-time reward — coins, and for some
 deeds a parcel of resources (food, timber, stone, or planks) — announced in the
