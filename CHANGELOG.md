@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.19.3
+Build palette grouping — the "Raise a Building" sheet now organizes its 17
+structures under category headers (Homes · Food & Provisions · Industry ·
+Trade & Hall · Defense · Roadworks) instead of one flat grid, so the right
+building is faster to find as the roster grows. Purely presentational.
+
 ## 1.19.2
 Child sprite scaling — settlers in the child stage now render ~0.68x across
 all villager draw paths (sprite, fallback sprite, and canvas), with shadow
