@@ -71,6 +71,23 @@ a:hover{ color:var(--amber); }
 .signpost a:hover{ color:var(--parchment); background:rgba(232,161,60,.07); }
 .signpost a[aria-current="page"]{ color:var(--amber); text-shadow:0 0 14px rgba(232,161,60,.5); }
 .signpost .nav-play{ border:1px solid var(--amber-soft); color:var(--amber); margin:0 .3rem; }
+/* Lore dropdown (click-based via <details>, no JS) */
+.nav-lore{ position:relative; }
+.nav-lore summary{
+  list-style:none; cursor:pointer; padding:.55rem .8rem; color:var(--text-dim);
+  font-family:var(--f-display); font-size:.95rem; letter-spacing:.05em; border-radius:3px;
+}
+.nav-lore summary::-webkit-details-marker{ display:none; }
+.nav-lore summary::after{ content:" \25BE"; opacity:.6; font-size:.75em; }
+.nav-lore summary:hover{ color:var(--parchment); background:rgba(232,161,60,.07); }
+.nav-lore[open] summary{ color:var(--parchment); }
+.nav-lore-menu{
+  position:absolute; top:100%; left:0; margin-top:.3rem; min-width:9.5rem; z-index:60;
+  display:flex; flex-direction:column; padding:.35rem;
+  background:var(--ground-2); border:1px solid var(--iron-lit); border-radius:8px;
+  box-shadow:0 8px 24px rgba(0,0,0,.5);
+}
+.nav-lore-menu a{ padding:.5rem .7rem; }
 .header-tools{ margin-left:auto; display:flex; gap:.4rem; align-items:center; }
 .signpost + .header-tools{ margin-left:0; }
 .tod-toggle,.menu-toggle{

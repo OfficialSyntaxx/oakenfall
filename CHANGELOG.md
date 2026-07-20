@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.31.0
+Approachability and legibility pass, plus a monetization refinement.
+
+- **Onboarding ribbon**: a brand-new hold now gets a dismissible step-by-step
+  guide — raise a House, set a Lumberjack, build a Farm, survive the first
+  winter — that completes and bows out on its own (or on the ✕). Persists so it
+  doesn't nag returning players.
+- **Active-status strip**: a small centre-top row of pills now shows what's
+  currently in effect — climate spell, festival blessing, active trade routes,
+  and an ongoing fire — so their effects are felt, not forgotten.
+- **Unlocks survive a save wipe**: redeemed cosmetic packs are now stored in
+  their own key (`oakenfall-unlocks`) as well as the save, so a fresh hold or a
+  cleared save keeps your entitlements.
+
+Website: the header nav's lore pages (Almanac, Wiki, Chronicle) are grouped
+under a single "Lore" dropdown to keep the bar uncluttered.
+
 ## 1.30.1
 Housekeeping from a full review pass. The memorial grove is now capped at 40
 graves — the oldest are "reclaimed by the forest" over very long games, so the
