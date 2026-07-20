@@ -340,6 +340,41 @@
   </div>
 </section>
 
+<section class="district deeds-showcase" id="deeds-showcase" hidden>
+  <p class="district-kicker">Your chronicle</p>
+  <h2>Deeds of your hold</h2>
+  <p id="deeds-lead">The deeds you've earned in Oakenfall, read from this browser's save.</p>
+  <div class="deeds-wall" id="deeds-wall"></div>
+</section>
+<script>
+(function(){
+  var DEEDS = [
+    ['firstHome','🏠','A Roof Raised'], ['hamlet','🏘️','Hamlet'], ['township','🏰','Township'],
+    ['firstWinter','❄️','First Winter'], ['ironHeart','🥶','Iron Heart'], ['bridgeBuilder','🌉','Bridge Builder'],
+    ['fullGranary','🌾','Full Granary'], ['timberBaron','🪵','Timber Baron'], ['firstWed','💞','A Match Made'],
+    ['newLife','👶','New Life'], ['greyHairs','🧓','Grey Hairs'], ['remembered','🪦','Remembered'],
+    ['heldGate','🛡️','Held the Gate'], ['scholar','🔬','Scholar']
+  ];
+  var earned = {};
+  try {
+    var raw = localStorage.getItem('oakenfall-save');
+    if (raw) { var s = JSON.parse(raw); earned = (s && s.deeds) || {}; }
+  } catch (e) { earned = {}; }
+  var got = DEEDS.filter(function(d){ return earned[d[0]]; });
+  if (!got.length) return; // nothing to show — leave the section hidden
+  var wall = document.getElementById('deeds-wall');
+  wall.innerHTML = DEEDS.map(function(d){
+    var has = !!earned[d[0]];
+    return '<div class="deed-badge' + (has ? ' earned' : '') + '" title="' + d[2] + '">' +
+      '<span class="db-ic">' + (has ? d[1] : '🔒') + '</span>' +
+      '<span class="db-name">' + d[2] + '</span></div>';
+  }).join('');
+  document.getElementById('deeds-lead').textContent =
+    'Your hold has earned ' + got.length + ' of ' + DEEDS.length + ' deeds — read from this browser’s save.';
+  document.getElementById('deeds-showcase').hidden = false;
+})();
+</script>
+
 <section class="district">
   <p class="district-kicker">The mason's oath</p>
   <h2>One file. No installs. No accounts.</h2>

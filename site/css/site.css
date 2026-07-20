@@ -411,3 +411,11 @@ html[data-season="Winter"] .hero-scene .foliage-dark{ fill:#6d7a7c; }
   .dcard .dicon > *{ opacity:1; transform:none; }
   .smoke{ display:none; }
 }
+
+/* ---------- Deeds showcase (reads the local save) ---------- */
+.deeds-wall{ display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:.6rem; margin-top:1.2rem; }
+.deed-badge{ display:flex; flex-direction:column; align-items:center; gap:.3rem; text-align:center;
+  padding:.8rem .5rem; border-radius:10px; background:rgba(20,16,10,.5); border:1px solid var(--panel-edge,#3a3223); opacity:.4; }
+.deed-badge.earned{ opacity:1; background:linear-gradient(180deg,rgba(42,33,19,.7),rgba(28,21,13,.7)); border-color:var(--amber-dim,#7a5220); }
+.deed-badge .db-ic{ font-size:1.7rem; line-height:1; }
+.deed-badge .db-name{ font-family:'Cinzel',serif; font-size:.72rem; color:var(--amber,#e7a23d); line-height:1.2; }
