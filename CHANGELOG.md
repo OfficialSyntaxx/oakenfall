@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.35.0
+Guilds. When two or more settlers reach Master in the same trade, they form a
+guild — the Woodwrights', Stonecutters', Ploughmen's, Fishers', or Hunters' —
+granting a +10% hold-wide bonus to that craft's output (wood, stone, farm food,
+fish, or meat respectively). Builds directly on skill mastery and apprenticeship:
+growing, keeping, and pairing veterans now pays off settlement-wide. Guilds form
+automatically, are announced and written to the Chronicle, and the active ones
+are listed in the Journal. Derived from settlers' skills, so nothing extra is
+stored in saves.
+
 ## 1.34.0
 The Blight — a disease-outbreak disaster to sit alongside fire and climate.
 Rarely (past the early days, in a hold of five or more), a sickness strikes:
