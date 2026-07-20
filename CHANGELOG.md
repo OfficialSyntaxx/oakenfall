@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.20.0
+Villager roster. The Hold Menu gains a "Folk" tab listing every settler,
+sortable by role, morale, or name, each row showing their life stage, trait,
+and a mood gauge. Tapping a settler opens their sheet and glides the camera to
+them — the fastest way to find a specific worker (or the last idle one) as the
+hold grows.
+
 ## 1.19.5
 Polish batch. The camera now eases (~250ms) toward its target when you focus
 a settler ("Find on map") or tap the minimap, instead of snapping — any drag,
