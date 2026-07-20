@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.19.0
+Living-world AI merge, increment 4 — the Chronicle. The hold now keeps a
+curated, dated story of its significant moments (founding, friendships,
+weddings, births, comings-of-age, passings, seasons), shown in the Journal
+tab beneath the stats and above the raw recent-events log. Persists in saves.
+This completes the four-part merge that brought the living-world AI's
+citizens (relationships, generations, ambient life, chronicle) into the
+city-builder while keeping all existing art, economy, and role mechanics.
+
 ## 1.18.0
 Living-world AI merge, increment 3 — ambient life. Idle and young citizens
 now act on context and personality instead of standing on their spot: they
