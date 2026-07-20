@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.34.0
+The Blight — a disease-outbreak disaster to sit alongside fire and climate.
+Rarely (past the early days, in a hold of five or more), a sickness strikes:
+roughly a third of the settlers fall ill at once, and over the next few days it
+spreads between those standing close before running its course. Sick settlers
+work slower and the whole hold's morale dips while it lasts. Herbal Lore
+research cuts both the initial infection and the spread rate, and a Healer
+(shop or wandering event) clears the currently sick. Shown in the status strip
+and written to the Chronicle; the outbreak persists in saves.
+
 ## 1.33.0
 Named districts. When three or more buildings cluster together, the hold gives
 that corner a name — the Timber Row, the Hearth Quarter, the Mill End — drawn
