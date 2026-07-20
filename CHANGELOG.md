@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.25.0
+Trade routes. With a Trading Post, the hold can now broker recurring caravan
+contracts (🐫 in the Shop tab): agree to deliver a set amount of a good —
+planks, bread, timber, stone, or provisions — every few days, and each
+fulfilled run pays coins automatically at dawn. Miss a delivery twice and the
+route breaks, with a small morale knock. Up to three routes at once, giving a
+steady coin income that rewards a well-supplied, road-linked hold and ties the
+merchant economy to production. Persists in saves.
+
 ## 1.24.0
 Events inbox. The recent-events log becomes a filterable inbox (📨 in the
 Journal tab): every toast is sorted into a category — Raids, Folk, Building, or
