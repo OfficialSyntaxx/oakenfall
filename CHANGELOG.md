@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.19.4
+Villager "Find on map" — a settler's sheet gains a button that pans the
+camera straight to them, so tracking down a specific worker (or that last
+idle settler) no longer means hunting across the map.
+
 ## 1.19.3
 Build palette grouping — the "Raise a Building" sheet now organizes its 17
 structures under category headers (Homes · Food & Provisions · Industry ·
