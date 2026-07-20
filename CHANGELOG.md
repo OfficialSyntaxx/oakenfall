@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.22.0
+Statistics. A new "📊 Statistics" view (from the Journal tab) charts settlers,
+provisions, and timber over the last 60 days as a line graph, alongside
+lifetime tallies — peak population, days survived, winters endured, buildings
+raised, settlers welcomed, raids survived, weddings, births, and passings.
+Per-day snapshots are captured at each dawn and persist in saves.
+
 ## 1.21.0
 Deeds. The hold can now earn 14 one-time achievements — A Roof Raised, Hamlet,
 Township, First Winter, Iron Heart, Bridge Builder, Full Granary, Timber Baron,
