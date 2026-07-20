@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.24.0
+Events inbox. The recent-events log becomes a filterable inbox (📨 in the
+Journal tab): every toast is sorted into a category — Raids, Folk, Building, or
+Other — and kept as a list of the last 40 tidings, newest first, so a notice
+missed while the game was in the background can be read back. Categorization is
+inferred from each message, so nothing about existing notifications changed.
+
 ## 1.23.0
 Seasonal festivals. Once a year, at the turn into spring, the hold holds a
 festival and you choose one of three lasting blessings: Harvest Feast (+20%
