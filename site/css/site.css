@@ -464,3 +464,8 @@ html[data-season="Winter"] .hero-scene .foliage-dark{ fill:#6d7a7c; }
 .wiki-cat-tag{ font-family:var(--f-display); font-size:.68rem; letter-spacing:.08em; text-transform:uppercase; color:var(--amber-soft); opacity:.85; }
 .wiki-card mark{ background:rgba(232,161,60,.28); color:var(--parchment); border-radius:2px; padding:0 .1em; }
 .wiki-empty{ margin-top:1.5rem; color:var(--text-dim); font-style:italic; }
+
+/* ---------- Support page ---------- */
+.support-note{ background:rgba(74,93,51,.12); border-left:3px solid var(--oakgreen-lit); border-radius:6px; padding:.7rem 1rem; font-size:.95rem; }
+.support-cta{ margin-top:2.2rem; text-align:center; background:linear-gradient(180deg,rgba(36,29,18,.5),rgba(21,18,12,.5)); border:1px solid var(--iron); border-radius:14px; padding:1.8rem 1.2rem; }
+.support-soon{ font-family:var(--f-display); font-size:1.15rem; color:var(--amber); letter-spacing:.02em; }
