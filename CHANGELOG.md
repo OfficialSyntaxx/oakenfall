@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.26.0
+Deed rewards. Earning a deed now grants a one-time reward — coins, and for some
+deeds a parcel of resources (food, timber, stone, or planks) — announced in the
+earn toast and shown on each badge in the Journal. The deed wall becomes a real
+set of goals to chase rather than pure cosmetics. (Deeds already earned in older
+saves keep their badge but were not retroactively paid.)
+
 ## 1.25.0
 Trade routes. With a Trading Post, the hold can now broker recurring caravan
 contracts (🐫 in the Shop tab): agree to deliver a set amount of a good —
