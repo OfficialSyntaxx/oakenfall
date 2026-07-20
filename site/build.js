@@ -81,6 +81,16 @@ if (fs.existsSync(livingSrc)) {
   fs.copyFileSync(livingSrc, path.join(OUT, 'living', 'index.html'));
 }
 
+// Cinematic scroll landing page = the homepage (/), also at /valley/.
+// Standalone HTML (its own <head>/scripts); copied raw, not through layout.
+// The old marketing home now lives at /hold/ (slug changed).
+const landingSrc = path.join(ROOT, 'game', 'oakenfall-landing.html');
+if (fs.existsSync(landingSrc)) {
+  fs.copyFileSync(landingSrc, path.join(OUT, 'index.html'));
+  fs.mkdirSync(path.join(OUT, 'valley'), { recursive: true });
+  fs.copyFileSync(landingSrc, path.join(OUT, 'valley', 'index.html'));
+}
+
 const layout = fs.readFileSync(path.join(SITE, 'layout.html'), 'utf8');
 const changelogSrc = fs.readFileSync(path.join(ROOT, 'CHANGELOG.md'), 'utf8');
 const changelog = changelogNotices(changelogSrc);
