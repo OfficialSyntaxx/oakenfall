@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.30.1
+Housekeeping from a full review pass. The memorial grove is now capped at 40
+graves — the oldest are "reclaimed by the forest" over very long games, so the
+per-frame render list and the save stay bounded; grave placement now reflows by
+a monotonic count so a reclaimed plot is reused instead of new graves stacking.
+Also corrected the homepage's building count (eighteen) after the Well was added.
+
 ## 1.30.0
 Redeem codes — the foundation for supporting Oakenfall. Cosmetic packs bought on
 the website can be unlocked in-game (⚙ → 🎁 Redeem) with a signed code that the
