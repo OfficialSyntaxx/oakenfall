@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.16.0
+Living-world AI merge, increment 1 — relationships. Settlers now form
+friendships (and occasional rivalries, from clashing work ethics) as they
+spend time near one another; strong bonds are announced and remembered, each
+settler's sheet shows their friends/rivals and a recent memory, and couples
+now prefer to wed a close friend. Additive to the existing role/economy loop;
+relationships persist across save/load (name-keyed, so no dangling refs).
+
 ## 1.15.0
 Menu restructure and mobile HUD fixes. The Goals (📜) button and coins (💰)
 pill now open a single Hold Menu hub with four tabs — Goals, Research, Shop,
