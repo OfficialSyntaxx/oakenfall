@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.28.1
+Refinements to the deed-reward, skill-growth, and fire systems shipped in
+1.26–1.28: idle adult settlers now form a bucket brigade — they run to the
+nearest blaze (🪣) and help douse it; fires ignite less often (tuned down and
+capped) and only after the hold is established (4+ timber buildings, past the
+first days); and the death of a Master now saddens the whole hold, not just
+their kin. A burned-down building also closes its panel cleanly if it was open.
+
 ## 1.28.0
 Fire — a new disaster. Timber buildings can catch fire (far more likely in a dry
 summer, rare in winter or rain). A blaze steadily damages its building and, left
