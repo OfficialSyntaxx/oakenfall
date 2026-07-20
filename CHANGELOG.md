@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.19.1
+Chronicle polish. Every chronicle moment now draws from several varied
+phrasings so the hold's story reads written rather than logged, and a new
+"Read the full Chronicle" view (from the Journal tab) presents it on an
+illuminated-parchment page, grouped by day and season with a titled header —
+made to be screenshotted. Purely presentational.
+
 ## 1.19.0
 Living-world AI merge, increment 4 — the Chronicle. The hold now keeps a
 curated, dated story of its significant moments (founding, friendships,
