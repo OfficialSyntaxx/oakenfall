@@ -16,7 +16,7 @@ no external network requests at runtime. All art is base64-embedded.
 ## Architecture map
 - Terrain: `drawTerrain` + `terrainStampFor` (Kenney block tiles in
   TERRAIN_B64; water recessed WATER_DROP=6; procedural fallback).
-- Buildings: `BUILD_DEFS` (18 types incl. processors with `proc` recipes),
+- Buildings: `BUILD_DEFS` (19 types incl. processors with `proc` recipes),
   `drawBuilding` (sprite via `blitSprite`/SPRITE_URLS + hand-drawn iso-kit:
   isoBox/isoRoof/glowWindow/chimneySmoke). Decay via `condition` (<35 = worn,
   bonuses halt). `hasActiveBuilding` gates bonuses.

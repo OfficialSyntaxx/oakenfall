@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.32.0
+Livestock — a second food chain. The new **Pasture** (🐑, Food category) grazes
+a herd that breeds on its own up to six animals and yields a steady trickle of
+food through spring, summer, and autumn, needing no assigned worker — a
+hands-off complement to farming. The catch: in winter the animals must be
+foddered from your food stores, and if the stores run dry the herd dwindles one
+animal at a time. Herd size persists in saves and is shown on the Pasture's
+panel; the field renders with animals that reflect the current herd.
+
 ## 1.31.0
 Approachability and legibility pass, plus a monetization refinement.
 
