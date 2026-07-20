@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.18.0
+Living-world AI merge, increment 3 — ambient life. Idle and young citizens
+now act on context and personality instead of standing on their spot: they
+gather at the hearth/tavern after dark, seek warmth in winter (the frail
+especially), drift toward close friends, and children play near home — each
+with a little mood bubble. Purely an idle-steering + bubble layer; it never
+overrides assigned work or the economy.
+
 ## 1.17.0
 Living-world AI merge, increment 2 — aging & generations. Settlers now have
 life stages (child → adult → elder) on a session-paced clock: children are
