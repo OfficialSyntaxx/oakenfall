@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.29.0
+Three additions that deepen the fire, skill, and weather systems.
+
+- **The Well** (⛲, Defense category) is a firebreak: timber buildings within
+  ~3.5 tiles of an intact well rarely catch fire and are doused much faster,
+  turning fire from pure RNG into something you plan against by spacing wells
+  through your timber.
+- **Apprenticeship**: a Master working within ~4 tiles of a novice of the same
+  trade teaches them, doubling the novice's skill growth (shown with a 📖
+  bubble) — so pairing veterans with youth is now a real placement decision.
+- **Climate spells**: multi-day conditions layered over daily weather —
+  droughts (fire risk up, farm yield down), cold snaps (extra food and stamina
+  drain), and fair spells (better crops and morale). Each is announced, lasts a
+  few days, shows beside the season in the clock, and is written to the
+  Chronicle. Disabled under Iron Winter. Persists in saves.
+
 ## 1.28.1
 Refinements to the deed-reward, skill-growth, and fire systems shipped in
 1.26–1.28: idle adult settlers now form a bucket brigade — they run to the
