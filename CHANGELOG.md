@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.33.0
+Named districts. When three or more buildings cluster together, the hold gives
+that corner a name — the Timber Row, the Hearth Quarter, the Mill End — drawn
+faintly on the map above the rooftops and recorded in the Chronicle when it
+first forms. The name derives from whichever building type dominates the
+cluster, and stays stable across recomputes and reloads. Labels fade out when
+you zoom far out. Purely presentational; recomputed on a slow timer from the
+current buildings, so nothing extra is stored in saves.
+
 ## 1.32.0
 Livestock — a second food chain. The new **Pasture** (🐑, Food category) grazes
 a herd that breeds on its own up to six animals and yields a steady trickle of
