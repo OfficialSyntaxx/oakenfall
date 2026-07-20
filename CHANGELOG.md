@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.17.0
+Living-world AI merge, increment 2 — aging & generations. Settlers now have
+life stages (child → adult → elder) on a session-paced clock: children are
+born, come of age and join the workforce; elders work at reduced pace but
+still contribute; the aged pass peacefully and are interred in a memorial
+grove west of the Town Center, with partners widowed and children grieving
+(morale hit + a lasting memory). Stage/age show in each settler's sheet.
+All additive to the economy; ages/stages/lifespans and the grove persist in
+saves (name-keyed, no dangling refs).
+
 ## 1.16.0
 Living-world AI merge, increment 1 — relationships. Settlers now form
 friendships (and occasional rivalries, from clashing work ethics) as they
