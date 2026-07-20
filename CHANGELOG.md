@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.19.5
+Polish batch. The camera now eases (~250ms) toward its target when you focus
+a settler ("Find on map") or tap the minimap, instead of snapping — any drag,
+pinch, or wheel cancels the glide. The villager sheet's morale bar and the
+building sheet's condition bar now use the shared `statBar()` component for a
+consistent look. Website: the Almanac gains a "River & Roads" chapter (bridges,
+fords, winter freeze, road logistics) that had drifted out of date since v1.14.
+
 ## 1.19.4
 Villager "Find on map" — a settler's sheet gains a button that pans the
 camera straight to them, so tracking down a specific worker (or that last
