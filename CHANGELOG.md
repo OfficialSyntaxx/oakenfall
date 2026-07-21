@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.45.0
+Shareable hold card. A new "Share Card" button in the Journal tab renders a
+1200×630 chronicle card — your hold's name and crest, its tier, and its tallies
+(days survived, winters endured, settlers, deeds earned) — and offers it to the
+device share sheet or a direct download. A tidy way to show off a hold (and,
+being share-sized, it doubles nicely as a social image).
+
 ## 1.44.0
 Watchable raids. A bandit raid is no longer just a line of text — torch-bearing
 raiders now march in from a map edge (or pour across an unwatched bridge) toward
