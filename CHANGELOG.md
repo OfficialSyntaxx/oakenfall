@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.37.1
+Cleanup + website refresh. Removed a dead "route penalties" row from the
+Trader's Ledger (missed trade routes cost morale, not coins, so the category was
+always zero). On the website, the homepage feature cards and the Almanac now
+reflect the systems added since — fire, blight, climate spells, livestock,
+guilds, trade routes — and the Almanac gained a "Hardships of the Hold" chapter
+plus a link through to the full Wiki.
+
 ## 1.37.0
 Audio pass — distinct stingers for the moments that matter, all synthesized by
 the built-in WebAudio engine (no new samples, no added load): a rising fanfare
