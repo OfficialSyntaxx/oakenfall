@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.44.0
+Watchable raids. A bandit raid is no longer just a line of text — torch-bearing
+raiders now march in from a map edge (or pour across an unwatched bridge) toward
+the Town Center, and your Guards ride out to intercept and turn them back. A
+well-defended hold visibly holds; a poorly-defended one watches thieves reach
+the stores. The raid's actual outcome is still governed by the same defense math
+(guards, palisades, watchtowers, the river moat), so this is drama layered over
+proven balance, not a change to how raids resolve. Raiders are transient (not
+saved).
+
 ## 1.43.0
 Sustainable land. Forest stands now tire as they're felled — each regrowth
 yields one less than before, and a fully-worked stand eventually goes barren and
