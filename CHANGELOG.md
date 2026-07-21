@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.40.0
+Second-tier research. The tech tree gains four advanced technologies, each gated
+behind a first-tier one, so late-game research isn't finished by mid-game:
+Hill Terracing (+15% farm yield again, after Crop Rotation), Aqueducts (every
+farm counts as irrigated, after Stone Masonry), Cold Storage (food spoils half
+as fast, after Deep Cellars), and the Guild Charter (guild bonuses rise from
++10% to +15%, after Hearthfires). Cold Storage and the Charter tie directly into
+the new spoilage and guild systems. Thirteen techs in all now; site copy updated.
+
 ## 1.39.0
 Food spoilage — Granaries finally earn their keep. Raw food held beyond a safe
 amount slowly spoils (~14% of the excess per day). A small pantry baseline keeps
