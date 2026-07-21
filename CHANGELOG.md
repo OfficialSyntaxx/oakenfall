@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.36.0
+Trader's Ledger — an economy view (📒 in the Shop tab). It tracks coin flow by
+category as you play and shows an all-time breakdown of income (daily bounties,
+goals, deeds, trade routes) versus spending (the Hold Shop, missed-route
+penalties), each with a proportion bar, plus a running net. Makes the coin
+economy legible — you can finally see whether your trade routes are actually
+paying off. The running totals persist in saves.
+
 ## 1.35.0
 Guilds. When two or more settlers reach Master in the same trade, they form a
 guild — the Woodwrights', Stonecutters', Ploughmen's, Fishers', or Hunters' —
