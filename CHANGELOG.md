@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.37.0
+Audio pass — distinct stingers for the moments that matter, all synthesized by
+the built-in WebAudio engine (no new samples, no added load): a rising fanfare
+for earning a deed, a warm chord when a festival begins, a low wobbling crackle
+when a fire ignites, an uneasy falling tone for a blight, and a two-note alarm
+for a wolf or bandit raid. Layered over the existing effect set and governed by
+the same 🔊 sound toggle.
+
 ## 1.36.0
 Trader's Ledger — an economy view (📒 in the Shop tab). It tracks coin flow by
 category as you play and shows an all-time breakdown of income (daily bounties,
