@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.39.0
+Food spoilage — Granaries finally earn their keep. Raw food held beyond a safe
+amount slowly spoils (~14% of the excess per day). A small pantry baseline keeps
+a little safe; each Granary adds a large safe allowance and the Deep Cellars
+research adds more, so genuinely stockpiling for winter now depends on building
+the storage to hold it. Bread and flour don't spoil. Nothing spoils in Peaceful
+(zero decay); Iron Winter spoils faster. The Granary panel shows the current
+safe amount, and an occasional notice warns when spoilage is mounting.
+
 ## 1.38.0
 Name your hold. The start screen now lets you name your settlement and pick a
 crest colour when you found it. The name appears in the HUD clock line, heads
