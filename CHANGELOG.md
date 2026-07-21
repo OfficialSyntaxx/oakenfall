@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.42.0
+Decision events — dilemmas that make your word matter. Every few days (once the
+hold is past its first days, and only when no panel is open so they never
+interrupt) a decision appears with two or three choices and real consequences:
+strangers at the gate asking to join, a bandit's tribute demand, a wandering
+scholar, a folk feast, a peddler's sealed crate, or old ruins worth digging.
+Choices affect food, coins, morale, research, or population, and each ruling is
+written into the Chronicle. Six dilemmas to start, gated so they only appear
+when they make sense.
+
 ## 1.41.0
 Decrees — hold-wide policies you rule by. From the Goals tab, enact or repeal
 four lasting laws, each a genuine trade-off: **Curfew** (−30% night raid risk,
