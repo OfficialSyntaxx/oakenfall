@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.38.0
+Name your hold. The start screen now lets you name your settlement and pick a
+crest colour when you found it. The name appears in the HUD clock line, heads
+the Chronicle ("The Chronicle of …"), colours the Town Center banner from the
+first day, and is read by the website's deeds showcase. Both persist in saves;
+leaving the name blank keeps the classic "Oakenfall".
+
 ## 1.37.1
 Cleanup + website refresh. Removed a dead "route penalties" row from the
 Trader's Ledger (missed trade routes cost morale, not coins, so the category was

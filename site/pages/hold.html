@@ -356,10 +356,10 @@
     ['heldGate','🛡️','Held the Gate'], ['scholar','🔬','Scholar'],
     ['master','★','Master of the Craft']
   ];
-  var earned = {};
+  var earned = {}, holdName = '';
   try {
     var raw = localStorage.getItem('oakenfall-save');
-    if (raw) { var s = JSON.parse(raw); earned = (s && s.deeds) || {}; }
+    if (raw) { var s = JSON.parse(raw); earned = (s && s.deeds) || {}; holdName = (s && s.holdName) || ''; }
   } catch (e) { earned = {}; }
   var got = DEEDS.filter(function(d){ return earned[d[0]]; });
   if (!got.length) return; // nothing to show — leave the section hidden
@@ -371,7 +371,7 @@
       '<span class="db-name">' + d[2] + '</span></div>';
   }).join('');
   document.getElementById('deeds-lead').textContent =
-    'Your hold has earned ' + got.length + ' of ' + DEEDS.length + ' deeds — read from this browser’s save.';
+    (holdName && holdName !== 'Oakenfall' ? holdName : 'Your hold') + ' has earned ' + got.length + ' of ' + DEEDS.length + ' deeds — read from this browser’s save.';
   document.getElementById('deeds-showcase').hidden = false;
 })();
 </script>
