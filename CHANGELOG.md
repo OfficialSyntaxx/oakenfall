@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.43.0
+Sustainable land. Forest stands now tire as they're felled — each regrowth
+yields one less than before, and a fully-worked stand eventually goes barren and
+stops regrowing. The new **Forester's Grove** (🌲, Industry, 25 wood + 10 stone)
+replants nearby forest within ~4½ tiles, reviving barren ground back toward full
+growth with no worker needed. The tile panel shows a stand's health (tiring /
+barren). Turns "infinite timber" into real land management — tend the woods or
+spread your camps. Twenty buildings now.
+
 ## 1.42.0
 Decision events — dilemmas that make your word matter. Every few days (once the
 hold is past its first days, and only when no panel is open so they never
