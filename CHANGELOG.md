@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.41.0
+Decrees — hold-wide policies you rule by. From the Goals tab, enact or repeal
+four lasting laws, each a genuine trade-off: **Curfew** (−30% night raid risk,
+−5 morale), **Tithe** (a daily coin levy scaled to population, −6 morale),
+**Open Gates** (newcomers arrive faster, +20% raid risk), and **Rationing**
+(food lasts 20% longer, −6% work speed). Toggle freely at any time; the choices
+persist in saves, and Tithe income shows in the Trader's Ledger.
+
 ## 1.40.0
 Second-tier research. The tech tree gains four advanced technologies, each gated
 behind a first-tier one, so late-game research isn't finished by mid-game:
