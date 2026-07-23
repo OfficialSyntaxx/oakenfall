@@ -73,6 +73,20 @@ fs.copyFileSync(path.join(ROOT, 'index.html'), path.join(OUT, 'game', 'index.htm
 // Home-screen icon, referenced by both the site layout and the game
 fs.copyFileSync(path.join(ROOT, 'apple-touch-icon.png'), path.join(OUT, 'apple-touch-icon.png'));
 
+// Optional image assets (hero art, OG/social image, concept art) dropped into
+// site/img/ — e.g. AI-generated key art. Copied verbatim to /img/. The OG image
+// is auto-detected from a known basename so link shares get real art when it's
+// present, and gracefully fall back to the icon when it isn't.
+const IMG_SRC = path.join(SITE, 'img');
+let ogImage = '/apple-touch-icon.png';
+if (fs.existsSync(IMG_SRC)) {
+  copyDir(IMG_SRC, path.join(OUT, 'img'));
+  fs.rmSync(path.join(OUT, 'img', 'README.md'), { force: true }); // keep the guide out of the deploy
+  for (const cand of ['og-oakenfall.jpg', 'og-oakenfall.png', 'og-oakenfall.webp']) {
+    if (fs.existsSync(path.join(IMG_SRC, cand))) { ogImage = '/img/' + cand; break; }
+  }
+}
+
 // Living-world sim (Canvas2D port) served at /living/ — a testbed for the
 // "living-sim becomes core" direction. Additive; does not affect / or /play/.
 const livingSrc = path.join(ROOT, 'game', 'oakenfall-living-canvas.html');
@@ -130,6 +144,8 @@ for (const file of fs.readdirSync(path.join(SITE, 'pages'))) {
     .replace(/{{title}}/g, title)
     .replace(/{{desc}}/g, desc)
     .replace(/{{slug}}/g, slug)
+    .replace(/{{ogimage}}/g, ogImage)
+    .replace(/{{twittercard}}/g, ogImage === '/apple-touch-icon.png' ? 'summary' : 'summary_large_image')
     .replace('{{content}}', content);
   const dst = slug === 'home' ? path.join(OUT, 'index.html')
     : path.join(OUT, path.basename(file, '.html'), 'index.html');
