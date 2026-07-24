@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.53.0
+Speak your will — the Steward's Word. A new 🗣️ button lets you command the hold
+in plain language. Say "build 3 houses" and your folk gather the wood and stone
+they lack, then raise all three; say "we need more wood" and idle settlers take
+up the axe; say "put 2 to mining" and they go. Orders queue up and are carried
+out as resources allow, with the hold reporting back as each is done. Runs
+entirely on your device — a forgiving command grammar, no accounts, no network.
+The first step toward settlers that truly do your bidding.
+
 ## 1.52.0
 Polish pass. The "Continue Your Hold" button on the main menu is now the bright,
 prominent gold button it should be for returning settlers. The new building
