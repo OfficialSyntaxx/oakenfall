@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.51.0
+The admin panel grows up. The hidden developer panel (reached via a promo code
+in Redeem) is now a full debug console: force any weather (clear, rain, storm,
+snowfall), jump the clock to dawn or night or skip whole days and seasons,
+trigger raids and fires on demand or douse them, grant resources and coins,
+fill stores to cap, summon settlers, heal the hold, unlock all research and
+cosmetics — plus sandbox toggles to freeze hunger/fatigue, block raids, and
+show a live debug overlay (FPS, population, weather, tier, and more).
+
 ## 1.50.0
 Seven new buildings. The art pass continues: the Tavern, Sawmill, Windmill,
 Bakery, Granary, Trading Post, and Watchtower all get hand-generated painterly
