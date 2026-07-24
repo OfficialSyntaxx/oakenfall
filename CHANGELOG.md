@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.52.0
+Polish pass. The "Continue Your Hold" button on the main menu is now the bright,
+prominent gold button it should be for returning settlers. The new building
+sprites that were floating (tavern, sawmill, windmill, granary, trading post,
+watchtower) now sit properly on their tiles — they were missing their ground
+anchors. And any in-game menu now closes when you tap away from it or open
+another — no more hunting for a close button on every panel.
+
 ## 1.51.0
 The admin panel grows up. The hidden developer panel (reached via a promo code
 in Redeem) is now a full debug console: force any weather (clear, rain, storm,
