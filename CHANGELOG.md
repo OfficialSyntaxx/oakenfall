@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.48.0
+A new house. The first hand-generated building sprite lands in the game: a
+painterly dark-medieval cottage — weathered timber frame, dark stone footing,
+mossy thatch roof, a stone chimney, and a warm-lit window — replacing the old
+placeholder house art. It layers over the procedural canvas fallback, which
+stays intact. First of a wider art pass on the hold's buildings.
+
 ## 1.47.0
 Water boundaries, smarter building sites, and a more varied crowd. Settlers no
 longer stroll across the river — every path and wander target now snaps to solid
