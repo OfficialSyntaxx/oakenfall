@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.49.0
+Longer days, tap-away notices, a seated house, and a hidden panel. The day and
+night cycle now runs much longer, so an afternoon in the hold no longer flies
+by. Notification toasts clear on their own within three seconds and vanish the
+moment you tap them. The new house sprite now sits properly on its tile instead
+of hovering. And a developer/admin panel is tucked away behind a promo code in
+the Redeem sheet — enter the code and a sandbox of grants and unlocks opens up.
+
 ## 1.48.0
 A new house. The first hand-generated building sprite lands in the game: a
 painterly dark-medieval cottage — weathered timber frame, dark stone footing,
