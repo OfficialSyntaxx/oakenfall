@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.54.0
+New faces and fixes. Fresh hand-generated art lands: revamped fishing hut,
+hunter's cabin and farm; three distinct raider types (bandit, brute, archer)
+that now march on the hold as real figures; and painterly settler portraits
+shown when you inspect one of your folk. Plus a batch of fixes: menu text that
+was rendering near-black (standing orders, redemption) is legible again, and
+notifications are now compact, capped, and float clear of any open menu instead
+of covering it.
+
 ## 1.53.0
 Speak your will — the Steward's Word. A new 🗣️ button lets you command the hold
 in plain language. Say "build 3 houses" and your folk gather the wood and stone
