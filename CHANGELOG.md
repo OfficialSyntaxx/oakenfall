@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.47.0
+Water boundaries, smarter building sites, and a more varied crowd. Settlers no
+longer stroll across the river — every path and wander target now snaps to solid
+ground, so folk keep to the banks and cross only at bridges, fords, or winter
+ice (fishers work from the shore instead of standing in the water). Resource
+buildings must now be raised beside the terrain they work: a Fishing Hut by
+water, a Forestry Camp at the treeline, a Mining Post by a stone outcrop, a
+Hunting Cabin along the wilds — and if you try to place one wrongly, the game
+tells you exactly what it needs. Finally, settlers no longer look like one
+person copied a dozen times: each now carries a subtle clothing tint and a
+slightly different build, so a bustling hold reads as a real crowd.
+
 ## 1.46.0
 Lamp posts. A new roadworks structure — a pitch-soaked lantern on a timber post
 that casts a warm pool of light after dark. Line your roads and squares with
