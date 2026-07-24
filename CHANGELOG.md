@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.50.0
+Seven new buildings. The art pass continues: the Tavern, Sawmill, Windmill,
+Bakery, Granary, Trading Post, and Watchtower all get hand-generated painterly
+sprites in the same dark-medieval style as the house — weathered timber, dark
+stone, mossy roofs, warm-lit windows. Each layers over its procedural fallback,
+which stays intact. The hold is starting to look like a real place.
+
 ## 1.49.0
 Longer days, tap-away notices, a seated house, and a hidden panel. The day and
 night cycle now runs much longer, so an afternoon in the hold no longer flies
