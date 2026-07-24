@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Oakenfall — 3D Prototype</title>
+<style>
+  :root{ --amber:#e8a13c; --parchment:#d8c9a3; }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html,body{ width:100%; height:100%; overflow:hidden; background:#0a0d12; }
+  canvas{ display:block; }
+  #overlay{ position:fixed; top:0; left:0; right:0; padding:16px 20px; z-index:10; pointer-events:none;
+    font-family:Georgia,'Times New Roman',serif; color:var(--parchment); text-shadow:0 2px 12px rgba(0,0,0,.8); }
+  #overlay h1{ font-size:clamp(20px,4vw,34px); letter-spacing:.06em; font-weight:700; }
+  #overlay h1 span{ color:var(--amber); }
+  #overlay p{ font-size:13px; opacity:.8; margin-top:4px; font-style:italic; max-width:34ch; }
+  #hint{ position:fixed; bottom:14px; left:0; right:0; text-align:center; z-index:10; pointer-events:none;
+    font-family:'Courier New',monospace; font-size:11px; letter-spacing:.18em; color:var(--parchment); opacity:.55; text-transform:uppercase; }
+  #loading{ position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:20;
+    font-family:Georgia,serif; color:var(--parchment); background:#0a0d12; font-size:15px; letter-spacing:.1em; }
+  #tod{ position:fixed; top:16px; right:20px; z-index:11; pointer-events:auto; display:flex; gap:6px; }
+  #tod button{ background:rgba(20,16,10,.7); border:1px solid #3a3223; color:var(--parchment); font-family:Georgia,serif;
+    font-size:12px; padding:6px 12px; border-radius:8px; cursor:pointer; min-height:34px; }
+  #tod button.on{ background:linear-gradient(180deg,#7a5220,#3a2710); color:#fff3d8; border-color:#7a5220; }
+</style>
+</head>
+<body>
+<div id="loading">Kindling the hearth…</div>
+<div id="overlay">
+  <h1>OAKEN<span>FALL</span> · 3D</h1>
+  <p>A stylized prototype of the hold in three dimensions — drag to orbit, pinch/scroll to zoom.</p>
+</div>
+<div id="tod">
+  <button id="btn-dusk" class="on">Dusk</button>
+  <button id="btn-night">Night</button>
+  <button id="btn-day">Day</button>
+</div>
+<div id="hint">drag to orbit · scroll to zoom · procedural placeholder art</div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const scene = new THREE.Scene();
+const renderer = new THREE.WebGLRenderer({ antialias:true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(45, innerWidth/innerHeight, 0.1, 500);
+camera.position.set(34, 26, 34);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 2, 0);
+controls.enableDamping = true;
+controls.dampingFactor = 0.06;
+controls.maxPolarAngle = Math.PI * 0.49;
+controls.minDistance = 12;
+controls.maxDistance = 90;
+controls.autoRotate = true;
+controls.autoRotateSpeed = 0.35;
+
+// ---- palette (color-graded dark earth tones, matching the game) ----
+const C = {
+  ground:0x2f3a24, groundDark:0x26301c, dirt:0x4a3d28, river:0x243a4a,
+  timber:0x4a3826, timberDark:0x3a2c1d, roof:0x33261a, roofLit:0x4a3320,
+  stone:0x565049, foliage:0x36452a, foliageLit:0x4c5e34, palisade:0x4a3a24,
+  torch:0xffa542, window:0xffcf7a,
+};
+const mat = (c, opts={}) => new THREE.MeshStandardMaterial({ color:c, roughness:opts.r ?? 0.92, metalness:opts.m ?? 0.0, flatShading:opts.flat ?? true, ...opts });
+
+const world = new THREE.Group(); scene.add(world);
+
+// ---- ground with gentle rolling hills (vertex-displaced plane) ----
+(() => {
+  const g = new THREE.PlaneGeometry(160, 160, 48, 48);
+  g.rotateX(-Math.PI/2);
+  const p = g.attributes.position;
+  for (let i=0;i<p.count;i++){
+    const x=p.getX(i), z=p.getZ(i);
+    const d = Math.hypot(x,z);
+    let h = Math.sin(x*0.06)*Math.cos(z*0.05)*1.6 + Math.sin(x*0.13+z*0.1)*0.8;
+    if (d>34) h += (d-34)*0.28; // valley walls rise at the edges
+    h -= Math.max(0, 3.2 - d*0.12); // flatten the town centre
+    p.setY(i, h);
+  }
+  g.computeVertexNormals();
+  const m = mat(C.ground, { r:1 });
+  const ground = new THREE.Mesh(g, m);
+  ground.receiveShadow = true;
+  world.add(ground);
+})();
+
+// ---- river along one edge ----
+(() => {
+  const g = new THREE.PlaneGeometry(160, 22, 1, 1); g.rotateX(-Math.PI/2);
+  const m = new THREE.MeshStandardMaterial({ color:C.river, roughness:0.25, metalness:0.2, transparent:true, opacity:0.9 });
+  const river = new THREE.Mesh(g, m); river.position.set(0, 0.15, 58); river.rotation.z = 0.06;
+  world.add(river);
+})();
+
+// ---- building factory (procedural low-poly) ----
+const torches = [];
+function addTorch(x, y, z){
+  const light = new THREE.PointLight(C.torch, 1.0, 14, 2.0);
+  light.position.set(x, y, z); world.add(light);
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 8),
+    new THREE.MeshBasicMaterial({ color:C.torch }));
+  bulb.position.copy(light.position); world.add(bulb);
+  torches.push({ light, base:1.0 });
+}
+function house(x, z, w=3.2, d=3.8, h=2.6, storeys=1, rot=0){
+  const g = new THREE.Group();
+  const bodyH = h*storeys;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(w, bodyH, d), mat(C.timber));
+  body.position.y = bodyH/2; body.castShadow = true; body.receiveShadow = true; g.add(body);
+  // roof (prism)
+  const roofH = 1.6 + storeys*0.4;
+  const roof = new THREE.Mesh(new THREE.CylinderGeometry(0.001, w*0.82, roofH, 4, 1), mat(C.roof));
+  roof.rotation.y = Math.PI/4; roof.position.y = bodyH + roofH/2 - 0.05;
+  roof.scale.z = d/w; roof.castShadow = true; g.add(roof);
+  // glowing windows
+  const winMat = new THREE.MeshBasicMaterial({ color:C.window });
+  for (let s=0; s<storeys; s++){
+    for (const sx of [-w*0.28, w*0.28]){
+      const win = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.6), winMat);
+      win.position.set(sx, h*0.5 + s*h, d/2 + 0.01); g.add(win);
+    }
+  }
+  // chimney smoke hint (thin cylinder) + smoke handled by fog
+  g.position.set(x, 0, z); g.rotation.y = rot;
+  world.add(g);
+  return g;
+}
+function watchtower(x, z){
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.3, 5.5, 6), mat(C.timberDark));
+  base.position.y = 2.75; base.castShadow = true; g.add(base);
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(1.6, 1.8, 6), mat(C.roof));
+  roof.position.y = 6.4; roof.castShadow = true; g.add(roof);
+  g.position.set(x, 0, z); world.add(g);
+  addTorch(x, 5.6, z);
+  return g;
+}
+function tree(x, z, s=1){
+  const g = new THREE.Group();
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18*s, 0.26*s, 1.6*s, 5), mat(C.timberDark));
+  trunk.position.y = 0.8*s; trunk.castShadow = true; g.add(trunk);
+  for (let i=0;i<3;i++){
+    const fol = new THREE.Mesh(new THREE.ConeGeometry((1.4-i*0.3)*s, (1.6-i*0.2)*s, 7), mat(i? C.foliage : C.foliageLit));
+    fol.position.y = (1.6 + i*0.9)*s; fol.castShadow = true; g.add(fol);
+  }
+  g.position.set(x, 0, z); world.add(g);
+}
+function palisadeRing(cx, cz, r, n){
+  for (let i=0;i<n;i++){
+    const a = i/n * Math.PI*2;
+    const x = cx + Math.cos(a)*r, z = cz + Math.sin(a)*r;
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.2, 2.4, 5), mat(C.palisade));
+    post.position.set(x, 1.2, z); post.castShadow = true;
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.5, 5), mat(C.palisade));
+    tip.position.set(x, 2.5, z); world.add(post, tip);
+  }
+}
+
+// ---- lay out a small hold ----
+// Town Center (manor) at the heart
+house(0, -2, 5.5, 6.5, 3.0, 2, 0.1);
+addTorch(3.4, 3, -2); addTorch(-3.4, 3, -2);
+// a cluster of houses
+const spots = [
+  [-7, 4, 0.3],[ -4, 8, -0.2],[ 6, 6, -0.4],[ 9, 1, 0.2],
+  [-9, -3, 0.1],[ 7, -6, 0.5],[ 2, 9, 0],[ -2, 5, -0.3],
+];
+spots.forEach(([x,z,r], i) => { house(x, z, 3+(i%2)*0.6, 3.6, 2.4, 1, r); if(i%2) addTorch(x+1.6, 1.8, z+1.6); });
+// watchtowers at the corners
+watchtower(-12, -10); watchtower(12, -11); watchtower(13, 9);
+// palisade
+palisadeRing(0, -1, 17, 64);
+// a central bonfire (bright torch)
+addTorch(0, 1.2, 8);
+// trees scattered outside the walls
+for (let i=0;i<40;i++){
+  const a = Math.random()*Math.PI*2, r = 20 + Math.random()*30;
+  const x = Math.cos(a)*r, z = Math.sin(a)*r;
+  if (z > 44) continue; // keep the river clear
+  tree(x, z, 0.8 + Math.random()*0.7);
+}
+
+// ---- lighting rigs (time of day) ----
+const hemi = new THREE.HemisphereLight(0x8fa5c4, 0x2a2416, 0.6); scene.add(hemi);
+const key = new THREE.DirectionalLight(0xffd9a0, 1.1);
+key.castShadow = true; key.shadow.mapSize.set(2048,2048);
+key.shadow.camera.near = 1; key.shadow.camera.far = 120;
+key.shadow.camera.left = -40; key.shadow.camera.right = 40;
+key.shadow.camera.top = 40; key.shadow.camera.bottom = -40;
+key.shadow.bias = -0.0004;
+scene.add(key); scene.add(key.target);
+
+const MOODS = {
+  dusk:  { bg:0x1b2436, fog:[0x1b2436, 40, 150], hemi:0.55, hemiSky:0x8fa5c4, key:1.1, keyColor:0xffcaa0, keyPos:[-30,22,-14], torch:1.0, exposure:1.05 },
+  night: { bg:0x0b1018, fog:[0x0b1018, 26, 120], hemi:0.22, hemiSky:0x5a708c, key:0.28, keyColor:0x9fb4d6, keyPos:[24,30,-20], torch:1.5, exposure:0.95 },
+  day:   { bg:0x9fb3c9, fog:[0xb9c6d6, 70, 220], hemi:0.9,  hemiSky:0xcfe0f0, key:1.5, keyColor:0xfff2d6, keyPos:[30,40,20], torch:0.25, exposure:1.15 },
+};
+let torchMul = 1.0;
+function setMood(name){
+  const m = MOODS[name];
+  scene.background = new THREE.Color(m.bg);
+  scene.fog = new THREE.Fog(m.fog[0], m.fog[1], m.fog[2]);
+  hemi.intensity = m.hemi; hemi.color.setHex(m.hemiSky);
+  key.intensity = m.key; key.color.setHex(m.keyColor);
+  key.position.set(...m.keyPos); key.target.position.set(0,0,0);
+  torchMul = m.torch; renderer.toneMappingExposure = m.exposure;
+  document.querySelectorAll('#tod button').forEach(b=>b.classList.remove('on'));
+  document.getElementById('btn-'+name).classList.add('on');
+}
+setMood('dusk');
+document.getElementById('btn-dusk').onclick = ()=>setMood('dusk');
+document.getElementById('btn-night').onclick = ()=>setMood('night');
+document.getElementById('btn-day').onclick = ()=>setMood('day');
+
+// ---- render loop with torch flicker ----
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const t = clock.getElapsedTime();
+  for (const tr of torches){
+    tr.light.intensity = (tr.base * torchMul) * (0.82 + Math.sin(t*8 + tr.light.position.x)*0.12 + Math.random()*0.06);
+  }
+  controls.update();
+  renderer.render(scene, camera);
+}
+addEventListener('resize', ()=>{
+  camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+// stop auto-rotate once the user grabs the camera
+controls.addEventListener('start', ()=>{ controls.autoRotate = false; });
+document.getElementById('loading').style.display = 'none';
+animate();
+</script>
+</body>
+</html>

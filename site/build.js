@@ -95,6 +95,15 @@ if (fs.existsSync(livingSrc)) {
   fs.copyFileSync(livingSrc, path.join(OUT, 'living', 'index.html'));
 }
 
+// 3D prototype (Three.js, procedural placeholder art) served at /3d/ — a
+// testbed for the "stylized 3D rebuild" direction. Uses a CDN (site-only, not
+// the game's single-file rule); does not affect the game or the homepage.
+const poc3dSrc = path.join(ROOT, 'game', 'oakenfall-3d-poc.html');
+if (fs.existsSync(poc3dSrc)) {
+  fs.mkdirSync(path.join(OUT, '3d'), { recursive: true });
+  fs.copyFileSync(poc3dSrc, path.join(OUT, '3d', 'index.html'));
+}
+
 // Cinematic scroll landing page = the homepage (/), also at /valley/.
 // Standalone HTML (its own <head>/scripts); copied raw, not through layout.
 // The old marketing home now lives at /hold/ (slug changed).
