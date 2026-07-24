@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.55.0
+Smarter hands and a clearer steward. Fixed the settler work bubbles — fishers
+and hunters no longer flash a mining pickaxe over their heads; each craft now
+shows its own mark (axe, pick, rod, bow). Fishers only take up spots with a real
+shoreline, so no more fishing out on the grass. And the Steward's Word command
+system got sturdier: it now puts more hands on a task, tells you exactly what is
+missing when it stalls (a workplace, idle folk, or a craftable good), and shows
+a live status chip so you can watch your orders being carried out.
+
 ## 1.54.0
 New faces and fixes. Fresh hand-generated art lands: revamped fishing hut,
 hunter's cabin and farm; three distinct raider types (bandit, brute, archer)
