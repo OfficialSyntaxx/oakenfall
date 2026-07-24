@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.46.0
+Lamp posts. A new roadworks structure — a pitch-soaked lantern on a timber post
+that casts a warm pool of light after dark. Line your roads and squares with
+them to push the night back: each one punches a glow into the darkness overlay
+and flickers like a real flame. Cheap to raise (8 wood, 6 stone), no settler
+needed. Purely light and atmosphere — the first of a small wave of decorative
+lighting.
+
 ## 1.45.0
 Shareable hold card. A new "Share Card" button in the Journal tab renders a
 1200×630 chronicle card — your hold's name and crest, its tier, and its tallies
