@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.61.0
+Sharper, and far lighter. Two things landed together. First, a real rendering
+bug: on many screens the game was drawing into a tiny 300x150 buffer and letting
+the browser stretch it to fit, which is why the world looked soft and cramped
+unless you maximised the window — it now always draws at your screen's true
+resolution. Second, the last of the artwork moved out of the page into proper
+files, so the game itself is now under 400KB instead of 15MB. Art loads as it is
+needed and is cached for offline play, and every sprite keeps its hand-drawn
+fallback if a file is slow to arrive.
+
 ## 1.60.0
 Loads five times faster. The game was a single 15MB file — and 12MB of that was
 background music inlined into the page, which meant every player downloaded it

@@ -75,14 +75,11 @@ fs.copyFileSync(path.join(ROOT, 'index.html'), path.join(OUT, 'game', 'index.htm
 // /game/assets/. Keeping them as files — rather than 12MB of inlined base64 —
 // is what makes the game load fast on mobile; they are still served from our
 // own origin and cached by the service worker, so offline play is unaffected.
-// Only groups the game actually references are shipped; this list grows as more
-// assets move out of the HTML during the module migration.
-const EXTERNAL_ASSET_GROUPS = ['music'];
+// All game assets now live as files rather than inlined base64 (which is what
+// took the game from 15.3MB to under 400KB). They ship beside the game so its
+// relative asset/ paths resolve, and the service worker caches them on use.
 const gameAssets = path.join(ROOT, 'public', 'assets');
-for (const group of EXTERNAL_ASSET_GROUPS) {
-  const src = path.join(gameAssets, group);
-  if (fs.existsSync(src)) copyDir(src, path.join(OUT, 'game', 'assets', group));
-}
+if (fs.existsSync(gameAssets)) copyDir(gameAssets, path.join(OUT, 'game', 'assets'));
 
 // Home-screen icon, referenced by both the site layout and the game
 fs.copyFileSync(path.join(ROOT, 'apple-touch-icon.png'), path.join(OUT, 'apple-touch-icon.png'));
