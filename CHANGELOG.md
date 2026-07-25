@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.67.0
+Settlers who work it out for themselves. Idle folk now look at what the hold
+actually needs — how the granary is holding up against how many mouths there
+are, how the timber and stone are running — and take up that trade on their own.
+They spread out sensibly rather than all seizing the same job, they leave hands
+free while anything is burning, and they know to stop when the stores are
+already full. They also head for the hearth when a storm rolls in.
+
 ## 1.66.0
 Housekeeping, no change to play. The game's code is being broken out of one very
 large file into proper modules — the map's geometry, its artwork list, and its

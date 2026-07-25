@@ -10,7 +10,9 @@
     "assets:rewrite": "node tools/rewrite-assets.mjs",
     "smoke": "npm run build && node tools/smoke-test.mjs",
     "build:site": "node site/build.js",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "gameplay": "npm run build && node tools/gameplay-test.mjs",
+    "verify": "npm run build && node tools/smoke-test.mjs && node tools/gameplay-test.mjs"
   },
   "devDependencies": {
     "playwright": "^1.62.0",
