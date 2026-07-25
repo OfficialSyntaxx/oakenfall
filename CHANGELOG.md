@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.58.0
+Wildlife, and settlers with survival instincts. Deer now roam the wilds and bolt
+when your folk draw near, and birds drift across the sky — the valley feels alive
+even before you build. Settlers react to danger: children and busy workers now
+scramble away from a fire instead of standing beside the flames (idle adults
+still rush in to fight it). And haulers no longer pile onto one tile at the Town
+Center — they spread around it as they drop off their loads.
+
 ## 1.57.0
 Fits your screen now. The hold used to open zoomed in so far that phones and
 un-maximized windows showed only a handful of tiles — you had to go fullscreen

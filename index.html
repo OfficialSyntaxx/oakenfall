@@ -1075,6 +1075,76 @@ function drawRaider(r){
   else { ctx.fillStyle='#e8782c'; ctx.beginPath(); ctx.ellipse(tx, cy-17, 3, 5, 0, 0, 7); ctx.fill(); }
   ctx.restore();
 }
+/* ── AMBIENT WILDLIFE ── deer roam the wilds and bolt from folk; birds drift
+   the sky. Purely atmospheric — not saved, respawned each session. */
+let critters = [];
+function spawnWildlife(){
+  critters = [];
+  const wild = (typeof wildsTiles!=='undefined' && wildsTiles.length) ? wildsTiles : [];
+  const deerN = Math.max(3, Math.min(7, (wild.length/6)|0 || 3));
+  for(let i=0;i<deerN;i++){
+    const t = wild.length ? wild[(Math.random()*wild.length)|0] : { gx:TC_CX+(Math.random()-0.5)*12, gy:TC_CY+(Math.random()-0.5)*12 };
+    critters.push({ kind:'deer', gx:t.gx, gy:t.gy, tx:t.gx, ty:t.gy, phase:Math.random()*6, face:1, rest:Math.random()*4, moving:false });
+  }
+  for(let i=0;i<4;i++){
+    critters.push({ kind:'bird', gx:Math.random()*MAP_SIZE, gy:Math.random()*MAP_SIZE, dir:Math.random()*6.28, phase:Math.random()*6, spd:0.5+Math.random()*0.5 });
+  }
+}
+function updateWildlife(dt){
+  if(!critters.length) return;
+  for(const c of critters){
+    if(c.kind==='deer'){
+      c.phase += dt*4;
+      let fd=16, fv=null;
+      for(const v of villagers){ const d=dist2(c.gx,c.gy,v.gx,v.gy); if(d<fd){ fd=d; fv=v; } }
+      const spooked = fv && fd < 9;      // within 3 tiles
+      if(spooked){
+        const a = Math.atan2(c.gy-fv.gy, c.gx-fv.gx) || 0;
+        c.tx = clamp(c.gx+Math.cos(a)*4, 1, MAP_SIZE-2);
+        c.ty = clamp(c.gy+Math.sin(a)*4, 1, MAP_SIZE-2);
+        c.rest = 1.5;
+      } else {
+        c.rest -= dt;
+        if(c.rest <= 0){ c.rest = 2+Math.random()*4;
+          const nx = clamp(c.gx+(Math.random()-0.5)*4, 1, MAP_SIZE-2), ny = clamp(c.gy+(Math.random()-0.5)*4, 1, MAP_SIZE-2);
+          if(typeof tileWalkable==='function' && tileWalkable(Math.round(nx), Math.round(ny))){ c.tx=nx; c.ty=ny; }
+        }
+      }
+      const dx=c.tx-c.gx, dy=c.ty-c.gy, d=Math.hypot(dx,dy);
+      if(d>0.05){ const spd=(spooked?2.4:0.7)*dt; c.gx+=dx/d*Math.min(spd,d); c.gy+=dy/d*Math.min(spd,d); c.face=dx>=0?1:-1; c.moving=true; }
+      else c.moving=false;
+    } else { // bird
+      c.phase += dt*8;
+      c.gx += Math.cos(c.dir)*c.spd*dt; c.gy += Math.sin(c.dir)*c.spd*dt;
+      if(c.gx<0) c.gx=MAP_SIZE; else if(c.gx>MAP_SIZE) c.gx=0;
+      if(c.gy<0) c.gy=MAP_SIZE; else if(c.gy>MAP_SIZE) c.gy=0;
+      if(Math.random()<0.006) c.dir += (Math.random()-0.5);
+    }
+  }
+}
+function drawDeer(c){
+  const p = project(c.gx, c.gy);
+  const bob = c.moving ? Math.abs(Math.sin(c.phase))*1.2 : 0;
+  const cx=p.x, cy=p.y-bob;
+  try{ drawShadow(cx, p.y+3, 7); }catch(e){}
+  ctx.save(); if(c.face<0){ ctx.translate(cx*2,0); ctx.scale(-1,1); }
+  const ls = c.moving ? Math.sin(c.phase)*1.7 : 0;
+  ctx.strokeStyle='#3a2a1a'; ctx.lineWidth=1.4; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(cx-3,cy-2); ctx.lineTo(cx-3+ls,cy+4); ctx.moveTo(cx+3,cy-2); ctx.lineTo(cx+3-ls,cy+4); ctx.stroke();
+  ctx.fillStyle='#7a5232'; ctx.beginPath(); ctx.ellipse(cx,cy-3,5.5,3.2,0,0,7); ctx.fill();          // body
+  ctx.beginPath(); ctx.ellipse(cx+5,cy-6,2,2.4,0,0,7); ctx.fill();                                    // head
+  ctx.fillStyle='#e8dcc4'; ctx.beginPath(); ctx.ellipse(cx-5,cy-2.5,1.6,2,0,0,7); ctx.fill();          // tail
+  ctx.strokeStyle='#4a3420'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(cx+5,cy-8); ctx.lineTo(cx+3.5,cy-11); ctx.moveTo(cx+6,cy-8); ctx.lineTo(cx+7.5,cy-11); ctx.stroke(); // antlers
+  ctx.restore();
+}
+function drawBird(c){
+  const p = project(c.gx, c.gy);
+  const cx=p.x, cy=p.y-48;                 // birds fly well above the ground
+  const f = Math.sin(c.phase)*3;
+  ctx.strokeStyle='rgba(28,24,20,0.65)'; ctx.lineWidth=1.4; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(cx-5,cy+f); ctx.lineTo(cx,cy-1.5); ctx.lineTo(cx+5,cy+f); ctx.stroke();
+}
 /* ── FORESTER'S GROVE ── replants tired and barren forest near each grove, so
    timber stays sustainable if you invest in the land. */
 let _foresterTimer = 0;
@@ -1365,7 +1435,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.57.0';
+const GAME_VERSION = '1.58.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -3129,6 +3199,24 @@ function updateVillager(v, dt){
     else if(v.hunger>=hungerSeek){ releaseClaims(v); v.state='seekingFood'; }
   }
 
+  // Reactive survival: a fire right beside you is dangerous. Children and busy
+  // workers scramble away from it; idle adults instead answer the bucket
+  // brigade (handled in ambientIdle), so we don't pull them off the fire.
+  if(!['eating','sleeping','seekingFood','seekingSleep'].includes(v.state)){
+    const adultHelper = v.stage!=='child' && v.role==='idle';
+    if(!adultHelper){
+      let nd=9, near=null;
+      for(const b of buildings){ if(!(b._fire>0)) continue; const c=buildingCenter(b); const d=dist2(v.gx,v.gy,c.gx,c.gy); if(d<nd){ nd=d; near=c; } }
+      if(near && nd < 6.25){ // within ~2.5 tiles
+        releaseClaims(v);
+        const ang = Math.atan2(v.gy-near.gy, v.gx-near.gx) || 0;
+        v.idleGX = clamp(v.gx + Math.cos(ang)*3.2, 1, MAP_SIZE-2);
+        v.idleGY = clamp(v.gy + Math.sin(ang)*3.2, 1, MAP_SIZE-2);
+        v.state = 'idle'; v.idleCooldown = Math.max(v.idleCooldown||0, 1.0); v.ambientEmote = '😱';
+      }
+    }
+  }
+
   const mul = effMultiplier(v);
 
   switch(v.state){
@@ -3225,7 +3313,11 @@ function updateVillager(v, dt){
       const tb = v.targetBuilding || findTC();
       if(!tb){ v.state='idle'; break; }
       const c = buildingCenter(tb);
-      const arrived = moveToward(v, c.gx, c.gy, dt, 1);
+      // Spread haulers around the drop building instead of stacking them all on
+      // one tile — a stable per-settler slot on the approach ring.
+      const RING = [[0,1.6],[1.4,1.2],[-1.4,1.2],[1.8,0.2],[-1.8,0.2],[0.6,2.1],[-0.6,2.1]];
+      const o = RING[hashStr(v.id) % RING.length];
+      const arrived = moveToward(v, c.gx+o[0], c.gy+o[1], dt, 1);
       if(arrived){
         if(v.carrying){ gainResource(v.carrying.type, v.carrying.amount); spawnFly(v.gx, v.gy, v.carrying.type); v.carrying=null; }
         v.targetBuilding = null;
@@ -3567,6 +3659,7 @@ function update(rawDt){
 
   for(const v of villagers.slice()) updateVillager(v, dt); // copy: villagers may leave mid-update
   processStewardOrders(dt);
+  updateWildlife(dt);
   checkQuests();
 
   // population growth
@@ -5450,6 +5543,9 @@ function render(){
   for(const r of raiders){
     list.push({depth:r.gx+r.gy+0.35, draw:()=>{ try{ drawRaider(r); }catch(e){} }});
   }
+  for(const cr of critters){
+    if(cr.kind==='deer') list.push({depth:cr.gx+cr.gy+0.28, draw:()=>{ try{ drawDeer(cr); }catch(e){} }});
+  }
   for(const m of memorials){
     list.push({depth:m.gx+m.gy+0.05, draw:()=>{ try{ drawMemorial(m); }catch(e){} }});
   }
@@ -5460,6 +5556,9 @@ function render(){
   }
   list.sort((a,b)=>a.depth-b.depth);
   for(const item of list) item.draw();
+
+  // Birds fly above the whole scene.
+  for(const cr of critters){ if(cr.kind==='bird'){ try{ drawBird(cr); }catch(e){} } }
 
   try { renderDustFX(1/60); } catch(e){}
   try { renderBoomFX(1/60); } catch(e){}
@@ -7187,6 +7286,7 @@ function finishBoot(){
   loadVillagerAnims();
   loadDecor();
   initCameraZoom();
+  try { spawnWildlife(); } catch(e){}
   const c = project(TC_CX, TC_CY);
   camera.panX = -c.x*camera.scale;
   camera.panY = -c.y*camera.scale + 40;
