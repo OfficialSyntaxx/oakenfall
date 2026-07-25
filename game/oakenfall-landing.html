@@ -984,21 +984,59 @@ layout();
 applyCamera(0);
 </script>
 <script>
-/* PWA install + service worker (progressive; no-ops where unsupported). */
+/* PWA install + service worker (progressive; no-ops where unsupported).
+   Two paths, because the platforms genuinely differ:
+   • Android/Chrome/Edge/desktop fire `beforeinstallprompt` → real install button.
+   • iOS Safari has NO programmatic install — the only route is
+     Share → Add to Home Screen, so we show a short instruction card instead. */
 (function(){
   if('serviceWorker' in navigator){ window.addEventListener('load', function(){ navigator.serviceWorker.register('/sw.js').catch(function(){}); }); }
-  var deferred=null, btn=null;
-  function showBtn(){
-    if(btn){ btn.hidden=false; return; }
-    btn=document.createElement('button');
-    btn.textContent='📲 Install';
-    btn.setAttribute('aria-label','Install Oakenfall app');
-    btn.style.cssText='position:fixed;right:14px;bottom:14px;z-index:60;padding:11px 15px;border-radius:10px;border:1px solid #e7a23d;background:linear-gradient(180deg,#f0b64a,#a5661c);color:#231603;font:600 14px/1 "IM Fell English SC",Georgia,serif;box-shadow:0 4px 12px rgba(0,0,0,.45);cursor:pointer;';
-    btn.addEventListener('click', async function(){ if(!deferred) return; deferred.prompt(); try{ await deferred.userChoice; }catch(e){} deferred=null; btn.hidden=true; });
-    document.body.appendChild(btn);
+
+  var standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  if(standalone) return;                       // already installed — say nothing
+
+  var ua = navigator.userAgent || '';
+  var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+  var isSafari = /^((?!chrome|android|crios|fxios).)*safari/i.test(ua);
+  var deferred = null, el = null;
+
+  function dismissed(){ try{ return localStorage.getItem('oak-install-dismissed')==='1'; }catch(e){ return false; } }
+  function remember(){ try{ localStorage.setItem('oak-install-dismissed','1'); }catch(e){} }
+
+  function chrome(html, onClick){
+    if(el || dismissed()) return;
+    el = document.createElement('div');
+    el.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:calc(14px + env(safe-area-inset-bottom,0px));z-index:60;max-width:min(92vw,420px);display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:12px;border:1px solid #e7a23d;background:linear-gradient(180deg,#2a2214,#171009);color:#e7d7ad;font:400 13.5px/1.35 "Alegreya Sans",system-ui,sans-serif;box-shadow:0 6px 18px rgba(0,0,0,.5);';
+    el.innerHTML = html;
+    var x = document.createElement('button');
+    x.textContent='✕'; x.setAttribute('aria-label','Dismiss');
+    x.style.cssText='margin-left:auto;background:none;border:0;color:#a8966b;font-size:16px;cursor:pointer;padding:4px 2px;';
+    x.addEventListener('click', function(){ remember(); el.remove(); el=null; });
+    el.appendChild(x);
+    if(onClick){
+      el.style.cursor='pointer';
+      el.addEventListener('click', function(ev){ if(ev.target!==x) onClick(); });
+    }
+    document.body.appendChild(el);
   }
-  window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); deferred=e; showBtn(); });
-  window.addEventListener('appinstalled', function(){ if(btn) btn.hidden=true; });
+
+  window.addEventListener('beforeinstallprompt', function(e){
+    e.preventDefault(); deferred = e;
+    chrome('<span style="font-size:19px">📲</span><span><b>Install Oakenfall</b><br><span style="opacity:.8">Play offline, straight from your home screen.</span></span>', async function(){
+      if(!deferred) return;
+      deferred.prompt();
+      try{ await deferred.userChoice; }catch(e2){}
+      deferred=null; if(el){ el.remove(); el=null; }
+    });
+  });
+  window.addEventListener('appinstalled', function(){ remember(); if(el){ el.remove(); el=null; } });
+
+  // iOS gets the manual route (no install event will ever fire there).
+  if(isIOS && isSafari){
+    setTimeout(function(){
+      chrome('<span style="font-size:19px">📲</span><span><b>Add Oakenfall to your Home Screen</b><br><span style="opacity:.8">Tap <b>Share</b> below, then <b>Add to Home Screen</b>.</span></span>', null);
+    }, 2500);
+  }
 })();
 </script>
 </body>
