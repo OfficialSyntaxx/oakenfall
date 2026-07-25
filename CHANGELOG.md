@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.68.0
+A hold that reorganises itself, and folk with lives. Settlers already in work now
+reconsider their trade: let the granary run down while six people fell timber and
+some will pick up a scythe of their own accord — though they will not churn, as
+moving costs them a walk across the hold. Children keep near a parent rather than
+milling about the square, married folk seek each other out at day's end, and
+guards walk a beat around their post instead of standing on it. Also fixed: the
+developer panel's "advance one day" moved the clock without ever ticking the day
+over, so weather, bounties and trade routes silently never rolled.
+
 ## 1.67.0
 Settlers who work it out for themselves. Idle folk now look at what the hold
 actually needs — how the granary is holding up against how many mouths there

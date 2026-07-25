@@ -419,8 +419,15 @@ function adminGrant(kind){
     // ── Time ──
     case 'tDawn':  toDawn(); toast('🛠️ Jumped to dawn.'); break;
     case 'tNight': toNight(); toast('🛠️ Jumped to night.'); break;
-    case 'tDay':   worldTime += CYCLE_LEN; toast('🛠️ Advanced one full day.'); break;
-    case 'tSeason':worldTime += SEASON_LEN; toast('🛠️ Advanced one season.'); break;
+    // Step to just short of the next dawn and let update() cross the boundary
+    // itself. Adding a whole cycle outright skipped the crossing entirely, so
+    // the day counter never moved and none of the daily rollover — weather,
+    // bounties, trade routes, stat snapshot — ever fired.
+    case 'tDay':   worldTime = (Math.floor(worldTime/CYCLE_LEN)+1)*CYCLE_LEN - 0.05; toast('🛠️ Advanced one full day.'); break;
+    case 'tSeason':
+      worldTime += SEASON_LEN;
+      dayCount = Math.floor(worldTime/CYCLE_LEN) + 1;   // resync: a jump skips the per-day rollovers
+      toast('🛠️ Advanced one season.'); break;
     // ── Hazards (test the drama) ──
     case 'raid':   launchRaid(4, true, raidEntryPoint(buildings.filter(b=>b.type==='bridge'))); toast('🛠️ Raiders incoming!'); sfx&&sfx('raid'); break;
     case 'fire':   { const cand = buildings.filter(b=>b.type!=='road'&&b.type!=='well'); if(cand.length){ igniteBuilding(cand[Math.floor(Math.random()*cand.length)], true); toast('🛠️ A fire breaks out!'); } break; }
@@ -883,7 +890,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.67.0';
+const GAME_VERSION = '1.68.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -1526,7 +1533,10 @@ function roleNeedScores(){
   const out = [];
   const add = (role, workplace, score)=>{
     if(!hasActiveBuilding(workplace)) return;      // nowhere to do the work
-    out.push({ role, score: score / (1 + (count[role]||0)) });
+    // `score` is the hold's raw appetite for this trade; `workers` lets callers
+    // reason about pressure per head. The published score is the raw need spread
+    // over the hands already on it, which is what makes hiring fan out.
+    out.push({ role, score: score / (1 + (count[role]||0)), raw: score, workers: count[role]||0 });
   };
   // Food is the survival pressure: weight it by how many mouths depend on it,
   // and sharply if the stores would not last long.
@@ -1550,6 +1560,43 @@ function seekWork(v){
   if(!best || best.score < 0.35) return false;
   reassignRole(v, best.role);
   v.ambientEmote = '💡';
+  return true;
+}
+/* An employed settler reconsiders their trade now and then: a hold that has run
+   its granary dry while six people fell timber should see some of them pick up
+   a scythe. The margin and the staggered cooldown exist to stop folk churning
+   between jobs every time a score wobbles — switching costs a walk, so it has to
+   be clearly worth it. Player-assigned roles are not sacred, but they are sticky:
+   nothing moves unless the need is substantially greater elsewhere. */
+function maybeSwitchTrade(v){
+  if(v.stage==='child' || v.role==='idle') return false;
+  if(v._tradeCheck === undefined) v._tradeCheck = worldTime + 20 + Math.random()*30;
+  if(worldTime < v._tradeCheck) return false;
+  v._tradeCheck = worldTime + 30 + Math.random()*30;
+  if(buildings.some(b=>b._fire>0)) return false;
+  const scores = roleNeedScores();
+  if(!scores.length) return false;
+  // Compare pressure per head, not the published score. A fixed margin against
+  // scores already divided by worker count is effectively unreachable once a few
+  // people hold a trade — the first version of this never fired once. What
+  // matters is how hard each trade is pulling per person: my trade's need shared
+  // among those doing it, against the candidate's need if I joined them.
+  const mine = scores.find(s=>s.role===v.role);
+  const minePressure = mine ? mine.raw / Math.max(1, mine.workers) : 0;
+  let pick = null, pickPressure = 0;
+  for(const cand of scores){
+    if(cand.role === v.role) continue;
+    const p = cand.raw / (cand.workers + 1);
+    if(p > pickPressure){ pick = cand; pickPressure = p; }
+  }
+  if(!pick || pickPressure < 0.4) return false;
+  // A trade in surplus frees you outright; otherwise the pull has to be clearly
+  // stronger, since switching costs a walk across the hold.
+  const worthIt = minePressure <= 0.05 ? true : pickPressure > minePressure * 1.8;
+  if(!worthIt) return false;
+  reassignRole(v, pick.role);
+  v.ambientEmote = '🔁';
+  remember(v, 'took up '+(ROLE_DEFS[pick.role]?ROLE_DEFS[pick.role].label:pick.role));
   return true;
 }
 function ambientIdle(v){
@@ -1582,10 +1629,30 @@ function ambientIdle(v){
     if(o){ v.idleGX=clamp(o.gx+(Math.random()-0.5)*1.2,1,MAP_SIZE-2); v.idleGY=clamp(o.gy+(Math.random()-0.5)*1.2,1,MAP_SIZE-2); v.ambientEmote='💬'; return; }
   }
   if(v.stage==='child'){
+    // Children keep near a parent when there is one to keep near — they trail
+    // whoever is working rather than milling about the square on their own.
+    const kin = (v.parents||[]).map(n=>villagers.find(x=>x.name===n)).filter(Boolean);
+    if(kin.length && Math.random()<0.65){
+      const p = kin[Math.floor(Math.random()*kin.length)];
+      v.idleGX = clamp(p.gx + (Math.random()-0.5)*2.0, 1, MAP_SIZE-2);
+      v.idleGY = clamp(p.gy + 0.8 + (Math.random()-0.5)*1.4, 1, MAP_SIZE-2);
+      v.ambientEmote = Math.random()<0.5 ? '🙂' : '🎈';
+      return;
+    }
     v.idleGX = clamp(TC_CX + (Math.random()-0.5)*4, 1, MAP_SIZE-2);
     v.idleGY = clamp(TC_CY + 1.5 + (Math.random()-0.5)*3, 1, MAP_SIZE-2);
     v.ambientEmote = Math.random()<0.5 ? '🙂' : '🎈';
     return;
+  }
+  // Married folk seek each other out when the day's work is done.
+  if(v.partner && Math.random()<0.45){
+    const spouse = villagers.find(x=>x.name===v.partner);
+    if(spouse){
+      v.idleGX = clamp(spouse.gx + (Math.random()-0.5)*1.4, 1, MAP_SIZE-2);
+      v.idleGY = clamp(spouse.gy + (Math.random()-0.5)*1.2, 1, MAP_SIZE-2);
+      v.ambientEmote = '💞';
+      return;
+    }
   }
   v.idleGX = clamp(v.idleGX + (Math.random()-0.5)*2.2, 1, MAP_SIZE-2);
   v.idleGY = clamp(v.idleGY + (Math.random()-0.5)*2.2, 1, MAP_SIZE-2);
@@ -2698,15 +2765,21 @@ function updateVillager(v, dt){
       moveToward(v, v.idleGX, v.idleGY, dt, 1);
       if(v.idleCooldown<=0){
         v.idleCooldown = 0.8 + Math.random()*0.5;
+        if(maybeSwitchTrade(v)) break;   // moved trades — pick it up next tick
         if(v.stage==='child'){
           ambientIdle(v); // too young to work — children play near home
         } else if(v.role==='guard'){
-          // Guards station themselves at a guard post and hold position
+          // Guards walk a beat around their post rather than standing on it —
+          // a visible patrol, and it puts them between the hold and the treeline.
           const posts = buildings.filter(b=>b.type==='guardPost');
           if(posts.length){
             const post = posts[hashStr(v.id) % posts.length];
-            v.idleGX = post.gx + 0.5 + (hashStr(v.name)%3-1)*0.4;
-            v.idleGY = post.gy + 1.1;
+            v._beat = ((v._beat||0) + 1) % 4;
+            const ang = (v._beat/4)*Math.PI*2 + (hashStr(v.name)%100)/100;
+            const spot = nearestWalkable(Math.round(post.gx + Math.cos(ang)*2.2),
+                                         Math.round(post.gy + 1 + Math.sin(ang)*1.6));
+            if(spot){ v.idleGX = spot.gx; v.idleGY = spot.gy; }
+            v.ambientEmote = isNight() ? '🔦' : null;
           }
         } else if(v.role==='lumberjack'){
           const t = findResourceTarget(v, forestTiles);
