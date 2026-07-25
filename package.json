@@ -5,10 +5,12 @@
   "description": "Oakenfall — living-world villager simulation and site build.",
   "scripts": {
     "test": "cd game && node soak-test.js",
-    "build": "node site/build.js",
+    "build": "vite build && node site/build.js",
     "assets:extract": "node tools/extract-assets.mjs",
     "assets:rewrite": "node tools/rewrite-assets.mjs",
-    "smoke": "node site/build.js && node tools/smoke-test.mjs"
+    "smoke": "npm run build && node tools/smoke-test.mjs",
+    "build:site": "node site/build.js",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "playwright": "^1.62.0",

@@ -66,20 +66,23 @@ fs.mkdirSync(OUT, { recursive: true });
 copyDir(path.join(SITE, 'css'), path.join(OUT, 'css'));
 copyDir(path.join(SITE, 'js'), path.join(OUT, 'js'));
 
-// The game, untouched, at /game/
-fs.mkdirSync(path.join(OUT, 'game'), { recursive: true });
-fs.copyFileSync(path.join(ROOT, 'index.html'), path.join(OUT, 'game', 'index.html'));
+// The game at /game/. Built by Vite into dist/ (run `vite build` first — the
+// npm "build" script chains them). dist/ already contains the bundled code,
+// the HTML shell, and public/assets passed through, so it copies wholesale.
+const DIST = path.join(ROOT, 'dist');
+if (!fs.existsSync(path.join(DIST, 'index.html'))) {
+  throw new Error('dist/index.html missing — run `vite build` before site/build.js (use `npm run build`)');
+}
+copyDir(DIST, path.join(OUT, 'game'));
 
 // External game assets (music today; more as they are pulled out of the HTML).
 // The game references these with relative paths, so they must sit beside it at
 // /game/assets/. Keeping them as files — rather than 12MB of inlined base64 —
 // is what makes the game load fast on mobile; they are still served from our
 // own origin and cached by the service worker, so offline play is unaffected.
-// All game assets now live as files rather than inlined base64 (which is what
-// took the game from 15.3MB to under 400KB). They ship beside the game so its
-// relative asset/ paths resolve, and the service worker caches them on use.
-const gameAssets = path.join(ROOT, 'public', 'assets');
-if (fs.existsSync(gameAssets)) copyDir(gameAssets, path.join(OUT, 'game', 'assets'));
+// Game art ships as files rather than inlined base64 (what took the game from
+// 15.3MB to under 400KB). Vite already passes public/assets through to dist/,
+// so it arrives with the copy above.
 
 // Home-screen icon, referenced by both the site layout and the game
 fs.copyFileSync(path.join(ROOT, 'apple-touch-icon.png'), path.join(OUT, 'apple-touch-icon.png'));
@@ -140,7 +143,7 @@ const credits = md(fs.readFileSync(path.join(ROOT, 'CREDITS.md'), 'utf8'));
 
 // Version guard: the game's GAME_VERSION and CHANGELOG.md's top entry must
 // agree, or the chronicle silently drifts from the game. Fail the build.
-const gameSrc = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+const gameSrc = fs.readFileSync(path.join(ROOT, 'src', 'main.ts'), 'utf8');
 const gameVer = (gameSrc.match(/const GAME_VERSION = '([^']+)'/) || [])[1];
 const logVer = (changelogSrc.match(/^## (\S+)/m) || [])[1];
 if (!gameVer || gameVer !== logVer) {

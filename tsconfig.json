@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "allowJs": true,
+    "checkJs": false,
+
+    /* Strictness is being turned up gradually. The game arrived as ~6,900 lines
+       of untyped JS; flipping every flag at once would bury real problems under
+       thousands of cosmetic ones. Modules get typed as they are split out. */
+    "strict": false,
+    "noImplicitAny": false,
+    "useDefineForClassFields": true
+  },
+  "include": ["src", "tools"]
+}

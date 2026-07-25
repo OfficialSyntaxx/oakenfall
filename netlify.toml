@@ -1,4 +1,12 @@
 [build]
-  command = "node site/build.js"
+  command = "npm run build"
   publish = "_site"
   functions = "netlify/functions"
+
+[build.environment]
+  # Vite 7 requires Node >=20.19; pin it so the deploy never falls back to an
+  # older default and fails the build.
+  NODE_VERSION = "22"
+  # Playwright is a devDependency for the local smoke test only; without this its
+  # postinstall downloads ~1GB of browsers during every deploy.
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"
