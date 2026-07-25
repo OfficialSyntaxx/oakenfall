@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.60.0
+Loads five times faster. The game was a single 15MB file — and 12MB of that was
+background music inlined into the page, which meant every player downloaded it
+even though music is off by default. The music now lives in its own files that
+load only when you switch it on, cutting the game from 15.3MB to 3.1MB. On a
+phone that is the difference between waiting half a minute and starting almost
+at once. It still plays offline once cached, and nothing about how you play
+changes.
+
 ## 1.59.0
 Mobile fixes that matter. Pinch-zoom no longer sends the camera flying — it now
 pivots properly around your fingers (the zoom anchor was drifting every frame).
