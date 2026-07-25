@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.65.0
+The minimap finally makes sense. It used to lay the land out as a square while
+the game shows it as a diamond, so nothing on it lined up with what was in front
+of you — that is why it never seemed good for much. It now draws the hold in the
+same view as the world itself: the river sits where you expect, your Town Center
+and settlers are marked, raiders flash a warning ring, buildings show orange
+while they burn, and the box showing where you are looking is finally a
+straight rectangle you can trust. You can also hold and drag on it to sweep the
+camera across the hold.
+
 ## 1.64.0
 The stores fit, and the world has a horizon. Your resource row no longer slides
 under the buttons or hides pills behind a floating toggle — it wraps onto tidy
