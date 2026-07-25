@@ -999,7 +999,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.69.0';
+const GAME_VERSION = '1.70.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -3316,6 +3316,7 @@ function update(rawDt){
   for(const v of villagers.slice()) updateVillager(v, dt); // copy: villagers may leave mid-update
   processStewardOrders(dt);
   updateWildlife(dt);
+  updateGroundCover(dt);
   checkQuests();
 
   // population growth
@@ -3586,6 +3587,21 @@ const TILE_COLORS = {
   stone: ['#3a3c34','#3d3f37','#373931','#404239'],
   water: ['#182c3e','#1c3244','#163040','#1a3446'],
 };
+/* ── GROUND COVER ── how wet and how snowed-under the land currently is. Eased
+   rather than switched, so puddles gather while it rains and dry off slowly
+   afterwards, and snow builds up over a fall instead of appearing all at once.
+   Two numbers for the whole map: the per-tile look is derived from them plus the
+   tile's own hash, which keeps this free of per-tile state or allocation. */
+let groundWet = 0, groundSnow = 0;
+function updateGroundCover(dt){
+  const raining = weather.type==='rain' || weather.type==='storm';
+  const snowing = weather.type==='snow';
+  const winter = seasonIndex()===3;
+  const wetTarget  = raining ? 1 : 0;
+  const snowTarget = snowing ? 1 : (winter ? 0.5 : 0);
+  groundWet  += (wetTarget  - groundWet ) * Math.min(1, dt*0.30);  // dries slowly
+  groundSnow += (snowTarget - groundSnow) * Math.min(1, dt*0.10);  // settles slower still
+}
 function drawTerrain(range){
   for(let gy=range.y0; gy<=range.y1; gy++){
     for(let gx=range.x0; gx<=range.x1; gx++){
@@ -3617,6 +3633,46 @@ function drawTerrain(range){
           ctx.globalAlpha = 1;
         }
       }
+      /* ── LIVING SURFACE ── shimmer, wet ground and settled snow, layered over
+         whichever tile art was drawn above. Flat fills only: a gradient per tile
+         per frame is the classic way to wreck this game's framerate. */
+      if(isWater){
+        if(riverFrozen()){
+          // Frozen over: a pale sheen and a hint of cracking, no movement.
+          ctx.fillStyle = 'rgba(206,224,236,0.34)';
+          tileDiamond(p.x, yTop, TILE_W*0.96, TILE_H*0.96); ctx.fill();
+          if(h2 > 0.7){
+            ctx.strokeStyle = 'rgba(255,255,255,0.22)'; ctx.lineWidth = 0.8;
+            ctx.beginPath(); ctx.moveTo(p.x-8, yTop-1); ctx.lineTo(p.x+3, yTop+3); ctx.stroke();
+          }
+        } else {
+          // Open water: a highlight sliding across the tile, each on its own
+          // phase so the river glitters rather than pulsing in unison.
+          const ph = worldTime*1.3 + h2*6.283;
+          const a = 0.09 + Math.sin(ph)*0.06;
+          if(a > 0.03){
+            ctx.fillStyle = 'rgba(188,224,244,'+a.toFixed(3)+')';
+            tileDiamond(p.x + Math.sin(ph)*6, yTop - 1, TILE_W*0.40, TILE_H*0.40); ctx.fill();
+          }
+        }
+      } else {
+        // Rain gathers in the hollows — only some tiles hold a puddle, and they
+        // spread as the downpour goes on.
+        if(groundWet > 0.04 && h2 > 0.58 && (t.type==='grass' || t.type==='dirt')){
+          const g = groundWet * (0.55 + h2*0.45);
+          ctx.fillStyle = 'rgba(38,58,70,'+(g*0.40).toFixed(3)+')';
+          tileDiamond(p.x + (h2-0.7)*12, yTop + 3, TILE_W*0.42*g, TILE_H*0.42*g); ctx.fill();
+          ctx.fillStyle = 'rgba(180,210,230,'+(g*0.10).toFixed(3)+')';   // sky caught in it
+          tileDiamond(p.x + (h2-0.7)*12, yTop + 2, TILE_W*0.26*g, TILE_H*0.26*g); ctx.fill();
+        }
+        // Snow lies unevenly — the tile's own hash decides how deeply it drifts.
+        if(groundSnow > 0.02){
+          const s = groundSnow * (0.45 + h2*0.55);
+          ctx.fillStyle = 'rgba(234,242,250,'+(s*0.62).toFixed(3)+')';
+          tileDiamond(p.x, yTop - 1, TILE_W*0.94, TILE_H*0.94); ctx.fill();
+        }
+      }
+
       // Earthen bank faces: where land meets water (or the map edge), draw the
       // tile's south-west / south-east side walls dropping to the lower level.
       if(!isWater && !stamp){

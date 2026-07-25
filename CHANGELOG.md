@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.70.0
+The ground answers the sky. Rain now gathers in puddles across the hold, pooling
+in the low spots while it falls and drying off slowly once it passes. Snow
+settles unevenly over the land through a fall and lingers into winter. The river
+glitters, each stretch catching the light on its own — and freezes to a pale,
+cracked sheet when the cold sets in.
+
 ## 1.69.0
 The wilds fill out. Boar now root about in the thickets — heavier than deer and
 far less inclined to run — while rabbits bolt from open grass at the slightest

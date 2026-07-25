@@ -1,8 +1,12 @@
 # Oakenfall — Project Brief for Claude Code
 
-Mobile-first isometric 2:1 city-builder/civ sim. ONE self-contained HTML file
-(`index.html`), vanilla JS + Canvas 2D. No frameworks, no build step, no npm,
-no external network requests at runtime. All art is base64-embedded.
+Mobile-first isometric 2:1 city-builder/civ sim. Canvas 2D, no game framework.
+Built with Vite: `index.html` is a shell, the game lives in `src/`, art in
+`public/assets/`. Runs fully offline — assets are bundled from our own origin and
+service-worker cached, never a third-party CDN.
+
+(It began as one self-contained 15MB HTML file with everything base64-inlined.
+That is retired: see the architecture direction below.)
 
 ## Architecture direction (decided; migration in progress)
 The end goal is a shipped **mobile game (iOS/Android)**. The owner approved a
@@ -31,6 +35,10 @@ modules, (3) Capacitor wrap + native storage.
   is sized, the HUD does not collide, and no console/request errors occur.
 - `node tools/shots.mjs` — screenshots both orientations × collapsed/expanded
   into /tmp/shots for eyeballing UI work.
+- `node tools/weather-shots.mjs` — forces clear/rain/snow via the admin panel and
+  shoots the terrain, since the living-surface effects are invisible by default.
+- `npm run gameplay` / `npm run verify` — drives the real player flow (promo code
+  → admin → Steward order) and asserts settlers self-employ and switch trades.
 - `npx tsc --noEmit` — typecheck.
 
 ## Hard constraints (never violate)
@@ -72,11 +80,13 @@ modules, (3) Capacitor wrap + native storage.
   `netlify/functions/submit-feedback.js`.
 
 ## Verification workflow (run before every commit)
-1. Extract script and syntax-check:
-   `node -e "const m=require('fs').readFileSync('index.html','utf8').match(/<script>([\s\S]*)<\/script>/); require('fs').writeFileSync('/tmp/c.js',m[1]);" && node --check /tmp/c.js`
-2. Feature asserts: for each change, grep/assert the exact strings landed.
-3. Duplicate function scan (no duplicate `function X` declarations).
-4. Bump GAME_VERSION + add a CHANGELOG.md entry for player-visible changes.
+1. `npm run verify` — build + smoke + gameplay. This replaces the old
+   extract-and-`node --check` dance; the build itself now catches syntax errors.
+2. `npx tsc --noEmit` when modules changed.
+3. Screenshot anything visual (`tools/shots.mjs`, `tools/weather-shots.mjs`) —
+   the automated checks have passed while the UI looked wrong.
+4. Bump GAME_VERSION in `src/main.ts` + add a CHANGELOG.md entry for
+   player-visible changes. The site build fails if the two disagree.
 
 ## Known pitfalls (hard-won)
 - Canvas resize feedback loop in iframes: never set canvas.width/height when
