@@ -73,6 +73,14 @@ fs.copyFileSync(path.join(ROOT, 'index.html'), path.join(OUT, 'game', 'index.htm
 // Home-screen icon, referenced by both the site layout and the game
 fs.copyFileSync(path.join(ROOT, 'apple-touch-icon.png'), path.join(OUT, 'apple-touch-icon.png'));
 
+// PWA: manifest, service worker, and installable icons — copied to the site
+// root so the game can be installed to a home screen and opened offline. All
+// use root-relative paths, so they survive a move to a different host/domain.
+for (const f of ['manifest.webmanifest', 'sw.js', 'icon-192.png', 'icon-512.png']) {
+  const src = path.join(ROOT, f);
+  if (fs.existsSync(src)) fs.copyFileSync(src, path.join(OUT, f));
+}
+
 // Optional image assets (hero art, OG/social image, concept art) dropped into
 // site/img/ — e.g. AI-generated key art. Copied verbatim to /img/. The OG image
 // is auto-detected from a known basename so link shares get real art when it's
