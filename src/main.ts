@@ -937,7 +937,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.64.0';
+const GAME_VERSION = '1.65.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -4887,95 +4887,115 @@ const minimapCanvas = document.getElementById('minimap');
 const mmCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
 // minimap tile size is computed dynamically in drawMinimap() based on MAP_SIZE
 const MM_COLORS = { grass:'#2a3f22', dirt:'#4a3a26', forest:'#1c3022', stone:'#3a3a34', water:'#1c3242' };
+// Projection the minimap last drew with, so pointer input can invert it.
+let mmLayout = { S:128, scale:1, offY:0 };
 function drawMinimap(){
   if(!mmCtx || !grid.length) return;
-  const MM_SIZE = 112; // CSS px — fixed display size
-  // Compute pixel-per-tile so the whole map always fills the minimap
-  const mmTile = Math.max(1, Math.floor(MM_SIZE / MAP_SIZE));
-  const sz = MAP_SIZE * mmTile;
-  minimapCanvas.width = sz; minimapCanvas.height = sz;
+  const S = 128;                       // backing resolution; CSS scales it to fit
+  minimapCanvas.width = S; minimapCanvas.height = S;
   minimapCanvas.style.width = '100%'; minimapCanvas.style.height = '100%';
 
-  mmCtx.clearRect(0,0,sz,sz);
+  // Draw in the SAME isometric projection as the world. The old minimap laid the
+  // grid out as a square while the game shows a diamond, so nothing on it lined
+  // up with what you were looking at — which is what made it feel pointless.
+  // Matching the projection means north here is north there, and the visible
+  // region becomes a plain rectangle instead of a skewed quad.
+  const scale = S / (MAP_SIZE * TILE_W);
+  const offY  = (S - MAP_SIZE * TILE_H * scale) / 2;
+  const mmX = (wx)=> wx*scale + S/2;
+  const mmY = (wy)=> wy*scale + offY;
+  const tw = TILE_W*scale, th = TILE_H*scale;
+  mmLayout = { S, scale, offY };       // shared with the pan handler
 
-  // Terrain
-  for(let y=0;y<MAP_SIZE;y++){
-    for(let x=0;x<MAP_SIZE;x++){
-      const t = grid[y] && grid[y][x];
-      if(!t) continue;
-      let col = t.wilds ? '#3a4e22' : (MM_COLORS[t.type]||'#2a3a22');
-      mmCtx.fillStyle = col;
-      mmCtx.fillRect(x*mmTile, y*mmTile, mmTile, mmTile);
-    }
+  mmCtx.clearRect(0,0,S,S);
+  mmCtx.fillStyle = '#0a0d12';         // the deep beyond the island
+  mmCtx.fillRect(0,0,S,S);
+
+  // Terrain, batched one path per colour — ~6 fills instead of 1300.
+  const byColour = new Map();
+  for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<MAP_SIZE;x++){
+    const t = grid[y] && grid[y][x];
+    if(!t) continue;
+    const col = t.wilds ? '#3a4e22' : (MM_COLORS[t.type]||'#2a3a22');
+    let path = byColour.get(col);
+    if(!path){ path = new Path2D(); byColour.set(col, path); }
+    const p = project(x,y), cx = mmX(p.x), cy = mmY(p.y);
+    path.moveTo(cx, cy-th/2); path.lineTo(cx+tw/2, cy);
+    path.lineTo(cx, cy+th/2); path.lineTo(cx-tw/2, cy); path.closePath();
   }
+  for(const [col,path] of byColour){ mmCtx.fillStyle = col; mmCtx.fill(path); }
 
-  // Roads (distinct sandy colour)
+  // Roads, then structures on top.
+  mmCtx.fillStyle = '#5a4e36';
   for(const b of buildings){
-    if(b.type==='road'){
-      mmCtx.fillStyle='#5a4e36';
-      mmCtx.fillRect(b.gx*mmTile, b.gy*mmTile, mmTile, mmTile);
-    }
+    if(b.type!=='road') continue;
+    const p = project(b.gx,b.gy);
+    mmCtx.fillRect(mmX(p.x)-tw/4, mmY(p.y)-th/4, Math.max(1.5,tw/2), Math.max(1.5,th/2));
   }
-
-  // Non-road buildings
   for(const b of buildings){
     if(b.type==='road') continue;
-    mmCtx.fillStyle = b.type==='townCenter' ? '#e7a23d' : '#c8a870';
-    mmCtx.fillRect(b.gx*mmTile, b.gy*mmTile, Math.max(mmTile, b.w*mmTile), Math.max(mmTile, b.h*mmTile));
+    const p = project(b.gx,b.gy);
+    const lit = b._fire>0;
+    mmCtx.fillStyle = lit ? '#ff7a2a' : (b.type==='townCenter' ? '#e7a23d' : '#c8a870');
+    const r = b.type==='townCenter' ? 3.4 : 2.2;
+    mmCtx.beginPath(); mmCtx.arc(mmX(p.x), mmY(p.y), lit ? r+1 : r, 0, 7); mmCtx.fill();
   }
 
-  // Villagers — green dot, red if sick
+  // Your folk, and anything threatening them.
   for(const v of villagers){
-    mmCtx.fillStyle = v.sick ? '#d04030' : '#78d060';
-    mmCtx.fillRect(Math.round(v.gx)*mmTile, Math.round(v.gy)*mmTile, Math.max(2,mmTile), Math.max(2,mmTile));
+    const p = project(v.gx,v.gy);
+    mmCtx.fillStyle = v.sick ? '#d04030' : '#8ade68';
+    mmCtx.beginPath(); mmCtx.arc(mmX(p.x), mmY(p.y), 1.5, 0, 7); mmCtx.fill();
+  }
+  for(const r of raiders){
+    const p = project(r.gx,r.gy);
+    mmCtx.fillStyle = '#ff4433';
+    mmCtx.beginPath(); mmCtx.arc(mmX(p.x), mmY(p.y), 2.4, 0, 7); mmCtx.fill();
+    mmCtx.strokeStyle = 'rgba(255,68,51,0.5)'; mmCtx.lineWidth = 1;
+    mmCtx.beginPath(); mmCtx.arc(mmX(p.x), mmY(p.y), 4.5 + Math.sin(worldTime*6)*1.5, 0, 7); mmCtx.stroke();
   }
 
-  // Night overlay
-  if(isNight()){
-    mmCtx.fillStyle='rgba(10,16,40,0.38)';
-    mmCtx.fillRect(0,0,sz,sz);
-  }
+  if(isNight()){ mmCtx.fillStyle='rgba(10,16,40,0.35)'; mmCtx.fillRect(0,0,S,S); }
 
-  // Viewport outline. The screen rectangle maps to a DIAMOND in grid space
-  // (that's what isometric projection does) — the old code took two corners and
-  // drew an axis-aligned box, which is why it never matched what you saw. Project
-  // all four screen corners and stroke the real quad.
-  const quad = [[0,0],[cssW,0],[cssW,cssH],[0,cssH]].map(([sx,sy])=>{
-    const wp = screenToWorldPixel(sx, sy);
-    const g = inProject(wp.x, wp.y);
-    return { x: g.gx*mmTile, y: g.gy*mmTile };
-  });
-  // Only worth drawing when it tells you something. Zoomed out (the common case
-  // now that the view fits the screen) the visible region covers the whole hold,
-  // so an outline around everything is just noise — show it only once you have
-  // zoomed in far enough that it marks a genuine subsection.
-  const area = Math.abs(
-    (quad[0].x*quad[1].y - quad[1].x*quad[0].y) +
-    (quad[1].x*quad[2].y - quad[2].x*quad[1].y) +
-    (quad[2].x*quad[3].y - quad[3].x*quad[2].y) +
-    (quad[3].x*quad[0].y - quad[0].x*quad[3].y)
-  ) / 2;
-  if(area < sz*sz*0.72){
+  // What you can currently see. Sharing the world's projection makes this an
+  // axis-aligned rectangle; it is only drawn when zoomed in far enough to mark a
+  // genuine subsection, since zoomed out it would just outline everything.
+  const tl = screenToWorldPixel(0,0), br = screenToWorldPixel(cssW,cssH);
+  const vx = mmX(tl.x), vy = mmY(tl.y), vw = (br.x-tl.x)*scale, vh = (br.y-tl.y)*scale;
+  if(vw*vh < S*S*0.62){
     mmCtx.save();
-    mmCtx.beginPath(); mmCtx.rect(0,0,sz,sz); mmCtx.clip();   // never spill past the map
-    mmCtx.beginPath();
-    mmCtx.moveTo(quad[0].x, quad[0].y);
-    for(let i=1;i<quad.length;i++) mmCtx.lineTo(quad[i].x, quad[i].y);
-    mmCtx.closePath();
-    mmCtx.fillStyle='rgba(231,162,61,0.10)'; mmCtx.fill();
-    mmCtx.strokeStyle='rgba(231,162,61,0.85)'; mmCtx.lineWidth=1.5; mmCtx.stroke();
+    mmCtx.beginPath(); mmCtx.rect(0,0,S,S); mmCtx.clip();
+    mmCtx.fillStyle='rgba(231,162,61,0.10)'; mmCtx.fillRect(vx,vy,vw,vh);
+    mmCtx.strokeStyle='rgba(231,162,61,0.9)'; mmCtx.lineWidth=1.5; mmCtx.strokeRect(vx,vy,vw,vh);
     mmCtx.restore();
   }
 }
-// tap minimap to jump camera there
+// Tap the minimap to look there — or hold and drag to sweep the camera across
+// the hold, which is far quicker than repeatedly dragging the world itself.
+// Inverts whatever projection drawMinimap last used.
 if(minimapCanvas){
-  minimapCanvas.addEventListener('click', (e)=>{
+  const lookAt = (clientX, clientY)=>{
     const rect = minimapCanvas.getBoundingClientRect();
-    const px = (e.clientX-rect.left)/rect.width, py = (e.clientY-rect.top)/rect.height;
-    const tgx = px*MAP_SIZE, tgy = py*MAP_SIZE;
-    const p = project(tgx, tgy);
-    panCameraTo(p.x, p.y);
+    const { S, scale, offY } = mmLayout;
+    const mx = (clientX-rect.left)/rect.width  * S;
+    const my = (clientY-rect.top )/rect.height * S;
+    panCameraTo((mx - S/2)/scale, (my - offY)/scale);
+  };
+  let dragging = false;
+  minimapCanvas.addEventListener('pointerdown', (e)=>{
+    dragging = true;
+    try{ minimapCanvas.setPointerCapture(e.pointerId); }catch(err){}
+    lookAt(e.clientX, e.clientY);
+    e.preventDefault(); e.stopPropagation();
   });
+  minimapCanvas.addEventListener('pointermove', (e)=>{
+    if(!dragging) return;
+    lookAt(e.clientX, e.clientY);
+    e.preventDefault(); e.stopPropagation();
+  });
+  const end = (e)=>{ dragging = false; try{ minimapCanvas.releasePointerCapture(e.pointerId); }catch(err){} };
+  minimapCanvas.addEventListener('pointerup', end);
+  minimapCanvas.addEventListener('pointercancel', end);
 }
 
 function drawGhost(){
