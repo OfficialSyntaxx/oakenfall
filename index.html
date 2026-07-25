@@ -1365,7 +1365,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.56.0';
+const GAME_VERSION = '1.57.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -2377,7 +2377,14 @@ function panCameraTo(wx, wy){
 }
 
 // Keep the map always at least 40% visible on each axis.
-const ZOOM_MIN = 0.55, ZOOM_MAX = 2.4;
+const ZOOM_MIN = 0.4, ZOOM_MAX = 2.4;
+// Pick a starting zoom that fits a comfortable slice of the hold on whatever
+// screen you're on — small phones and un-maximized windows were far too zoomed
+// in (only a few tiles visible). Aims for ~10 tiles across the smaller side.
+function initCameraZoom(){
+  const minDim = Math.min(cssW, cssH);
+  camera.scale = Math.max(0.6, Math.min(1.25, minDim / (10 * TILE_W)));
+}
 function clampCamera(){
   // The isometric diamond spans world X in [-half, +half] (centered on 0)
   // and world Y in [0, MAP_SIZE*TILE_H]. The screen-center look-at point in
@@ -7179,6 +7186,7 @@ function finishBoot(){
   loadTerrainStamps();
   loadVillagerAnims();
   loadDecor();
+  initCameraZoom();
   const c = project(TC_CX, TC_CY);
   camera.panX = -c.x*camera.scale;
   camera.panY = -c.y*camera.scale + 40;

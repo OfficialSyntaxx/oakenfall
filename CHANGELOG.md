@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.57.0
+Fits your screen now. The hold used to open zoomed in so far that phones and
+un-maximized windows showed only a handful of tiles — you had to go fullscreen
+to see anything. The starting zoom now adapts to your screen size (aiming for a
+comfortable ~10 tiles across), and you can zoom further out to survey the whole
+settlement. The "Install" button also now lives only on the landing page, never
+over the game itself.
+
 ## 1.56.0
 Settlers with better sense (first pass). Two AI improvements: folk now eat
 before they are half-starved when the granary can spare it — but still tough it

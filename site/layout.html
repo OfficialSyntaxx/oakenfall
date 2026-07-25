@@ -85,23 +85,10 @@
 </footer>
 
 <script>
-/* PWA: register the service worker and offer an install button when the browser
-   allows it. Progressive — does nothing where unsupported. */
-(function(){
-  if('serviceWorker' in navigator){ window.addEventListener('load', function(){ navigator.serviceWorker.register('/sw.js').catch(function(){}); }); }
-  var deferred=null, btn=null;
-  function showBtn(){
-    if(btn) { btn.hidden=false; return; }
-    btn=document.createElement('button');
-    btn.textContent='📲 Install Oakenfall';
-    btn.setAttribute('aria-label','Install Oakenfall app');
-    btn.style.cssText='position:fixed;right:14px;bottom:14px;z-index:60;padding:11px 15px;border-radius:10px;border:1px solid #e7a23d;background:linear-gradient(180deg,#f0b64a,#a5661c);color:#231603;font:600 14px/1 "Cinzel",Georgia,serif;box-shadow:0 4px 12px rgba(0,0,0,.45);cursor:pointer;';
-    btn.addEventListener('click', async function(){ if(!deferred) return; deferred.prompt(); try{ await deferred.userChoice; }catch(e){} deferred=null; btn.hidden=true; });
-    document.body.appendChild(btn);
-  }
-  window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); deferred=e; showBtn(); });
-  window.addEventListener('appinstalled', function(){ if(btn) btn.hidden=true; });
-})();
+/* Register the service worker so the game is installable/offline. The install
+   *button* lives only on the landing page — not here, so it never floats over
+   the game surface. Progressive: no-op where unsupported. */
+if('serviceWorker' in navigator){ window.addEventListener('load', function(){ navigator.serviceWorker.register('/sw.js').catch(function(){}); }); }
 </script>
 <script src="/js/version.js" defer></script>
 <script src="/js/site.js" defer></script>
