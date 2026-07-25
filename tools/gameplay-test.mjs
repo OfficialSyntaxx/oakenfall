@@ -79,6 +79,49 @@ check('steward carries out a build order', camps >= 1, `${camps} forestry camp(s
 check('settlers take up needed work unprompted', (s.roles.lumberjack || 0) > 0,
   'roles: ' + JSON.stringify(s.roles));
 check('wildlife is alive in the world', s.critters > 0, `${s.critters} critters`);
+
+// The need-scoring engine should reflect the hold's actual state: with folk
+// already felling timber, forestry must no longer be the most urgent thing.
+const woodNeed = (s.needs.find((n) => n.role === 'lumberjack') || {}).score ?? 0;
+check('need scoring responds to who is already working',
+  s.needs.length > 0 && woodNeed < 1.25,
+  'needs: ' + JSON.stringify(s.needs.map((n) => `${n.role}:${n.score.toFixed(2)}`)));
+
+const lumberBefore = s.roles.lumberjack || 0, dayBefore = s.day;
+// Job switching: raise a farm, jump the clock past the (deliberately staggered)
+// reconsider cooldown, and confirm hands move to the more urgent trade as the
+// granary runs down. Uses the admin day-skip so this is not a 60s real wait.
+await page.click('#steward-btn');
+await page.waitForTimeout(400);
+await page.fill('#steward-input', 'build a farm');
+await page.click('#steward-go');
+await page.waitForTimeout(500);
+await page.click('body', { position: { x: 640, y: 700 } }).catch(() => {});
+await page.waitForTimeout(6000);
+
+for (let i = 0; i < 2; i++) {
+  await page.click('#more-btn');
+  await page.click('#redeem-btn');
+  await page.waitForTimeout(300);
+  await page.click('#admin-open').catch(() => {});
+  await page.waitForTimeout(300);
+  await page.click('[data-admin="tDay"]').catch(() => {});
+  await page.waitForTimeout(300);
+  await page.click('body', { position: { x: 640, y: 700 } }).catch(() => {});
+  await page.waitForTimeout(2500);
+}
+const after = await snap();
+// Distinguish a real switch from new arrivals simply hiring in: a lumberjack
+// count that FELL can only mean existing hands moved trade.
+const movedTrade = (after.roles.lumberjack || 0) < lumberBefore;
+check('admin day-skip actually advances the day', after.day > dayBefore,
+  `day ${dayBefore} -> ${after.day}`);
+check('settlers move trades as needs shift', movedTrade,
+  `lumberjacks ${lumberBefore} -> ${after.roles.lumberjack || 0}, roles: ` + JSON.stringify(after.roles) +
+  ', stores: ' + JSON.stringify({wood: Math.floor(after.stockpile.wood||0), food: Math.floor(after.stockpile.food||0)}) +
+  ', needs: ' + JSON.stringify(after.needs.map(n=>`${n.role}:${n.score.toFixed(2)}`)));
+s = after;
+
 check('no uncaught errors', errors.length === 0, errors[0] || '');
 
 await browser.close();
