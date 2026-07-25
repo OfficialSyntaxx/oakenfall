@@ -937,7 +937,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.63.0';
+const GAME_VERSION = '1.64.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -3228,6 +3228,16 @@ function updateHudReserve(){
     const landscape = window.matchMedia('(orientation: landscape)').matches;
     const reserve = Math.ceil(Math.max(rw, landscape ? Math.max(rw, mw) : rw) + 16);
     document.documentElement.style.setProperty('--hud-reserve', reserve+'px');
+    // Publish where the stores actually end, so the clock and minimap can sit
+    // below them — the row's height changes when it wraps or is expanded, and
+    // fixed offsets used to drive the clock straight through the pills.
+    const bar = document.getElementById('hud-top');
+    if(bar){
+      const pills = bar.querySelectorAll('.pill');
+      let bottom = bar.getBoundingClientRect().bottom;
+      for(const p of pills){ bottom = Math.max(bottom, p.getBoundingClientRect().bottom); }
+      document.documentElement.style.setProperty('--hud-bottom', Math.ceil(bottom)+'px');
+    }
   }catch(e){}
 }
 function requestResize(){
@@ -5041,12 +5051,57 @@ function buildSpotReason(gx,gy){
 }
 function isValidBuildSpot(gx,gy){ return buildSpotReason(gx,gy)===null; }
 
+/* ── THE VOID BEYOND ── the hold used to sit on flat black, which read as an
+   unfinished cut-out. A cold, deep expanse (think far water under night sky)
+   gives the island somewhere to be. Cached per canvas size + time of day;
+   rebuilding a gradient every frame is one of this project's known cost traps. */
+let _voidGrad = null, _voidKey = '';
+function voidBackdrop(){
+  const dark = (typeof darknessFactor==='function') ? darknessFactor() : 0;
+  const band = Math.round(dark*4); // quantised so we rebuild rarely, not per frame
+  const key = cssW+'x'+cssH+':'+band;
+  if(_voidGrad && _voidKey===key) return _voidGrad;
+  const t = band/4;
+  // Day: slate-teal deep water. Night: near-black with a cold blue cast.
+  const mix = (a,b)=> a.map((v,i)=> Math.round(v + (b[i]-v)*t));
+  const inner = mix([26,38,44],[10,14,26]);
+  const outer = mix([9,14,18],[4,6,12]);
+  const g = ctx.createRadialGradient(cssW/2, cssH*0.46, Math.min(cssW,cssH)*0.12,
+                                     cssW/2, cssH*0.46, Math.max(cssW,cssH)*0.78);
+  g.addColorStop(0, `rgb(${inner[0]},${inner[1]},${inner[2]})`);
+  g.addColorStop(1, `rgb(${outer[0]},${outer[1]},${outer[2]})`);
+  _voidGrad = g; _voidKey = key;
+  return g;
+}
+/* A soft skirt of haze hugging the map's edge. The land ends on a hard
+   geometric line, which is the thing that actually read as unfinished; fading
+   the dark outward from that line settles the hold into the distance instead of
+   cutting it out. Flat translucent fills, no per-frame gradient. */
+function drawIslandSkirt(){
+  const c = [ project(0,0), project(MAP_SIZE,0), project(MAP_SIZE,MAP_SIZE), project(0,MAP_SIZE) ];
+  const cx = (c[0].x + c[2].x)/2, cy = (c[0].y + c[2].y)/2;
+  ctx.save();
+  for(let i=6;i>=1;i--){
+    const grow = 1 + i*0.055;
+    ctx.fillStyle = 'rgba(6,10,16,'+(0.16 - i*0.018).toFixed(3)+')';
+    ctx.beginPath();
+    for(let k=0;k<4;k++){
+      const x = cx + (c[k].x-cx)*grow, y = cy + (c[k].y-cy)*grow;
+      k ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+    }
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
 function render(){
   // Always re-apply DPR scale cleanly — never rely on ctx.getTransform() across frames
   const dpr = canvasDPR;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, cssW, cssH);
-  ctx.fillStyle = '#0a0e0a';
+  // The world beyond the hold. Flat black made the map read as an island cut out
+  // of nothing; a deep, cold expanse gives it somewhere to sit. Cached and only
+  // rebuilt on resize — allocating a gradient every frame is expensive.
+  ctx.fillStyle = voidBackdrop();
   ctx.fillRect(0, 0, cssW, cssH);
 
   if(!grid.length) return; // map not yet generated
@@ -5054,6 +5109,8 @@ function render(){
   ctx.save();
   ctx.translate(cssW/2+camera.panX, cssH/2+camera.panY);
   ctx.scale(camera.scale, camera.scale);
+
+  try { drawIslandSkirt(); } catch(e){ /* guard */ }
 
   const range = visibleTileRange();
   try { drawTerrain(range); } catch(e){ /* guard */ }
