@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.62.0
+A tidier HUD and an honest minimap. Your stores now have a expand button: leave
+it collapsed for a compact row, or open it to see every store at once instead of
+scrolling for them — and flour, which was tracked but never shown, finally has
+its place. The minimap's view outline now only appears when you are zoomed in
+far enough for it to mean something; zoomed out you can already see the whole
+hold, so an outline around everything was just clutter.
+
 ## 1.61.0
 Sharper, and far lighter. Two things landed together. First, a real rendering
 bug: on many screens the game was drawing into a tiny 300x150 buffer and letting
