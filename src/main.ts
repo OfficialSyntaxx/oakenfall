@@ -9,6 +9,12 @@
  * Safe under module scope: the game has no inline HTML event handlers, and
  * every intentional global is an explicit window.* assignment.
  */
+import { BUILD_DEFS, ROLE_DEFS, TECH_TREE, HOLD_TIERS, SEASON_NAMES, WEATHER_TABLE, MM_COLORS, VILLAGER_TINTS, RAIDER_VARIANTS, NUM_WORDS, UNLOCK_SKUS, GAME_MODES } from './defs';
+
+import { TILE_W, TILE_H, clamp, lerp, dist2, hash2, hashStr, project, inProject, fmt } from './math';
+
+import { SPRITE_URLS, VANIM_B64, DECOR_B64, TERRAIN_B64, AUDIO_B64, MUSIC_URLS } from './assets';
+
 
 (function(){
 "use strict";
@@ -16,7 +22,7 @@
 /* =========================================================================
    CONSTANTS
 ========================================================================= */
-const TILE_W = 64, TILE_H = 32;
+
 
 /* =========================================================================
    HIGS SPRITE ASSETS  (AI-generated isometric building art)
@@ -24,31 +30,7 @@ const TILE_W = 64, TILE_H = 32;
 // Asset URLs (files, not inlined base64) — bundled locally, cached by the
 // service worker, so offline play is unaffected. Procedural fallbacks still
 // cover a failed or slow load.
-const SPRITE_URLS = {
-  townCenter: 'assets/sprites/townCenter.png',
-  house: 'assets/sprites/house.png',
-  manor: 'assets/sprites/manor.png',
-  watchtower: 'assets/sprites/watchtower.png',
-  guardPost: 'assets/sprites/guardPost.png',
-  tavern: 'assets/sprites/tavern.png',
-  bakery: 'assets/sprites/bakery.png',
-  granary: 'assets/sprites/granary.png',
-  sawmill: 'assets/sprites/sawmill.png',
-  tradingPost: 'assets/sprites/tradingPost.png',
-  windmill: 'assets/sprites/windmill.png',
-  fishingHut: 'assets/sprites/fishingHut.png',
-  huntingCabin: 'assets/sprites/huntingCabin.png',
-  farm: 'assets/sprites/farm.png',
-  raider_bandit: 'assets/sprites/raider_bandit.png',
-  raider_brute: 'assets/sprites/raider_brute.png',
-  raider_archer: 'assets/sprites/raider_archer.png',
-  portrait_peasant: 'assets/sprites/portrait_peasant.png',
-  portrait_lumberjack: 'assets/sprites/portrait_lumberjack.png',
-  portrait_miner: 'assets/sprites/portrait_miner.png',
-  portrait_fisher: 'assets/sprites/portrait_fisher.png',
-  portrait_farmer: 'assets/sprites/portrait_farmer.png',
-  portrait_guard: 'assets/sprites/portrait_guard.png',
-}
+
 const SPRITES = {};
 let spritesLoaded = 0, spritesTotal = 0;
 function preloadSprites(){
@@ -86,17 +68,7 @@ function loadSprite(key, url, attempt){
 // Asset URLs (files, not inlined base64) — bundled locally, cached by the
 // service worker, so offline play is unaffected. Procedural fallbacks still
 // cover a failed or slow load.
-const VANIM_B64 = {
-  guard_idle: ['assets/vanim/guard_idle-0.png', 'assets/vanim/guard_idle-1.png', 'assets/vanim/guard_idle-2.png', 'assets/vanim/guard_idle-3.png'],
-  guard_run: ['assets/vanim/guard_run-0.png', 'assets/vanim/guard_run-1.png', 'assets/vanim/guard_run-2.png'],
-  run_meat: ['assets/vanim/run_meat-0.png', 'assets/vanim/run_meat-1.png', 'assets/vanim/run_meat-2.png'],
-  idle: ['assets/vanim/idle-0.png', 'assets/vanim/idle-1.png', 'assets/vanim/idle-2.png', 'assets/vanim/idle-3.png'],
-  run: ['assets/vanim/run-0.png', 'assets/vanim/run-1.png', 'assets/vanim/run-2.png'],
-  run_wood: ['assets/vanim/run_wood-0.png', 'assets/vanim/run_wood-1.png', 'assets/vanim/run_wood-2.png'],
-  work_axe: ['assets/vanim/work_axe-0.png', 'assets/vanim/work_axe-1.png', 'assets/vanim/work_axe-2.png'],
-  work_pickaxe: ['assets/vanim/work_pickaxe-0.png', 'assets/vanim/work_pickaxe-1.png', 'assets/vanim/work_pickaxe-2.png'],
-  work_knife: ['assets/vanim/work_knife-0.png', 'assets/vanim/work_knife-1.png', 'assets/vanim/work_knife-2.png'],
-}
+
 const VANIM = {};
 let vanimReady = false;
 function loadVillagerAnims(){
@@ -164,7 +136,10 @@ let MAP_SIZE = 36;
 let TC_X = 16, TC_Y = 16; // town center anchor (occupies 2x2: TC_X..TC_X+1, TC_Y..TC_Y+1)
 let TC_CX = TC_X + 0.5, TC_CY = TC_Y + 0.5; // visual/logical center
 let wolfRiskMul = 1;
-// NOTE: references GAME_MODES/gameMode declared later in the script. Safe because
+// GAME_MODES now arrives as a module import, so it is initialised before any of
+// this file runs — the old ordering hazard (it used to be declared far below,
+// making a boot-time call throw) no longer exists.
+// Historic note: references GAME_MODES/gameMode declared later in the script. Safe because
 // this is only ever called from user-gesture handlers (New Game / Continue), which
 // run after full script evaluation. Do NOT call this at top level during boot.
 function applyDifficulty(cfg){
@@ -182,39 +157,8 @@ const HUNGER_RATE = 100/340;   // per second — ~5.7 min to starve at 1× speed
 const FATIGUE_RATE = 100/400;  // per second (base, day) — ~6.7 min to exhaust
 const DAY_LEN = 260, NIGHT_LEN = 160, CYCLE_LEN = DAY_LEN + NIGHT_LEN;
 
-const BUILD_DEFS = {
-  house:       { name:'House',          icon:'🏚️', cost:{wood:30,stone:0},  desc:'Shelters settlers. +3 capacity.', role:null },
-  road:        { name:'Road',           icon:'🛤️', cost:{wood:0,stone:8},   desc:'Paved path — settlers move 30% faster on roads, and processors beside a road linked to the Town Center work 12% faster.', role:null },
-  bridge:      { name:'Bridge',         icon:'🌉', cost:{wood:20,planks:6}, desc:'A plank span over the river. Opens the far bank to your settlers — but every bridge is a door raiders can use too. A Guard Post within 3 tiles keeps a crossing watched.', role:null, onWater:true },
-  forestCamp:  { name:'Forestry Camp',  icon:'🪓', cost:{wood:40,stone:10}, desc:'Assign a Lumberjack to fell timber from the woods.', role:'lumberjack' },
-  miningPost:  { name:'Mining Post',    icon:'⛏️', cost:{wood:30,stone:20}, desc:'Assign a Miner to delve stone from outcrops.', role:'miner' },
-  fishingHut:  { name:'Fishing Hut',    icon:'🎣', cost:{wood:35,stone:5},  desc:'Build along the river. Assign a Fisher to net food.', role:'fisher', needsWater:true },
-  huntingCabin:{ name:'Hunting Cabin',  icon:'🏹', cost:{wood:35,stone:0},  desc:'Build near the wilds. Assign a Hunter to track game.', role:'hunter' },
-  farm:        { name:'Farm',           icon:'🌾', cost:{wood:35,stone:0},  desc:'Assign a Farmer to tend crops for food. +15% yield beside the river.', role:'farmer' },
-  granary:     { name:'Granary',        icon:'🏺', cost:{wood:45,stone:15}, desc:'Raises storage limits for wood, stone, and food by 90 each.', role:null },
-  tradingPost: { name:'Trading Post',   icon:'⚖️', cost:{wood:50,stone:10}, desc:'Exchange surplus goods at fixed rates.', role:null },
-  watchtower:  { name:'Watchtower',     icon:'🗼', cost:{wood:40,stone:25}, desc:'Wardens watch the treeline, cutting wolf raid risk sharply.', role:null },
-  tavern:      { name:'Tavern',         icon:'🍺', cost:{wood:55,stone:10}, desc:'Warmth and ale ease the toil — settlers tire 20% slower.', role:null },
-  sawmill:     { name:'Sawmill',        icon:'🪚', cost:{wood:50,stone:20}, desc:'Saws raw timber into planks (4 wood → 2 planks). Planks unlock finer construction.', role:null, proc:{in:{wood:4}, out:{planks:2}, every:12} },
-  windmill:    { name:'Windmill',       icon:'🌬️', cost:{wood:45,stone:25,planks:8}, desc:'Grinds grain into flour (5 food → 3 flour). Its sails turn day and night.', role:null, proc:{in:{food:5}, out:{flour:3}, every:14} },
-  bakery:      { name:'Bakery',         icon:'🍞', cost:{wood:35,stone:15,planks:12}, desc:'Bakes hearty bread (2 flour → 3 bread). Bread fills bellies better than raw fare.', role:null, proc:{in:{flour:2}, out:{bread:3}, every:12} },
-  guardPost:   { name:'Guard Post',     icon:'🛡️', cost:{wood:40,stone:20,planks:6}, desc:'Assign a Guard to stand watch. Guards drive off bandits before they reach the stores.', role:'guard' },
-  palisade:    { name:'Palisade',       icon:'🪵', cost:{wood:12,stone:0}, desc:'A wall of sharpened timber. Blocks passage and slows raiders — ring your hold for safety.', role:null },
-  well:        { name:'Well',           icon:'⛲', cost:{wood:10,stone:24}, desc:'A stone well. Water on hand means fire near it is far less likely to catch and far quicker to douse — space wells through your timber as firebreaks.', role:null },
-  lampPost:    { name:'Lamp Post',      icon:'🏮', cost:{wood:8,stone:6}, desc:'A pitch-soaked lantern hung on a timber post. Casts a warm pool of light after dark — line your roads and squares to push back the night.', role:null },
-  pasture:     { name:'Pasture',        icon:'🐑', cost:{wood:40,stone:5}, desc:'Grazes livestock for a steady trickle of food, and the herd grows on its own. But in winter the animals need fodder (food from your stores) or they dwindle — a food source that also has an appetite.', role:null },
-  forester:    { name:'Forester\'s Grove', icon:'🌲', cost:{wood:25,stone:10}, desc:'Woods tire as they\'re felled, and a fully-worked stand goes barren. A Forester\'s Grove replants nearby forest — reviving barren ground and keeping the timber sustainable.', role:null },
-  manor:       { name:'Manor',          icon:'🏛️', cost:{wood:40,stone:10,planks:25}, desc:'A grand timber-framed hall. Shelters +6 settlers in comfort.', role:null, needsTech:'framing' },
-};
-const ROLE_DEFS = {
-  idle:      {label:'Idle',       ic:'💤', needsBuilding:null},
-  guard:     {label:'Guard',      ic:'🛡️', needsBuilding:'guardPost'},
-  lumberjack:{label:'Lumberjack', ic:'🪓', needsBuilding:'forestCamp'},
-  miner:     {label:'Miner',      ic:'⛏️', needsBuilding:'miningPost'},
-  farmer:    {label:'Farmer',     ic:'🌾', needsBuilding:'farm'},
-  fisher:    {label:'Fisher',     ic:'🎣', needsBuilding:'fishingHut'},
-  hunter:    {label:'Hunter',     ic:'🏹', needsBuilding:'huntingCabin'},
-};
+
+
 
 const NAME_POOL = ["Eldric","Brom","Sela","Tamsin","Joran","Wren","Osric","Maela","Garrick","Ysolde",
   "Cormac","Liora","Dunwald","Petra","Aldric","Senna","Halvard","Rosalind","Thane","Briala",
@@ -231,27 +175,19 @@ function rollName(){
 /* =========================================================================
    UTILITIES
 ========================================================================= */
-function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
-function lerp(a,b,t){ return a+(b-a)*t; }
-function dist2(ax,ay,bx,by){ const dx=ax-bx, dy=ay-by; return dx*dx+dy*dy; }
-function hash2(x,y){
-  let h = Math.sin(x*127.1 + y*311.7) * 43758.5453;
-  return h - Math.floor(h);
-}
-function hashStr(s){ let h=0; for(let i=0;i<s.length;i++) h = (h*31+s.charCodeAt(i))>>>0; return h; }
-function project(gx,gy){
-  return { x:(gx-gy)*(TILE_W/2), y:(gx+gy)*(TILE_H/2) };
-}
-function inProject(wx,wy){
-  const a = wx/(TILE_W/2), b = wy/(TILE_H/2);
-  return { gx:(a+b)/2, gy:(b-a)/2 };
-}
+
+
+
+
+
+
+
 function tileAt(gx,gy){
   gx = Math.round(gx); gy = Math.round(gy);
   if(gx<0||gy<0||gx>=MAP_SIZE||gy>=MAP_SIZE) return null;
   return grid[gy] ? grid[gy][gx] || null : null;
 }
-function fmt(n){ return Math.floor(n).toString(); }
+
 
 /* =========================================================================
    STATE
@@ -316,7 +252,7 @@ function gainResource(type, amount){
 }
 window.__capWarned = {wood:false,stone:false,food:false,planks:false,flour:false,bread:false};
 
-const SEASON_NAMES = ['Spring','Summer','Autumn','Winter'];
+
 const SEASON_LEN = CYCLE_LEN * 3; // 3 day/night cycles per season
 function seasonIndex(){
   if(typeof gameMode!=='undefined' && gameMode.forceWinter) return 3; return Math.floor(worldTime / SEASON_LEN) % 4; }
@@ -355,11 +291,7 @@ function harvestBoonMul(){ return festivalBoon==='harvest' ? 1.2 : 1; }
    website's Netlify function — codes cannot be forged from this public key. */
 let unlocks = {};   // sku → true; persists in saves
 const REDEEM_PUBKEY_SPKI = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAERa+HGQmoarIV601nzvFQOQDNa9nAJDdY8ZOSjedDrMTvfEDGKFlzBIUNc6RTQl/qMlRAXzxeW5F9mhLFTo6auQ==';
-const UNLOCK_SKUS = {
-  supporter: {ic:'✦', name:'Supporter Pack', desc:'A patron\'s thanks — premium banner dyes, a Patron plaque, and the hold\'s gratitude.'},
-  frost:     {ic:'❄️', name:'Frostmark Banners', desc:'A cold-country set of banner colours.'},
-  ember:     {ic:'🔥', name:'Emberlands Banners', desc:'A warm, volcanic set of banner colours.'},
-};
+
 function hasUnlock(sku){ return !!unlocks[sku]; }
 function isPatron(){ return !!unlocks.supporter; }
 let _redeemKeyPromise = null;
@@ -517,7 +449,7 @@ function raidEntryPoint(openBridges){
   if(side===2) return {gx:0, gy:Math.random()*m};
   return {gx:m, gy:Math.random()*m};
 }
-const RAIDER_VARIANTS = ['bandit','brute','archer'];
+
 function launchRaid(n, didSteal, entry){
   for(let i=0;i<n;i++){
     raiders.push({ gx:clamp(entry.gx+(Math.random()-0.5)*2,0,MAP_SIZE-1), gy:clamp(entry.gy+(Math.random()-0.5)*2,0,MAP_SIZE-1),
@@ -834,13 +766,7 @@ function checkDeeds(){
 }
 /* ── WEATHER ── rolled each dawn, season-weighted */
 let weather = { type:'clear', label:'Clear', ic:'☀️' };
-const WEATHER_TABLE = {
-  // [clear, rain, storm, snow] weights per season
-  0:[0.55,0.35,0.10,0],    // spring — rainy
-  1:[0.75,0.15,0.10,0],    // summer
-  2:[0.60,0.28,0.12,0],    // autumn
-  3:[0.55,0,0.10,0.35],    // winter — snowfall
-};
+
 const WEATHER_DEFS = [{type:'clear',label:'Clear',ic:'☀️'},{type:'rain',label:'Rain',ic:'🌧️'},{type:'storm',label:'Storm',ic:'⛈️'},{type:'snow',label:'Snowfall',ic:'🌨️'}];
 function setWeather(type){ const d = WEATHER_DEFS.find(x=>x.type===type); if(d){ weather = { type:d.type, label:d.label, ic:d.ic }; } }
 function rollWeather(){
@@ -937,7 +863,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.65.0';
+const GAME_VERSION = '1.66.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -1101,14 +1027,7 @@ function renderFeedbackSheet(kind){
 // Asset URLs (files, not inlined base64) — bundled locally, cached by the
 // service worker, so offline play is unaffected. Procedural fallbacks still
 // cover a failed or slow load.
-const AUDIO_B64 = {
-  tap: 'assets/audio/tap.ogg',
-  warn: 'assets/audio/warn.ogg',
-  open: 'assets/audio/open.ogg',
-  close: 'assets/audio/close.ogg',
-  mine: 'assets/audio/mine.ogg',
-  chop: 'assets/audio/chop.ogg',
-}
+
 const audioCache = {};
 function playSample(kind){
   const src = AUDIO_B64[kind];
@@ -1131,7 +1050,7 @@ function playSample(kind){
 // It is off by default, so inlining it made every player download audio they
 // might never hear. Files are bundled locally (and cached by the service
 // worker), so the game still works fully offline.
-const MUSIC_URLS = { elvendawn: 'assets/music/elvendawn.ogg', windsofvalor: 'assets/music/windsofvalor.ogg' };
+
 const MUSIC_KEYS = Object.keys(MUSIC_URLS).filter(k=>MUSIC_URLS[k]);
 let musicOn = false, musicEl = null, musicIdx = 0;
 function playCurrentTrack(){
@@ -1656,22 +1575,7 @@ const DECAY_RATE = 100/(10*245); // full decay over ~10 day cycles
 /* ── RESEARCH & POLICIES ── one active project at a time, run from the Town Center */
 let researched = {};
 let activeResearch = null; // {id, remaining, total}
-const TECH_TREE = [
-  { id:'tools',    name:'Sharpened Tools', ic:'🪓', desc:'+15% wood & stone yield.', cost:{wood:30,stone:20}, time:60 },
-  { id:'crops',    name:'Crop Rotation',   ic:'🌱', desc:'+20% farm yield.', cost:{food:25,wood:15}, time:60 },
-  { id:'masonry',  name:'Stone Masonry',   ic:'🧱', desc:'Buildings cost 15% less stone.', cost:{stone:40}, time:75 },
-  { id:'herbs',    name:'Herbal Lore',     ic:'🌿', desc:'Illness is rarer and passes 40% faster.', cost:{food:30}, time:70 },
-  { id:'ale',      name:'Oaken Ale',       ic:'🍺', desc:'Tavern rest bonus improves (settlers tire 30% slower).', cost:{planks:20}, time:80, req:'tools' },
-  { id:'cellars',  name:'Deep Cellars',    ic:'🏺', desc:'+60 storage for every resource.', cost:{planks:30,stone:20}, time:90, req:'masonry' },
-  { id:'militia',  name:'Drilled Militia', ic:'⚔️', desc:'Guards count double against bandits.', cost:{planks:25,bread:15}, time:90 },
-  { id:'hearth',   name:'Hearthfires',     ic:'🔥', desc:'Warm hearths lift every settler\'s spirits (+8 morale).', cost:{wood:20,bread:10}, time:70 },
-  { id:'framing',  name:'Timber Framing',  ic:'🏛️', desc:'Unlocks the Manor — grand housing for 6 settlers.', cost:{planks:35,stone:15}, time:100, req:'tools' },
-  // ── Second tier — deeper research gated behind the first ──
-  { id:'terracing',name:'Hill Terracing',  ic:'⛰️', desc:'+15% farm yield again — terraced fields catch every drop.', cost:{stone:35,food:20}, time:110, req:'crops' },
-  { id:'aqueduct', name:'Aqueducts',       ic:'🌊', desc:'Every farm counts as irrigated (+15%), river or no.', cost:{stone:50,planks:20}, time:120, req:'masonry' },
-  { id:'coldstore',name:'Cold Storage',    ic:'🧊', desc:'Food spoils half as fast — cellars keep the winter stores.', cost:{planks:25,stone:30}, time:110, req:'cellars' },
-  { id:'charter',  name:'Guild Charter',   ic:'⚜️', desc:'Guild bonuses rise from +10% to +15% hold-wide.', cost:{planks:30,bread:20}, time:120, req:'hearth' },
-];
+
 function techAvailable(t){ return !researched[t.id] && (!t.req || researched[t.req]); }
 function startResearch(id){
   if(activeResearch) { toast('Research is already underway.', true); return; }
@@ -1686,12 +1590,7 @@ let journalTimer = 1;
 let activeEvent = null; // {type, endsAt, data}
 
 /* ── HOLD TIERS ─────────────────────────────────────────────────────── */
-const HOLD_TIERS = [
-  { name:'Outpost', ic:'⛺', pop:0,  bld:0 },
-  { name:'Hamlet',  ic:'🏕️', pop:6,  bld:4 },
-  { name:'Village', ic:'🏘️', pop:12, bld:8 },
-  { name:'Town',    ic:'🏰', pop:20, bld:12 },
-];
+
 let currentTierIdx = 0;
 function computeTierIdx(){
   const pop = villagers.length;
@@ -2253,7 +2152,7 @@ const STEWARD_BUILD = {
 const STEWARD_BUILD_KEYS = Object.keys(STEWARD_BUILD).sort((a,b)=>b.length-a.length);
 const STEWARD_RES = { 'wood':'wood','timber':'wood','logs':'wood','log':'wood','stone':'stone','rock':'stone','rocks':'stone','food':'food','grain':'food','planks':'planks','plank':'planks','flour':'flour','bread':'bread' };
 const STEWARD_ROLE = { 'guard':'guard','guards':'guard','lumberjack':'lumberjack','woodcutter':'lumberjack','logging':'lumberjack','miner':'miner','mining':'miner','farmer':'farmer','farming':'farmer','fisher':'fisher','fishing':'fisher','hunter':'hunter','hunting':'hunter' };
-const NUM_WORDS = { a:1, an:1, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10, eleven:11, twelve:12, couple:2, few:3, several:4, some:3 };
+
 function stewardNum(s){
   const m = s.match(/\b(\d{1,3})\b/); if(m) return Math.min(50, parseInt(m[1],10));
   for(const w of Object.keys(NUM_WORDS)){ if(new RegExp('\\b'+w+'\\b').test(s)) return NUM_WORDS[w]; }
@@ -3295,28 +3194,7 @@ function tileDiamond(cx,cy,w,h){
 // Asset URLs (files, not inlined base64) — bundled locally, cached by the
 // service worker, so offline play is unaffected. Procedural fallbacks still
 // cover a failed or slow load.
-const DECOR_B64 = {
-  explosion: ['assets/decor/explosion-0.png', 'assets/decor/explosion-1.png', 'assets/decor/explosion-2.png', 'assets/decor/explosion-3.png'],
-  splash: ['assets/decor/splash-0.png', 'assets/decor/splash-1.png', 'assets/decor/splash-2.png', 'assets/decor/splash-3.png', 'assets/decor/splash-4.png'],
-  plankStack: 'assets/decor/plankStack.png',
-  oak: 'assets/decor/oak.png',
-  roadTile: 'assets/decor/roadTile.png',
-  clouds: ['assets/decor/clouds-0.png', 'assets/decor/clouds-1.png', 'assets/decor/clouds-2.png'],
-  sacksCrate: 'assets/decor/sacksCrate.png',
-  sack: 'assets/decor/sack.png',
-  waterRocks: ['assets/decor/waterRocks-0.png', 'assets/decor/waterRocks-1.png', 'assets/decor/waterRocks-2.png', 'assets/decor/waterRocks-3.png'],
-  fence: 'assets/decor/fence.png',
-  hayStack: 'assets/decor/hayStack.png',
-  farmland: 'assets/decor/farmland.png',
-  corn: 'assets/decor/corn.png',
-  cornYoung: 'assets/decor/cornYoung.png',
-  hay: 'assets/decor/hay.png',
-  bush1: ['assets/decor/bush1-0.png', 'assets/decor/bush1-1.png', 'assets/decor/bush1-2.png', 'assets/decor/bush1-3.png'],
-  bush3: ['assets/decor/bush3-0.png', 'assets/decor/bush3-1.png', 'assets/decor/bush3-2.png', 'assets/decor/bush3-3.png'],
-  rocks: ['assets/decor/rocks-0.png', 'assets/decor/rocks-1.png', 'assets/decor/rocks-2.png', 'assets/decor/rocks-3.png'],
-  dust: ['assets/decor/dust-0.png', 'assets/decor/dust-1.png', 'assets/decor/dust-2.png', 'assets/decor/dust-3.png', 'assets/decor/dust-4.png', 'assets/decor/dust-5.png'],
-  fire: ['assets/decor/fire-0.png', 'assets/decor/fire-1.png', 'assets/decor/fire-2.png', 'assets/decor/fire-3.png', 'assets/decor/fire-4.png', 'assets/decor/fire-5.png'],
-}
+
 const DECOR = {};
 let decorReady = false;
 function loadDecor(){
@@ -3419,17 +3297,7 @@ function renderDustFX(dt){
 // Asset URLs (files, not inlined base64) — bundled locally, cached by the
 // service worker, so offline play is unaffected. Procedural fallbacks still
 // cover a failed or slow load.
-const TERRAIN_B64 = {
-  grass_010: 'assets/terrain/grass_010.png',
-  grass_067: 'assets/terrain/grass_067.png',
-  grass_098: 'assets/terrain/grass_098.png',
-  water_066: 'assets/terrain/water_066.png',
-  water_045: 'assets/terrain/water_045.png',
-  dirt_073: 'assets/terrain/dirt_073.png',
-  dirt_083: 'assets/terrain/dirt_083.png',
-  stone_081: 'assets/terrain/stone_081.png',
-  stone_102: 'assets/terrain/stone_102.png',
-}
+
 const TERRAIN_IMGS = { grass:[], water:[], dirt:[], stone:[] };
 let terrainReady = false;
 function loadTerrainStamps(){
@@ -4662,7 +4530,7 @@ function bubbleFor(v){
 // copied a dozen times. Tint = multiply a hue over the frame, then re-apply the
 // frame's own alpha mask so transparency and shading survive. Cached per
 // (frame,tint) — never allocated per draw.
-const VILLAGER_TINTS = [null, '#c98a5a', '#6f8f4a', '#7d6ec6', '#b3603a', '#4f8f9c', '#a9863f', '#8a5566'];
+
 const _tintCache = new Map();
 function tintedFrame(img, tint){
   if(!tint) return img;
@@ -4886,7 +4754,7 @@ function drawRoad(gx,gy){
 const minimapCanvas = document.getElementById('minimap');
 const mmCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
 // minimap tile size is computed dynamically in drawMinimap() based on MAP_SIZE
-const MM_COLORS = { grass:'#2a3f22', dirt:'#4a3a26', forest:'#1c3022', stone:'#3a3a34', water:'#1c3242' };
+
 // Projection the minimap last drew with, so pointer input can invert it.
 let mmLayout = { S:128, scale:1, offY:0 };
 function drawMinimap(){
@@ -6896,24 +6764,7 @@ function restoreState(data){
 const START_RES_PRESETS = {
   lean:{wood:35,stone:10,food:20}, standard:{wood:60,stone:25,food:40}, bountiful:{wood:100,stone:45,food:70}
 };
-const GAME_MODES = {
-  settler: {
-    name:'Settler', desc:'The classic Oakenfall experience — seasons, wolves, bandits, and bounties.',
-    wolfMul:1, banditsEnabled:true, decayMul:1, tradeMul:1, offlineOn:true, bountyCoinMul:1, festivalEvery:0,
-  },
-  peaceful: {
-    name:'Peaceful', desc:'No wolves, no bandits, no decay. Build in tranquillity — but bounties pay half.',
-    wolfMul:0, banditsEnabled:false, decayMul:0, tradeMul:1, offlineOn:true, bountyCoinMul:0.5, festivalEvery:0,
-  },
-  ironwinter: {
-    name:'Iron Winter', desc:'Endless winter. Yields are thin, fatigue bites, wolves are bold, decay is fast. For veterans.',
-    wolfMul:1.8, banditsEnabled:true, decayMul:1.7, tradeMul:1, offlineOn:false, bountyCoinMul:1.6, festivalEvery:0, forceWinter:true,
-  },
-  merchant: {
-    name:'Merchant', desc:'Trade is king — rates are richer, merchants visit often, bounties pay double. Wolves smell profit.',
-    wolfMul:1.2, banditsEnabled:true, decayMul:1, tradeMul:1.3, offlineOn:true, bountyCoinMul:2, festivalEvery:0, merchantOften:true,
-  },
-};
+
 let gameMode = GAME_MODES.settler;
 let gameModeId = 'settler';
 document.querySelectorAll('.diff-opts[data-group="mode"] button').forEach(btn=>{

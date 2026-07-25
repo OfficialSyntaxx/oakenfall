@@ -11,9 +11,27 @@ rule is being retired deliberately — its *purpose* (runs anywhere, fully
 offline, no network dependency) is preserved by bundling assets locally and
 caching via the service worker, which a Capacitor app satisfies natively.
 Migration order: (1) extract assets out of the HTML, (2) move code into TS
-modules, (3) Capacitor wrap + native storage. Step 1 is underway: assets live in
-`public/assets/`, extracted by `tools/extract-assets.mjs`; music is already
-external (that alone cut the game from 15.3MB to 3.1MB).
+modules, (3) Capacitor wrap + native storage.
+
+- **Step 1 DONE** — all assets live in `public/assets/` (extracted by
+  `tools/extract-assets.mjs`, rewritten by `tools/rewrite-assets.mjs`). The game
+  went 15.3MB → ~395KB.
+- **Step 2 in progress** — `index.html` is now a shell; code lives in `src/`,
+  built by Vite (`npm run build` = `vite build && node site/build.js`).
+  Extracted so far: `src/math.ts` (typed), `src/assets.ts`, `src/defs.ts`.
+  `src/main.ts` still holds the rest under `@ts-nocheck`; split further with
+  `tools/split-module.mjs`, verifying with `npm run smoke` after each move.
+  Only lift declarations that are genuinely self-contained — anything closing
+  over live game state (QUESTS, DECREE_DEFS) must wait for that state to move.
+- **Step 3 pending** — Capacitor.
+
+## Verification
+- `npm run smoke` — builds, serves `_site`, boots the real game in Chromium at
+  phone/landscape/desktop and asserts the world renders, assets load, the canvas
+  is sized, the HUD does not collide, and no console/request errors occur.
+- `node tools/shots.mjs` — screenshots both orientations × collapsed/expanded
+  into /tmp/shots for eyeballing UI work.
+- `npx tsc --noEmit` — typecheck.
 
 ## Hard constraints (never violate)
 - Assets are bundled **locally** — never fetched from a third-party CDN at
@@ -71,8 +89,15 @@ external (that alone cut the game from 15.3MB to 3.1MB).
 - Per-frame gradient allocation is expensive — cache or use flat fills.
 - Sprite-sheet frames must be trimmed with a UNION bbox across frames, or
   animations jitter (fixed once already — don't reintroduce).
-- `applyDifficulty` references GAME_MODES declared later in the file — only
-  call it from user-gesture handlers, never at top level during boot.
+- ~~`applyDifficulty` references GAME_MODES declared later in the file~~ —
+  RESOLVED: GAME_MODES moved to `src/defs.ts` and is imported, so it is
+  initialised before `main.ts` runs. The ordering hazard is gone.
+- Regex over `src/main.ts` can blow the stack on very long lines — the asset
+  tooling hit this on 6MB base64 strings. Prefer manual scanning for big files
+  (see `tools/extract-assets.mjs`).
+- Splitting a function out of `main.ts` by brace-balancing must skip the
+  parameter list: `function f(a,b){…}` closes to depth 0 at `)` before the body
+  opens, which silently decapitates it (see `tools/split-module.mjs`).
 
 ## Workflow preferences (from the project owner, Syntaxx)
 - Outline architecture before large code dumps; approve roadmap before big

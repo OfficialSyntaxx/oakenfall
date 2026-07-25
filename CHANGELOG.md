@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.66.0
+Housekeeping, no change to play. The game's code is being broken out of one very
+large file into proper modules — the map's geometry, its artwork list, and its
+rulebook of buildings, roles and research now each live somewhere sensible, with
+real type-checking on the foundations. It also quietly retired a long-standing
+trap in the code that could have broken starting a new hold.
+
 ## 1.65.0
 The minimap finally makes sense. It used to lay the land out as a square while
 the game shows it as a diamond, so nothing on it lined up with what was in front
