@@ -38,8 +38,16 @@ exports.handler = async (event) => {
   catch (e) { return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid JSON' }) }; }
 
   // ── Purchase gate (replace with your storefront's real verification) ──
+  // Constant-time comparison so the secret can't be recovered by timing the
+  // response. Both sides are hashed to equal length before comparing.
   const secret = process.env.SIGN_SHARED_SECRET;
-  if (!secret || payload.secret !== secret) {
+  const given = String(payload.secret || '');
+  const ok = secret && (() => {
+    const a = crypto.createHash('sha256').update(secret).digest();
+    const b = crypto.createHash('sha256').update(given).digest();
+    return crypto.timingSafeEqual(a, b);
+  })();
+  if (!ok) {
     return { statusCode: 403, headers, body: JSON.stringify({ error: 'Not authorized' }) };
   }
 

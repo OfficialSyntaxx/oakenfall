@@ -13,6 +13,7 @@
 <meta name="twitter:card" content="{{twittercard}}">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2 30 16 16 30 2 16Z' fill='%2315120c' stroke='%23e8a13c' stroke-width='2'/%3E%3Cpath d='M16 22V13M16 13c-3-1-5-4-5-6 2 0 4 1 5 3 1-2 3-3 5-3 0 2-2 5-5 6Z' stroke='%234a5d33' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/manifest.webmanifest">
 <link rel="stylesheet" href="/css/site.css">
 </head>
 <body class="page-{{slug}}">
@@ -83,6 +84,25 @@
   </div>
 </footer>
 
+<script>
+/* PWA: register the service worker and offer an install button when the browser
+   allows it. Progressive — does nothing where unsupported. */
+(function(){
+  if('serviceWorker' in navigator){ window.addEventListener('load', function(){ navigator.serviceWorker.register('/sw.js').catch(function(){}); }); }
+  var deferred=null, btn=null;
+  function showBtn(){
+    if(btn) { btn.hidden=false; return; }
+    btn=document.createElement('button');
+    btn.textContent='📲 Install Oakenfall';
+    btn.setAttribute('aria-label','Install Oakenfall app');
+    btn.style.cssText='position:fixed;right:14px;bottom:14px;z-index:60;padding:11px 15px;border-radius:10px;border:1px solid #e7a23d;background:linear-gradient(180deg,#f0b64a,#a5661c);color:#231603;font:600 14px/1 "Cinzel",Georgia,serif;box-shadow:0 4px 12px rgba(0,0,0,.45);cursor:pointer;';
+    btn.addEventListener('click', async function(){ if(!deferred) return; deferred.prompt(); try{ await deferred.userChoice; }catch(e){} deferred=null; btn.hidden=true; });
+    document.body.appendChild(btn);
+  }
+  window.addEventListener('beforeinstallprompt', function(e){ e.preventDefault(); deferred=e; showBtn(); });
+  window.addEventListener('appinstalled', function(){ if(btn) btn.hidden=true; });
+})();
+</script>
 <script src="/js/version.js" defer></script>
 <script src="/js/site.js" defer></script>
 </body>
