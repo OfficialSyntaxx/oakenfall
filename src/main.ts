@@ -373,6 +373,26 @@ function renderRedeemSheet(){
 // actions operate on the live game state and are saved like any other change.
 // Persistent admin/sandbox toggles (debug only). Read in hot loops.
 const ADMIN = { freezeNeeds:false, noRaids:false, debug:false };
+
+/* Read-only snapshot of the running hold. Top-level declarations in a module do
+   not land on window, so this is the only way for the automated tests (and the
+   report/diagnostics tooling) to see what the simulation is actually doing.
+   Deliberately a copy — nothing here can be used to mutate game state. */
+window.__oakDebug = function(){
+  const roles = {};
+  for(const v of villagers) roles[v.role] = (roles[v.role]||0) + 1;
+  return {
+    version: GAME_VERSION,
+    day: dayCount, season: seasonName(), weather: weather.type,
+    villagers: villagers.length, roles,
+    buildings: buildings.filter(b=>b.type!=='road').map(b=>b.type),
+    stockpile: Object.assign({}, stockpile),
+    coins, tier: currentTierIdx,
+    needs: (typeof roleNeedScores==='function') ? roleNeedScores().slice(0,3) : [],
+    critters: (typeof critters!=='undefined') ? critters.length : 0,
+    raiders: raiders.length,
+  };
+};
 function adminGrant(kind){
   const bump = (k,n)=>{ stockpile[k] = (stockpile[k]||0) + n; };
   const toDawn = ()=>{ worldTime = Math.floor(worldTime/CYCLE_LEN)*CYCLE_LEN + 30; };
@@ -863,7 +883,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.66.0';
+const GAME_VERSION = '1.67.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -1491,6 +1511,47 @@ function passVillager(v){
    at the hearth after dark, seek warmth in winter, drift toward friends, and
    the children play. Only steers idle wander targets + a mood bubble — never
    overrides assigned work. */
+/* ── WHAT THE HOLD NEEDS ── a utility score per trade, so an unemployed settler
+   can work out what is worth doing instead of waiting to be told. Scarcity
+   drives the score; existing workers divide it, so hands spread across trades
+   rather than all piling onto whatever is scarcest. Recomputed at most once a
+   second — every idle settler asks the same question. */
+let _needCache = null, _needAt = -1;
+function roleNeedScores(){
+  if(_needCache && worldTime - _needAt < 1) return _needCache;
+  const pop = Math.max(1, villagers.length);
+  const count = {};
+  for(const v of villagers) count[v.role] = (count[v.role]||0) + 1;
+  const frac = (k)=> (stockpile[k]||0) / Math.max(1, capFor(k));
+  const out = [];
+  const add = (role, workplace, score)=>{
+    if(!hasActiveBuilding(workplace)) return;      // nowhere to do the work
+    out.push({ role, score: score / (1 + (count[role]||0)) });
+  };
+  // Food is the survival pressure: weight it by how many mouths depend on it,
+  // and sharply if the stores would not last long.
+  const hungry = (1 - frac('food'))*1.6 + ((stockpile.food||0) < pop*3 ? 1.4 : 0);
+  add('farmer','farm', hungry);
+  add('fisher','fishingHut', riverFrozen() ? 0 : hungry*0.95);
+  add('hunter','huntingCabin', hungry*0.9);
+  add('lumberjack','forestCamp', (1 - frac('wood'))*1.25);
+  add('miner','miningPost', (1 - frac('stone'))*1.05);
+  if(currentTierIdx >= 2) add('guard','guardPost', 0.85);   // worth raiding now
+  out.sort((a,b)=>b.score - a.score);
+  _needCache = out; _needAt = worldTime;
+  return out;
+}
+/* An unemployed adult takes up the most-needed trade — unless the hold is on
+   fire, when free hands are worth more than another woodcutter (idle adults are
+   the bucket brigade). Returns true if they took work. */
+function seekWork(v){
+  if(buildings.some(b=>b._fire>0)) return false;
+  const best = roleNeedScores()[0];
+  if(!best || best.score < 0.35) return false;
+  reassignRole(v, best.role);
+  v.ambientEmote = '💡';
+  return true;
+}
 function ambientIdle(v){
   // Bucket brigade: idle adults rush to the nearest fire to help fight it.
   if(v.stage!=='child'){
@@ -1507,10 +1568,12 @@ function ambientIdle(v){
   const winter = (typeof seasonIndex==='function') && seasonIndex()===3;
   const tav = buildings.find(b=>b.type==='tavern');
   const hearth = tav ? {gx:tav.gx+0.5, gy:tav.gy+1.1} : {gx:TC_CX, gy:TC_CY+1.4};
-  if(night || (winter && (hasTrait(v,'frail') || Math.random()<0.4))){
+  // Foul weather drives folk to shelter — a storm clears the yards fastest.
+  const storm = weather.type==='storm', rain = weather.type==='rain' || weather.type==='snow';
+  if(storm || night || (winter && (hasTrait(v,'frail') || Math.random()<0.4)) || (rain && Math.random()<0.5)){
     v.idleGX = clamp(hearth.gx + (Math.random()-0.5)*1.8, 1, MAP_SIZE-2);
     v.idleGY = clamp(hearth.gy + (Math.random()-0.5)*1.0, 1, MAP_SIZE-2);
-    v.ambientEmote = (winter && !night) ? '🥶' : '🔥';
+    v.ambientEmote = storm ? '⛈️' : (rain && !night) ? '☔' : (winter && !night) ? '🥶' : '🔥';
     return;
   }
   const fr = (v.relations||[]).filter(r=>r.type==='friend' && r.s>50);
@@ -2664,8 +2727,8 @@ function updateVillager(v, dt){
         } else if(v.role==='farmer'){
           const b = nearestBuildingOfTypes(['farm'], v.gx, v.gy, true);
           if(b){ b.workers++; v.targetBuilding=b; v.state='walkingToFarm'; }
-        } else {
-          ambientIdle(v); // unassigned — live a little
+        } else if(!seekWork(v)){
+          ambientIdle(v); // nothing worth doing — live a little
         }
       }
       break;
