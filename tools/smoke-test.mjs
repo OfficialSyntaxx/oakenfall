@@ -74,6 +74,30 @@ for (const [label, vw, vh] of [['phone', 390, 844], ['landscape', 844, 390], ['d
       menuVisible: !document.getElementById('begin-btn')?.closest('#start-overlay,#menu,#overlay')?.classList?.contains('hidden'),
       canvasSize: c.width + 'x' + c.height,
       canvasSized: c.width >= window.innerWidth,  // backing store must match the viewport, not the 300x150 default
+      // HUD: the resource row must never sit under the right-hand buttons.
+      hudOverlap: (() => {
+        const bar = document.getElementById('hud-top');
+        const right = document.getElementById('hud-right');
+        if (!bar || !right) return 'missing';
+        // Two subtleties: portrait deliberately stacks the row BELOW the buttons
+        // (so a horizontal-only test false-positives), and the row is a scroll
+        // container that visually clips its pills (so testing pill rects
+        // false-positives on clipped overflow). The honest check is the
+        // container's own box — which margin-right shrinks — intersected in 2D.
+        const b = bar.getBoundingClientRect(), r = right.getBoundingClientRect();
+        for (const p of bar.querySelectorAll('.pill')) {
+          const q = p.getBoundingClientRect();
+          // what the player can actually see: the pill clipped to its scroll box
+          const v = { left: Math.max(q.left, b.left), right: Math.min(q.right, b.right),
+                      top: Math.max(q.top, b.top), bottom: Math.min(q.bottom, b.bottom) };
+          if (v.right <= v.left || v.bottom <= v.top) continue;   // fully clipped away
+          if (v.right > r.left + 1 && v.left < r.right - 1 && v.bottom > r.top + 1 && v.top < r.bottom - 1) {
+            return `OVERLAP pill(${Math.round(v.left)},${Math.round(v.top)}-${Math.round(v.right)},${Math.round(v.bottom)}) vs buttons(${Math.round(r.left)},${Math.round(r.top)}-${Math.round(r.right)},${Math.round(r.bottom)})`;
+          }
+        }
+        return 'ok';
+      })(),
+      hudToggle: !!document.getElementById('hud-more'),
     };
   });
 
@@ -86,12 +110,13 @@ server.close();
 
 let bad = 0;
 for (const r of results) {
-  const ok = r.state.distinctColors > 8 && r.errors.length === 0 && r.failed.length === 0 && r.state.canvasSized;
+  const ok = r.state.distinctColors > 8 && r.errors.length === 0 && r.failed.length === 0 && r.state.canvasSized && r.state.hudOverlap === 'ok' && r.state.hudToggle;
   if (!ok) bad++;
   console.log(`\n[${r.label}] ${ok ? 'PASS' : 'FAIL'}`);
   console.log('  render colors :', r.state.distinctColors, '(>8 means a drawn world)');
   console.log('  assets fetched:', r.state.assetsFetched, JSON.stringify(r.state.assetsByGroup));
   console.log('  canvas        :', r.state.canvasSize, r.state.canvasSized ? '(sized)' : '(NOT SIZED — stretched/blurry)');
+  console.log('  hud           :', r.state.hudOverlap, '| toggle:', r.state.hudToggle);
   if (r.errors.length) console.log('  ERRORS:', r.errors.slice(0, 4));
   if (r.failed.length) console.log('  FAILED REQUESTS:', r.failed.slice(0, 6));
 }

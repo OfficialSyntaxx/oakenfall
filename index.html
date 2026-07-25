@@ -57,6 +57,23 @@
   }
   #hud-top::-webkit-scrollbar{ display:none; }
   #hud-top .pill{ flex:0 0 auto; pointer-events:auto; }
+  /* Expand toggle — sticks to the visible right edge while the row scrolls, so
+     it never scrolls out of reach. Expanding wraps the stores onto extra rows
+     instead of hiding them behind a scroll players may not notice. */
+  #hud-more{
+    position:sticky; right:0; flex:0 0 auto; pointer-events:auto; margin-left:2px;
+    width:26px; height:26px; min-width:26px; border-radius:7px; cursor:pointer;
+    background:linear-gradient(180deg,var(--panel-top),var(--panel-bot));
+    border:1px solid var(--panel-edge); color:var(--parchment-text);
+    font-size:13px; line-height:1; padding:0;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,0.10), 0 2px 4px rgba(0,0,0,0.45);
+    transition:transform .18s;
+  }
+  #hud-top.expanded{
+    flex-wrap:wrap; overflow-x:visible; overflow-y:visible; row-gap:5px;
+    -webkit-mask-image:none; mask-image:none;
+  }
+  #hud-top.expanded #hud-more{ transform:rotate(180deg); }
   /* Narrow phones: tighten the resource pills so more of the hold's stores fit
      on screen before the row needs scrolling. */
   @media (max-width: 480px){
@@ -429,9 +446,11 @@
   <div class="pill"><span class="icon">🪨</span><b id="res-stone">0</b><span class="cap" id="cap-stone"></span></div>
   <div class="pill"><span class="icon">🌾</span><b id="res-food">0</b><span class="cap" id="cap-food"></span></div>
   <div class="pill"><span class="icon">🪚</span><b id="res-planks">0</b><span class="cap" id="cap-planks"></span></div>
+  <div class="pill"><span class="icon">🌰</span><b id="res-flour">0</b><span class="cap" id="cap-flour"></span></div>
   <div class="pill"><span class="icon">🍞</span><b id="res-bread">0</b><span class="cap" id="cap-bread"></span></div>
   <div class="pill" id="shop-pill" style="cursor:pointer;"><span class="icon">💰</span><b id="res-coins">0</b></div>
   <div class="pill"><span class="icon">👥</span><b id="res-pop">0</b><span class="cap" id="res-cap">/0</span></div>
+  <button id="hud-more" aria-label="Show all stores" aria-expanded="false" title="Show all stores">▾</button>
 </div>
 <!-- Fixed button cluster: OUTSIDE #hud-top so its mask/overflow can't clip
      the ⚙ dropdown. -->
@@ -1449,7 +1468,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.61.0';
+const GAME_VERSION = '1.62.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -5447,14 +5466,27 @@ function drawMinimap(){
     const g = inProject(wp.x, wp.y);
     return { x: g.gx*mmTile, y: g.gy*mmTile };
   });
-  mmCtx.save();
-  mmCtx.beginPath();
-  mmCtx.moveTo(quad[0].x, quad[0].y);
-  for(let i=1;i<quad.length;i++) mmCtx.lineTo(quad[i].x, quad[i].y);
-  mmCtx.closePath();
-  mmCtx.fillStyle='rgba(231,162,61,0.12)'; mmCtx.fill();
-  mmCtx.strokeStyle='rgba(231,162,61,0.9)'; mmCtx.lineWidth=1.5; mmCtx.stroke();
-  mmCtx.restore();
+  // Only worth drawing when it tells you something. Zoomed out (the common case
+  // now that the view fits the screen) the visible region covers the whole hold,
+  // so an outline around everything is just noise — show it only once you have
+  // zoomed in far enough that it marks a genuine subsection.
+  const area = Math.abs(
+    (quad[0].x*quad[1].y - quad[1].x*quad[0].y) +
+    (quad[1].x*quad[2].y - quad[2].x*quad[1].y) +
+    (quad[2].x*quad[3].y - quad[3].x*quad[2].y) +
+    (quad[3].x*quad[0].y - quad[0].x*quad[3].y)
+  ) / 2;
+  if(area < sz*sz*0.72){
+    mmCtx.save();
+    mmCtx.beginPath(); mmCtx.rect(0,0,sz,sz); mmCtx.clip();   // never spill past the map
+    mmCtx.beginPath();
+    mmCtx.moveTo(quad[0].x, quad[0].y);
+    for(let i=1;i<quad.length;i++) mmCtx.lineTo(quad[i].x, quad[i].y);
+    mmCtx.closePath();
+    mmCtx.fillStyle='rgba(231,162,61,0.10)'; mmCtx.fill();
+    mmCtx.strokeStyle='rgba(231,162,61,0.85)'; mmCtx.lineWidth=1.5; mmCtx.stroke();
+    mmCtx.restore();
+  }
 }
 // tap minimap to jump camera there
 if(minimapCanvas){
@@ -5870,6 +5902,30 @@ document.getElementById('quest-btn').addEventListener('click', ()=>{
   exitBuildModeIfActive(); selection={type:null,ref:null};
   renderHubSheet('goals');
 });
+// Resource row expand/collapse. Collapsed it is a compact scrolling row; expanded
+// it wraps so every store is visible at once — a scroll alone is too easy to miss
+// on a phone. The choice is remembered.
+(function(){
+  const bar = document.getElementById('hud-top');
+  const btn = document.getElementById('hud-more');
+  if(!bar || !btn) return;
+  const apply = (on)=>{
+    bar.classList.toggle('expanded', on);
+    btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+    btn.setAttribute('aria-label', on ? 'Collapse stores' : 'Show all stores');
+    if(typeof updateHudReserve==='function') updateHudReserve();
+  };
+  let saved = false;
+  try{ saved = localStorage.getItem('oak-hud-expanded')==='1'; }catch(e){}
+  apply(saved);
+  btn.addEventListener('click', (e)=>{
+    e.stopPropagation();
+    const on = !bar.classList.contains('expanded');
+    apply(on);
+    try{ localStorage.setItem('oak-hud-expanded', on?'1':'0'); }catch(e){}
+  });
+})();
+
 document.getElementById('steward-btn').addEventListener('click', ()=>{
   exitBuildModeIfActive(); selection={type:null,ref:null};
   sheetNav.replace({ id:'steward', title:'🗣️ Give an Order', render:renderStewardSheet });
@@ -6042,12 +6098,14 @@ function updateHud(){
     window._hudRefs = {
       planks: document.getElementById('res-planks'), capPlanks: document.getElementById('cap-planks'),
       bread: document.getElementById('res-bread'),  capBread: document.getElementById('cap-bread'),
+      flour: document.getElementById('res-flour'),  capFlour: document.getElementById('cap-flour'),
       coins: document.getElementById('res-coins'),  badge: document.getElementById('idle-badge'),
     };
   }
   const R = window._hudRefs;
   R.planks.textContent = fmt(stockpile.planks||0);
   R.capPlanks.textContent = '/'+capFor('planks');
+  if(R.flour){ R.flour.textContent = fmt(stockpile.flour||0); R.capFlour.textContent = '/'+capFor('flour'); }
   R.bread.textContent = fmt(stockpile.bread||0);
   R.capBread.textContent = '/'+capFor('bread');
   R.coins.textContent = fmt(coins);
