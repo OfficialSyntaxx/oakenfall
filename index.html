@@ -57,6 +57,14 @@
   }
   #hud-top::-webkit-scrollbar{ display:none; }
   #hud-top .pill{ flex:0 0 auto; pointer-events:auto; }
+  /* Narrow phones: tighten the resource pills so more of the hold's stores fit
+     on screen before the row needs scrolling. */
+  @media (max-width: 480px){
+    #hud-top{ gap:5px; }
+    #hud-top .pill{ padding:4px 7px 4px 6px; font-size:12.5px; gap:3px; }
+    #hud-top .pill .icon{ font-size:13px; }
+    #hud-top .pill b{ font-size:12px; min-width:1.3em; }
+  }
   .pill{
     pointer-events:auto;
     display:flex;align-items:center;gap:5px;
@@ -76,7 +84,10 @@
   #hud-right .iconbtn{ width:44px; height:44px; font-size:16px; }
   /* Reserve real space for the fixed button cluster: margin (not padding)
      shrinks the scrollport, so pills can never slide under the buttons. */
-  #hud-top{ margin-right:calc(env(safe-area-inset-right,0px) + 156px); padding-right:12px; }
+  /* Space reserved for the right-hand controls. Measured at runtime into
+     --hud-reserve so the resource row can never slide under the buttons when
+     the cluster changes size (adding a HUD button used to break this). */
+  #hud-top{ margin-right:calc(env(safe-area-inset-right,0px) + var(--hud-reserve, 168px)); padding-right:12px; }
   /* fade hint: the right edge dissolves so players know the row scrolls */
   #hud-top{
     -webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 26px),transparent);
@@ -1435,7 +1446,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.58.0';
+const GAME_VERSION = '1.59.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -3703,13 +3714,29 @@ function resizeCanvas(){
     _resizing = false;
   }
 }
+// Measure the right-hand HUD cluster (and the clock/minimap beneath it) and
+// reserve exactly that much room for the scrolling resource row. Hard-coded
+// values silently broke whenever a HUD button was added — this can't.
+function updateHudReserve(){
+  try{
+    const right = document.getElementById('hud-right');
+    if(!right) return;
+    const rw = right.getBoundingClientRect().width || 0;
+    const mm = document.getElementById('minimap-wrap');
+    const mw = (mm && !mm.classList.contains('hidden')) ? (mm.getBoundingClientRect().width||0) : 0;
+    // In landscape the minimap sits beside the buttons; in portrait it's below.
+    const landscape = window.matchMedia('(orientation: landscape)').matches;
+    const reserve = Math.ceil(Math.max(rw, landscape ? Math.max(rw, mw) : rw) + 16);
+    document.documentElement.style.setProperty('--hud-reserve', reserve+'px');
+  }catch(e){}
+}
 function requestResize(){
   // Debounce: coalesce rapid-fire resize events (common during iframe/viewport
   // settling) into a single rAF-scheduled call instead of running synchronously
   // inside the event that triggered them.
   if(_resizePending) return;
   _resizePending = true;
-  requestAnimationFrame(()=>{ _resizePending=false; resizeCanvas(); });
+  requestAnimationFrame(()=>{ _resizePending=false; resizeCanvas(); updateHudReserve(); });
 }
 window.addEventListener('resize', requestResize);
 window.addEventListener('orientationchange', requestResize);
@@ -5393,17 +5420,23 @@ function drawMinimap(){
     mmCtx.fillRect(0,0,sz,sz);
   }
 
-  // Viewport rectangle
-  const wpTL = screenToWorldPixel(0, 0);
-  const wpBR = screenToWorldPixel(cssW, cssH);
-  const g0 = inProject(wpTL.x, wpTL.y);
-  const g1 = inProject(wpBR.x, wpBR.y);
-  const vx = clamp(Math.min(g0.gx,g1.gx)*mmTile, 0, sz);
-  const vy = clamp(Math.min(g0.gy,g1.gy)*mmTile, 0, sz);
-  const vw = clamp(Math.abs(g1.gx-g0.gx)*mmTile, 2, sz-vx);
-  const vh = clamp(Math.abs(g1.gy-g0.gy)*mmTile, 2, sz-vy);
-  mmCtx.strokeStyle='rgba(231,162,61,0.85)'; mmCtx.lineWidth=1.5;
-  mmCtx.strokeRect(vx,vy,vw,vh);
+  // Viewport outline. The screen rectangle maps to a DIAMOND in grid space
+  // (that's what isometric projection does) — the old code took two corners and
+  // drew an axis-aligned box, which is why it never matched what you saw. Project
+  // all four screen corners and stroke the real quad.
+  const quad = [[0,0],[cssW,0],[cssW,cssH],[0,cssH]].map(([sx,sy])=>{
+    const wp = screenToWorldPixel(sx, sy);
+    const g = inProject(wp.x, wp.y);
+    return { x: g.gx*mmTile, y: g.gy*mmTile };
+  });
+  mmCtx.save();
+  mmCtx.beginPath();
+  mmCtx.moveTo(quad[0].x, quad[0].y);
+  for(let i=1;i<quad.length;i++) mmCtx.lineTo(quad[i].x, quad[i].y);
+  mmCtx.closePath();
+  mmCtx.fillStyle='rgba(231,162,61,0.12)'; mmCtx.fill();
+  mmCtx.strokeStyle='rgba(231,162,61,0.9)'; mmCtx.lineWidth=1.5; mmCtx.stroke();
+  mmCtx.restore();
 }
 // tap minimap to jump camera there
 if(minimapCanvas){
@@ -6791,6 +6824,10 @@ canvas.addEventListener('touchstart', (e)=>{
     touchState.lastMidX = mid.x; touchState.lastMidY = mid.y;
     touchState.panStartX = camera.panX; touchState.panStartY = camera.panY;
     touchState.midStartX = mid.x; touchState.midStartY = mid.y;
+    // Capture the world point under the fingers ONCE. Recomputing it each move
+    // (against a camera we just mutated) fed back on itself and sent the view
+    // flying — this is the anchor the pinch pivots around.
+    touchState.pinchWorld = screenToWorldPixel(mid.x, mid.y);
     touchState.moved=true;
   }
 }, {passive:false});
@@ -6814,11 +6851,12 @@ canvas.addEventListener('touchmove', (e)=>{
     const dist = getTouchDist(e.touches[0], e.touches[1]);
     const mid = getTouchMid(e.touches[0], e.touches[1]);
     let newScale = clamp(touchState.startScale * (dist/touchState.startDist), ZOOM_MIN, ZOOM_MAX);
-    // keep the midpoint's world location fixed under fingers
-    const worldUnderMidBefore = screenToWorldPixel(touchState.midStartX, touchState.midStartY);
+    // Pin the world point captured at pinch start under the current midpoint, so
+    // the map zooms about your fingers and can be dragged with two down.
+    const anchor = touchState.pinchWorld || screenToWorldPixel(touchState.midStartX, touchState.midStartY);
     camera.scale = newScale;
-    camera.panX = mid.x - cssW/2 - worldUnderMidBefore.x*newScale;
-    camera.panY = mid.y - cssH/2 - worldUnderMidBefore.y*newScale;
+    camera.panX = mid.x - cssW/2 - anchor.x*newScale;
+    camera.panY = mid.y - cssH/2 - anchor.y*newScale;
     clampCamera();
   }
 }, {passive:false});
@@ -7286,6 +7324,7 @@ function finishBoot(){
   loadVillagerAnims();
   loadDecor();
   initCameraZoom();
+  try { updateHudReserve(); } catch(e){}
   try { spawnWildlife(); } catch(e){}
   const c = project(TC_CX, TC_CY);
   camera.panX = -c.x*camera.scale;

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.59.0
+Mobile fixes that matter. Pinch-zoom no longer sends the camera flying — it now
+pivots properly around your fingers (the zoom anchor was drifting every frame).
+The minimap's view box was drawn as a rectangle when an isometric view is really
+a diamond, so it never matched what you saw; it now traces the true shape. The
+resource row measures the buttons beside it instead of guessing, so it stops
+sliding underneath them in landscape, and the pills tighten up on narrow phones
+so more of your stores fit. Plus a proper Add to Home Screen prompt on iOS,
+where browsers never allow a real install button.
+
 ## 1.58.0
 Wildlife, and settlers with survival instincts. Deer now roam the wilds and bolt
 when your folk draw near, and birds drift across the sky — the valley feels alive
