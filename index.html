@@ -1365,7 +1365,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.55.0';
+const GAME_VERSION = '1.56.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -2873,7 +2873,10 @@ function pathFind(fromGX, fromGY, toGX, toGY){
   bestG[key(startGX,startGY)]=0;
   const DIRS=[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]];
   let iters=0;
-  while(open.length>0 && iters++<180){
+  // Cap scales a little with map size so long, obstructed routes resolve instead
+  // of the settler giving up and standing still on bigger holds.
+  const ITER_CAP = Math.min(600, Math.max(240, MAP_SIZE*MAP_SIZE/2));
+  while(open.length>0 && iters++<ITER_CAP){
     // find min-f node (small array, no heap needed)
     let bi=0;
     for(let i=1;i<open.length;i++) if(open[i].f<open[bi].f) bi=i;
@@ -3110,8 +3113,13 @@ function updateVillager(v, dt){
 
   const lockedStates = ['eating','sleeping','seekingFood','seekingSleep'];
   if(!lockedStates.includes(v.state)){
-    if(v.fatigue>=96){ releaseClaims(v); v.state='seekingSleep'; }
-    else if(v.hunger>=96){ releaseClaims(v); v.state='seekingFood'; }
+    // Utility needs: eat sooner when there's food to spare (settlers no longer
+    // work themselves to the brink of starvation), but hold out through a
+    // famine so a lean hold doesn't drain its last stores. Rest a touch earlier.
+    const foodToSpare = (stockpile.food||0) > villagers.length;
+    const hungerSeek = foodToSpare ? 86 : 96;
+    if(v.fatigue>=92){ releaseClaims(v); v.state='seekingSleep'; }
+    else if(v.hunger>=hungerSeek){ releaseClaims(v); v.state='seekingFood'; }
   }
 
   const mul = effMultiplier(v);

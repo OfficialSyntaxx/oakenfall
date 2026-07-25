@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.56.0
+Settlers with better sense (first pass). Two AI improvements: folk now eat
+before they are half-starved when the granary can spare it — but still tough it
+out through a famine so a lean hold does not burn its last food — and they tire
+to rest a little sooner. And pathfinding no longer gives up on longer routes:
+the search budget scales with the map, so settlers stop freezing mid-journey on
+bigger holds. More of the "thinking settlers" work to come.
+
 ## 1.55.0
 Smarter hands and a clearer steward. Fixed the settler work bubbles — fishers
 and hunters no longer flash a mining pickaxe over their heads; each craft now
