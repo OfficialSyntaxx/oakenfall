@@ -4,8 +4,20 @@ Mobile-first isometric 2:1 city-builder/civ sim. ONE self-contained HTML file
 (`index.html`), vanilla JS + Canvas 2D. No frameworks, no build step, no npm,
 no external network requests at runtime. All art is base64-embedded.
 
+## Architecture direction (decided; migration in progress)
+The end goal is a shipped **mobile game (iOS/Android)**. The owner approved a
+move to **Vite + TypeScript modules + Capacitor**. The "one self-contained file"
+rule is being retired deliberately — its *purpose* (runs anywhere, fully
+offline, no network dependency) is preserved by bundling assets locally and
+caching via the service worker, which a Capacitor app satisfies natively.
+Migration order: (1) extract assets out of the HTML, (2) move code into TS
+modules, (3) Capacitor wrap + native storage. Step 1 is underway: assets live in
+`public/assets/`, extracted by `tools/extract-assets.mjs`; music is already
+external (that alone cut the game from 15.3MB to 3.1MB).
+
 ## Hard constraints (never violate)
-- Single file. All assets embedded as data URIs.
+- Assets are bundled **locally** — never fetched from a third-party CDN at
+  runtime. Offline play must always work.
 - Mobile touch first: drag-pan, pinch-zoom, double-tap zoom, bottom-docked
   sheets (side-docked in landscape). 44px minimum touch targets.
 - Every sprite consumer has a procedural canvas fallback. NEVER remove
