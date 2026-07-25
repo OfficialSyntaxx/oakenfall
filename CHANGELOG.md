@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.64.0
+The stores fit, and the world has a horizon. Your resource row no longer slides
+under the buttons or hides pills behind a floating toggle — it wraps onto tidy
+rows instead of scrolling sideways, shows what you watch most at a glance, and
+opens to reveal everything. The clock and minimap now sit below it however tall
+it grows. And the hold no longer floats in a black nothing: the land settles
+into a deep, cold expanse with its edges softened into the distance.
+
 ## 1.63.0
 Under the hood: the game is now built rather than hand-assembled. Its code moved
 out of the web page into a proper TypeScript project with a real build step, and

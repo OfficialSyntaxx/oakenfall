@@ -57,21 +57,22 @@
   }
   #hud-top::-webkit-scrollbar{ display:none; }
   #hud-top .pill{ flex:0 0 auto; pointer-events:auto; }
-  /* Expand toggle — sticks to the visible right edge while the row scrolls, so
-     it never scrolls out of reach. Expanding wraps the stores onto extra rows
-     instead of hiding them behind a scroll players may not notice. */
+  /* Stores wrap onto extra rows rather than scrolling sideways. Scrolling hid
+     pills behind a floating button and was easy to miss on a phone; wrapping
+     means everything shown is actually readable. */
+  #hud-top{ flex-wrap:wrap; overflow:visible; row-gap:5px;
+    -webkit-mask-image:none; mask-image:none; }
+  /* Collapsed shows the stores you watch minute to minute; the rest appear on
+     expand. Ordinary flex item — never floats over a pill. */
+  #hud-top:not(.expanded) .pill.secondary{ display:none; }
   #hud-more{
-    position:sticky; right:0; flex:0 0 auto; pointer-events:auto; margin-left:2px;
-    width:26px; height:26px; min-width:26px; border-radius:7px; cursor:pointer;
+    flex:0 0 auto; pointer-events:auto; align-self:center;
+    width:30px; height:30px; min-width:30px; border-radius:8px; cursor:pointer;
     background:linear-gradient(180deg,var(--panel-top),var(--panel-bot));
     border:1px solid var(--panel-edge); color:var(--parchment-text);
     font-size:13px; line-height:1; padding:0;
     box-shadow:inset 0 1px 0 rgba(255,255,255,0.10), 0 2px 4px rgba(0,0,0,0.45);
     transition:transform .18s;
-  }
-  #hud-top.expanded{
-    flex-wrap:wrap; overflow-x:visible; overflow-y:visible; row-gap:5px;
-    -webkit-mask-image:none; mask-image:none;
   }
   #hud-top.expanded #hud-more{ transform:rotate(180deg); }
   /* Narrow phones: tighten the resource pills so more of the hold's stores fit
@@ -81,6 +82,11 @@
     #hud-top .pill{ padding:4px 7px 4px 6px; font-size:12.5px; gap:3px; }
     #hud-top .pill .icon{ font-size:13px; }
     #hud-top .pill b{ font-size:12px; min-width:1.3em; }
+    /* Collapsed on a narrow phone, drop the "/cap" suffixes so the whole row —
+       toggle included — fits on one line. Population keeps its cap; how close
+       you are to the housing limit is the one you act on. Expanding brings the
+       rest back. */
+    #hud-top:not(.expanded) .pill .cap:not(#res-cap){ display:none; }
   }
   .pill{
     pointer-events:auto;
@@ -105,11 +111,8 @@
      --hud-reserve so the resource row can never slide under the buttons when
      the cluster changes size (adding a HUD button used to break this). */
   #hud-top{ margin-right:calc(env(safe-area-inset-right,0px) + var(--hud-reserve, 168px)); padding-right:12px; }
-  /* fade hint: the right edge dissolves so players know the row scrolls */
-  #hud-top{
-    -webkit-mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 26px),transparent);
-    mask-image:linear-gradient(90deg,#000 0,#000 calc(100% - 26px),transparent);
-  }
+  /* (The old right-edge fade mask lived here. It hinted at horizontal scrolling,
+     which the stores no longer do — they wrap — and it clipped the last pill.) */
   #more-menu{
     position:absolute; top:calc(100% + 6px); right:0;
     display:flex; flex-direction:column; gap:6px;
@@ -136,8 +139,10 @@
       margin-right:0; padding-right:10px;
       padding-top:calc(env(safe-area-inset-top,0px) + 62px);
     }
-    #clock{ top:calc(env(safe-area-inset-top,0px) + 100px) !important; }
-    #minimap-wrap{ top:calc(env(safe-area-inset-top,0px) + 130px) !important; }
+    /* Sit below whatever height the stores currently occupy — expanding adds a
+       row, and fixed offsets used to put the clock straight through the pills. */
+    #clock{ top:calc(var(--hud-bottom, 100px) + 6px) !important; }
+    #minimap-wrap{ top:calc(var(--hud-bottom, 130px) + 34px) !important; }
   }
   .iconbtn{
     width:44px;height:44px;border-radius:8px;display:flex;align-items:center;justify-content:center;
@@ -445,9 +450,9 @@
   <div class="pill"><span class="icon">🪵</span><b id="res-wood">0</b><span class="cap" id="cap-wood"></span></div>
   <div class="pill"><span class="icon">🪨</span><b id="res-stone">0</b><span class="cap" id="cap-stone"></span></div>
   <div class="pill"><span class="icon">🌾</span><b id="res-food">0</b><span class="cap" id="cap-food"></span></div>
-  <div class="pill"><span class="icon">🪚</span><b id="res-planks">0</b><span class="cap" id="cap-planks"></span></div>
-  <div class="pill"><span class="icon">🌰</span><b id="res-flour">0</b><span class="cap" id="cap-flour"></span></div>
-  <div class="pill"><span class="icon">🍞</span><b id="res-bread">0</b><span class="cap" id="cap-bread"></span></div>
+  <div class="pill secondary"><span class="icon">🪚</span><b id="res-planks">0</b><span class="cap" id="cap-planks"></span></div>
+  <div class="pill secondary"><span class="icon">🌰</span><b id="res-flour">0</b><span class="cap" id="cap-flour"></span></div>
+  <div class="pill secondary"><span class="icon">🍞</span><b id="res-bread">0</b><span class="cap" id="cap-bread"></span></div>
   <div class="pill" id="shop-pill" style="cursor:pointer;"><span class="icon">💰</span><b id="res-coins">0</b></div>
   <div class="pill"><span class="icon">👥</span><b id="res-pop">0</b><span class="cap" id="res-cap">/0</span></div>
   <button id="hud-more" aria-label="Show all stores" aria-expanded="false" title="Show all stores">▾</button>
