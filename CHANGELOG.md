@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.69.0
+The wilds fill out. Boar now root about in the thickets — heavier than deer and
+far less inclined to run — while rabbits bolt from open grass at the slightest
+approach. Fish break the surface of the river, and butterflies drift over the
+meadows through spring and summer. The land answers the seasons too: game grows
+scarce under winter snow, the butterflies vanish with the warm months, and the
+fish return once the river thaws.
+
 ## 1.68.0
 A hold that reorganises itself, and folk with lives. Settlers already in work now
 reconsider their trade: let the granary run down while six people fell timber and

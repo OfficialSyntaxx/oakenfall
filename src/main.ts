@@ -539,26 +539,67 @@ function drawRaider(r){
 /* ── AMBIENT WILDLIFE ── deer roam the wilds and bolt from folk; birds drift
    the sky. Purely atmospheric — not saved, respawned each session. */
 let critters = [];
+/* Each kind keeps its own temperament: how far it lets you approach, how hard it
+   bolts, and how restless it is when left alone. Boar stand their ground far
+   longer than deer; rabbits spook at almost anything. */
+const CRITTER_KINDS = {
+  deer:   { flee:9,    speed:2.4, graze:0.7,  wander:4.0 },
+  boar:   { flee:3.5,  speed:1.9, graze:0.45, wander:2.6 },
+  rabbit: { flee:16,   speed:3.2, graze:1.1,  wander:2.2 },
+};
 function spawnWildlife(){
   critters = [];
   const wild = (typeof wildsTiles!=='undefined' && wildsTiles.length) ? wildsTiles : [];
-  const deerN = Math.max(3, Math.min(7, (wild.length/6)|0 || 3));
-  for(let i=0;i<deerN;i++){
-    const t = wild.length ? wild[(Math.random()*wild.length)|0] : { gx:TC_CX+(Math.random()-0.5)*12, gy:TC_CY+(Math.random()-0.5)*12 };
-    critters.push({ kind:'deer', gx:t.gx, gy:t.gy, tx:t.gx, ty:t.gy, phase:Math.random()*6, face:1, rest:Math.random()*4, moving:false });
+  const winter = seasonIndex()===3;
+  const pickWild = ()=> wild.length ? wild[(Math.random()*wild.length)|0]
+                                    : { gx:TC_CX+(Math.random()-0.5)*12, gy:TC_CY+(Math.random()-0.5)*12 };
+  const beast = (kind, t)=> critters.push({ kind, gx:t.gx, gy:t.gy, tx:t.gx, ty:t.gy,
+    phase:Math.random()*6, face:1, rest:Math.random()*4, moving:false });
+
+  // Game thins out in winter — the wilds feel emptier when the snow is down.
+  const deerN = Math.max(2, Math.min(7, (wild.length/6)|0 || 3)) * (winter?0.5:1) | 0;
+  for(let i=0;i<deerN;i++) beast('deer', pickWild());
+  for(let i=0;i<(winter?1:2);i++) beast('boar', pickWild());
+
+  // Rabbits keep to open grass rather than the deep wilds.
+  const grass = [];
+  for(let y=2;y<MAP_SIZE-2;y+=3) for(let x=2;x<MAP_SIZE-2;x+=3){
+    const t = grid[y] && grid[y][x];
+    if(t && t.type==='grass' && !t.building) grass.push(t);
   }
+  const rabbitN = winter ? 2 : 5;
+  for(let i=0;i<rabbitN && grass.length;i++) beast('rabbit', grass[(Math.random()*grass.length)|0]);
+
   for(let i=0;i<4;i++){
-    critters.push({ kind:'bird', gx:Math.random()*MAP_SIZE, gy:Math.random()*MAP_SIZE, dir:Math.random()*6.28, phase:Math.random()*6, spd:0.5+Math.random()*0.5 });
+    critters.push({ kind:'bird', gx:Math.random()*MAP_SIZE, gy:Math.random()*MAP_SIZE,
+      dir:Math.random()*6.28, phase:Math.random()*6, spd:0.5+Math.random()*0.5 });
+  }
+  // Fish break the surface of open water — none once the river freezes over.
+  if(typeof waterTiles!=='undefined' && waterTiles.length && !riverFrozen()){
+    for(let i=0;i<4;i++){
+      const t = waterTiles[(Math.random()*waterTiles.length)|0];
+      critters.push({ kind:'fish', gx:t.gx, gy:t.gy, phase:Math.random()*6, next:Math.random()*6 });
+    }
+  }
+  // Butterflies only in the warm seasons.
+  if(seasonIndex()===0 || seasonIndex()===1){
+    for(let i=0;i<6 && grass.length;i++){
+      const t = grass[(Math.random()*grass.length)|0];
+      critters.push({ kind:'flit', gx:t.gx, gy:t.gy, phase:Math.random()*6, dir:Math.random()*6.28,
+        hue: Math.random()<0.5 ? '#e8d27a' : '#d9a0c8' });
+    }
   }
 }
 function updateWildlife(dt){
   if(!critters.length) return;
   for(const c of critters){
-    if(c.kind==='deer'){
+    const spec = CRITTER_KINDS[c.kind];
+    if(spec){
+      // Grazing beasts: wander, watch for folk, bolt when one comes too close.
       c.phase += dt*4;
-      let fd=16, fv=null;
+      let fd=Infinity, fv=null;
       for(const v of villagers){ const d=dist2(c.gx,c.gy,v.gx,v.gy); if(d<fd){ fd=d; fv=v; } }
-      const spooked = fv && fd < 9;      // within 3 tiles
+      const spooked = fv && fd < spec.flee;
       if(spooked){
         const a = Math.atan2(c.gy-fv.gy, c.gx-fv.gx) || 0;
         c.tx = clamp(c.gx+Math.cos(a)*4, 1, MAP_SIZE-2);
@@ -567,19 +608,30 @@ function updateWildlife(dt){
       } else {
         c.rest -= dt;
         if(c.rest <= 0){ c.rest = 2+Math.random()*4;
-          const nx = clamp(c.gx+(Math.random()-0.5)*4, 1, MAP_SIZE-2), ny = clamp(c.gy+(Math.random()-0.5)*4, 1, MAP_SIZE-2);
+          const nx = clamp(c.gx+(Math.random()-0.5)*spec.wander, 1, MAP_SIZE-2);
+          const ny = clamp(c.gy+(Math.random()-0.5)*spec.wander, 1, MAP_SIZE-2);
           if(typeof tileWalkable==='function' && tileWalkable(Math.round(nx), Math.round(ny))){ c.tx=nx; c.ty=ny; }
         }
       }
       const dx=c.tx-c.gx, dy=c.ty-c.gy, d=Math.hypot(dx,dy);
-      if(d>0.05){ const spd=(spooked?2.4:0.7)*dt; c.gx+=dx/d*Math.min(spd,d); c.gy+=dy/d*Math.min(spd,d); c.face=dx>=0?1:-1; c.moving=true; }
+      if(d>0.05){ const spd=(spooked?spec.speed:spec.graze)*dt; c.gx+=dx/d*Math.min(spd,d); c.gy+=dy/d*Math.min(spd,d); c.face=dx>=0?1:-1; c.moving=true; }
       else c.moving=false;
-    } else { // bird
+    } else if(c.kind==='bird'){
       c.phase += dt*8;
       c.gx += Math.cos(c.dir)*c.spd*dt; c.gy += Math.sin(c.dir)*c.spd*dt;
       if(c.gx<0) c.gx=MAP_SIZE; else if(c.gx>MAP_SIZE) c.gx=0;
       if(c.gy<0) c.gy=MAP_SIZE; else if(c.gy>MAP_SIZE) c.gy=0;
       if(Math.random()<0.006) c.dir += (Math.random()-0.5);
+    } else if(c.kind==='fish'){
+      // Mostly below the surface; breaks it now and then in a short arc.
+      c.next -= dt;
+      if(c.next <= 0){ c.next = 4+Math.random()*7; c.jump = 1; }
+      if(c.jump > 0) c.jump = Math.max(0, c.jump - dt*1.6);
+    } else if(c.kind==='flit'){
+      c.phase += dt*7;
+      c.dir += (Math.random()-0.5)*0.5;
+      c.gx = clamp(c.gx + Math.cos(c.dir)*0.35*dt, 1, MAP_SIZE-2);
+      c.gy = clamp(c.gy + Math.sin(c.dir)*0.35*dt, 1, MAP_SIZE-2);
     }
   }
 }
@@ -597,6 +649,63 @@ function drawDeer(c){
   ctx.fillStyle='#e8dcc4'; ctx.beginPath(); ctx.ellipse(cx-5,cy-2.5,1.6,2,0,0,7); ctx.fill();          // tail
   ctx.strokeStyle='#4a3420'; ctx.lineWidth=1;
   ctx.beginPath(); ctx.moveTo(cx+5,cy-8); ctx.lineTo(cx+3.5,cy-11); ctx.moveTo(cx+6,cy-8); ctx.lineTo(cx+7.5,cy-11); ctx.stroke(); // antlers
+  ctx.restore();
+}
+function drawBoar(c){
+  const p = project(c.gx, c.gy);
+  const bob = c.moving ? Math.abs(Math.sin(c.phase))*0.9 : 0;
+  const cx=p.x, cy=p.y-bob;
+  try{ drawShadow(cx, p.y+3, 7.5); }catch(e){}
+  ctx.save(); if(c.face<0){ ctx.translate(cx*2,0); ctx.scale(-1,1); }
+  const ls = c.moving ? Math.sin(c.phase)*1.3 : 0;
+  ctx.strokeStyle='#241a12'; ctx.lineWidth=1.5; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(cx-3,cy-1); ctx.lineTo(cx-3+ls,cy+4); ctx.moveTo(cx+3,cy-1); ctx.lineTo(cx+3-ls,cy+4); ctx.stroke();
+  ctx.fillStyle='#4a3b30';                                            // bristly dark body
+  ctx.beginPath(); ctx.ellipse(cx,cy-3,6,3.4,0,0,7); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx+4,cy-5); ctx.lineTo(cx+9,cy-2); ctx.lineTo(cx+4,cy-1); ctx.closePath(); ctx.fill(); // snout
+  ctx.strokeStyle='#2a2019'; ctx.lineWidth=1;                          // back ridge
+  ctx.beginPath(); ctx.moveTo(cx-4,cy-6); ctx.lineTo(cx-1,cy-7.5); ctx.lineTo(cx+2,cy-6); ctx.stroke();
+  ctx.fillStyle='#e8e2d2';                                             // tusk
+  ctx.beginPath(); ctx.moveTo(cx+8,cy-2); ctx.lineTo(cx+10,cy-4); ctx.lineTo(cx+8.5,cy-1.5); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function drawRabbit(c){
+  const p = project(c.gx, c.gy);
+  const hop = c.moving ? Math.abs(Math.sin(c.phase*1.6))*2.4 : 0;
+  const cx=p.x, cy=p.y-hop;
+  try{ drawShadow(cx, p.y+2, 4); }catch(e){}
+  ctx.save(); if(c.face<0){ ctx.translate(cx*2,0); ctx.scale(-1,1); }
+  ctx.fillStyle='#9c8a72';
+  ctx.beginPath(); ctx.ellipse(cx,cy-2,3.2,2.2,0,0,7); ctx.fill();      // body
+  ctx.beginPath(); ctx.arc(cx+2.6,cy-4,1.6,0,7); ctx.fill();            // head
+  ctx.strokeStyle='#9c8a72'; ctx.lineWidth=1.1; ctx.lineCap='round';    // ears
+  ctx.beginPath(); ctx.moveTo(cx+2.4,cy-5.2); ctx.lineTo(cx+1.8,cy-8.2);
+  ctx.moveTo(cx+3.2,cy-5.2); ctx.lineTo(cx+3.4,cy-8.2); ctx.stroke();
+  ctx.fillStyle='#efe9dc'; ctx.beginPath(); ctx.arc(cx-3.2,cy-2.2,1.2,0,7); ctx.fill(); // scut
+  ctx.restore();
+}
+function drawFish(c){
+  if(!(c.jump > 0)) return;                       // only visible mid-arc
+  const p = project(c.gx, c.gy);
+  const t = 1 - c.jump;                            // 0 → 1 across the leap
+  const lift = Math.sin(t*Math.PI)*7;
+  const cx = p.x + (t-0.5)*7, cy = p.y - lift - 2;
+  ctx.save();
+  ctx.fillStyle='#8fa8b8';
+  ctx.beginPath(); ctx.ellipse(cx, cy, 3.2, 1.5, -0.5+t, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx-3,cy); ctx.lineTo(cx-5,cy-1.6); ctx.lineTo(cx-5,cy+1.6); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='rgba(200,225,240,0.5)'; ctx.lineWidth=1;            // splash ring on the way down
+  if(t>0.75){ ctx.beginPath(); ctx.ellipse(p.x+(t-0.5)*7, p.y, 4*(t-0.75)*4, 1.6*(t-0.75)*4, 0, 0, 7); ctx.stroke(); }
+  ctx.restore();
+}
+function drawFlit(c){
+  const p = project(c.gx, c.gy);
+  const cy = p.y - 12 - Math.sin(c.phase*0.6)*3;
+  const w = Math.abs(Math.sin(c.phase))*2.6 + 0.6;   // wingbeat
+  ctx.save();
+  ctx.fillStyle = c.hue;
+  ctx.beginPath(); ctx.ellipse(p.x-w*0.5, cy, w, 1.9, 0.4, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(p.x+w*0.5, cy, w, 1.9, -0.4, 0, 7); ctx.fill();
   ctx.restore();
 }
 function drawBird(c){
@@ -890,7 +999,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.68.0';
+const GAME_VERSION = '1.69.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -1589,7 +1698,10 @@ function maybeSwitchTrade(v){
     const p = cand.raw / (cand.workers + 1);
     if(p > pickPressure){ pick = cand; pickPressure = p; }
   }
-  if(!pick || pickPressure < 0.4) return false;
+  // Floor only exists to stop churn when nothing much is needed; the ratio test
+  // below is what decides "clearly stronger". Set too high (0.4) it vetoed real
+  // imbalances — a trade pulling 2.25x harder than the one being left.
+  if(!pick || pickPressure < 0.2) return false;
   // A trade in surplus frees you outright; otherwise the pull has to be clearly
   // stronger, since switching costs a walk across the hold.
   const worthIt = minePressure <= 0.05 ? true : pickPressure > minePressure * 1.8;
@@ -2970,6 +3082,9 @@ function update(rawDt){
   if(newSeason !== prevSeason){
     const icons = ['🌱','☀️','🍂','❄️'];
     toast(icons[newSeason]+' '+SEASON_NAMES[newSeason]+' has begun.');
+    // Re-seed the wilds: game thins for winter, butterflies come with the warm
+    // months, fish return once the river runs again.
+    try { spawnWildlife(); } catch(e){}
     chron('season', SEASON_NAMES[newSeason]);
     if(newSeason===3){ toast('🧊 The river freezes solid — anything can cross the ice, and the moat is gone.', true); }
     if(prevSeason===3){ window._frozenFisherToast=false; toast('💧 The thaw — the river runs (and guards it) again.'); }
@@ -5177,7 +5292,8 @@ function render(){
     list.push({depth:r.gx+r.gy+0.35, draw:()=>{ try{ drawRaider(r); }catch(e){} }});
   }
   for(const cr of critters){
-    if(cr.kind==='deer') list.push({depth:cr.gx+cr.gy+0.28, draw:()=>{ try{ drawDeer(cr); }catch(e){} }});
+    const drawer = { deer:drawDeer, boar:drawBoar, rabbit:drawRabbit, fish:drawFish }[cr.kind];
+    if(drawer) list.push({depth:cr.gx+cr.gy+0.28, draw:()=>{ try{ drawer(cr); }catch(e){} }});
   }
   for(const m of memorials){
     list.push({depth:m.gx+m.gy+0.05, draw:()=>{ try{ drawMemorial(m); }catch(e){} }});
@@ -5191,7 +5307,11 @@ function render(){
   for(const item of list) item.draw();
 
   // Birds fly above the whole scene.
-  for(const cr of critters){ if(cr.kind==='bird'){ try{ drawBird(cr); }catch(e){} } }
+  // Birds and butterflies fly above the scene rather than sorting into it.
+  for(const cr of critters){
+    if(cr.kind==='bird'){ try{ drawBird(cr); }catch(e){} }
+    else if(cr.kind==='flit'){ try{ drawFlit(cr); }catch(e){} }
+  }
 
   try { renderDustFX(1/60); } catch(e){}
   try { renderBoomFX(1/60); } catch(e){}
