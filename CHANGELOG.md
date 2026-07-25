@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.63.0
+Under the hood: the game is now built rather than hand-assembled. Its code moved
+out of the web page into a proper TypeScript project with a real build step, and
+ships as a compiled bundle — 82KB over the wire, where the whole thing once
+weighed 15MB. Nothing about playing it changes, but it means faster loading, and
+it is the groundwork for releasing Oakenfall as an actual app on phones.
+
 ## 1.62.0
 A tidier HUD and an honest minimap. Your stores now have a expand button: leave
 it collapsed for a compact row, or open it to see every store at once instead of

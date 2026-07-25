@@ -1,4 +1,9 @@
 [build]
-  command = "node site/build.js"
+  command = "npm run build"
   publish = "_site"
   functions = "netlify/functions"
+
+[build.environment]
+  # Playwright is a devDependency for the local smoke test only; without this its
+  # postinstall downloads ~1GB of browsers during every deploy.
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1"
