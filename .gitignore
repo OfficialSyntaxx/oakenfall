@@ -19,3 +19,6 @@ ios/App/Pods/
 ios/App/build/
 ios/App/DerivedData/
 ios/App/output/
+
+# Generated art waiting to be imported by tools/import-sprites.mjs
+drop/
