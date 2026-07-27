@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.74.0
+The Steward's Word listens properly. One sentence can now carry several orders
+— "build 2 farms and put 3 to farming" is two instructions, not one misread —
+and the hold understands more of them: tear down a building, mend what's worn,
+take up a study, or simply ask how much stone you're holding and get an answer
+instead of a shrug. Trades can be staffed even when nobody is idle: hands come
+from whichever trade has most to spare, never leaving one empty. Workplaces are
+sited where their work is, so a forestry camp goes to the treeline and a mining
+post to the rock rather than the first free patch by the gate. An order that
+can't proceed steps aside for the next one instead of blocking the queue, and
+every standing order can be cancelled on its own.
+
 ## 1.73.0
 Four holds, not one. The title screen now keeps four saved holds side by side —
 each named, each showing the day it reached and how many settlers live there,
