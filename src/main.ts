@@ -443,7 +443,8 @@ window.__oakDebug = function(){
   for(const v of villagers) roles[v.role] = (roles[v.role]||0) + 1;
   return {
     version: GAME_VERSION,
-    day: dayCount, season: seasonName(), weather: weather.type,
+    day: dayCount, time: Math.round(worldTime*100)/100, editing: editorOn,
+    season: seasonName(), weather: weather.type,
     villagers: villagers.length, roles,
     buildings: buildings.filter(b=>b.type!=='road').map(b=>b.type),
     stockpile: Object.assign({}, stockpile),
@@ -1070,7 +1071,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.71.0';
+const GAME_VERSION = '1.72.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -6693,6 +6694,15 @@ buildFab.addEventListener('click', ()=>{
 ========================================================================= */
 let touchState = { mode:null, startX:0, startY:0, startPanX:0, startPanY:0, startDist:0, startScale:1, lastMidX:0, lastMidY:0, moved:false, startTime:0 };
 
+/* Paint from a screen point. In the editor one finger paints; two fingers still
+   pinch/pan, so the map stays navigable while you work. */
+function paintScreen(sx, sy){
+  const wp = screenToWorldPixel(sx, sy);
+  const g = inProject(wp.x, wp.y);
+  paintAt(g.gx, g.gy);
+  if(editBrush==='tc') editorTitle();
+}
+
 function getTouchDist(t0,t1){ return Math.hypot(t1.clientX-t0.clientX, t1.clientY-t0.clientY); }
 function getTouchMid(t0,t1){ return {x:(t0.clientX+t1.clientX)/2, y:(t0.clientY+t1.clientY)/2}; }
 
@@ -6705,6 +6715,7 @@ canvas.addEventListener('touchstart', (e)=>{
     touchState.startX=t.clientX; touchState.startY=t.clientY;
     touchState.startPanX=camera.panX; touchState.startPanY=camera.panY;
     touchState.moved=false; touchState.startTime=performance.now();
+    if(editorOn){ touchState.mode='paint'; paintScreen(t.clientX, t.clientY); }
   } else if(e.touches.length>=2){
     const mid = getTouchMid(e.touches[0], e.touches[1]);
     touchState.mode='pinch';
@@ -6723,6 +6734,10 @@ canvas.addEventListener('touchstart', (e)=>{
 
 canvas.addEventListener('touchmove', (e)=>{
   e.preventDefault();
+  if(touchState.mode==='paint' && e.touches.length===1){
+    paintScreen(e.touches[0].clientX, e.touches[0].clientY);
+    return;
+  }
   if(touchState.mode==='pan' && e.touches.length===1){
     const t = e.touches[0];
     const dx = t.clientX-touchState.startX, dy = t.clientY-touchState.startY;
@@ -6786,15 +6801,19 @@ canvas.addEventListener('touchend', (e)=>{
     touchState.moved=true;
   }
 }, {passive:false});
+canvas.addEventListener('touchend', ()=>{ if(editorOn) drawMinimap(); }, {passive:true});
 canvas.addEventListener('touchcancel', ()=>{ touchState.mode=null; }, {passive:false});
 
 // Mouse fallback (desktop testing convenience)
 let mouseDown=false, mouseMoved=false, mouseStart={x:0,y:0}, mouseStartPan={x:0,y:0}, mouseStartTime=0;
 canvas.addEventListener('mousedown', (e)=>{
+  if(editorOn && e.button===0){ mouseDown=false; editPaintDrag=true; paintScreen(e.clientX, e.clientY); return; }
   mouseDown=true; mouseMoved=false; mouseStart={x:e.clientX,y:e.clientY};
   mouseStartPan={x:camera.panX,y:camera.panY}; mouseStartTime=performance.now(); camGlide.active=false;
 });
+let editPaintDrag = false;
 window.addEventListener('mousemove', (e)=>{
+  if(editPaintDrag){ paintScreen(e.clientX, e.clientY); return; }
   if(!mouseDown) return;
   const dx=e.clientX-mouseStart.x, dy=e.clientY-mouseStart.y;
   if(Math.hypot(dx,dy)>6) mouseMoved=true;
@@ -6802,6 +6821,7 @@ window.addEventListener('mousemove', (e)=>{
   clampCamera();
 });
 window.addEventListener('mouseup', (e)=>{
+  if(editPaintDrag){ editPaintDrag = false; drawMinimap(); return; }
   if(!mouseDown) return;
   mouseDown=false;
   if(!mouseMoved && performance.now()-mouseStartTime<400){ handleTap(e.clientX, e.clientY); }
@@ -6922,10 +6942,12 @@ function loop(now){
         clampCamera();
         if(Math.hypot(camGlide.x - camera.panX, camGlide.y - camera.panY) < 0.5) camGlide.active = false;
       }
-      update(dt);
-      updateHud();
-      mmTimer -= dt;
-      if(mmTimer<=0){ drawMinimap(); mmTimer=2; }
+      if(!editorOn){
+        update(dt);
+        updateHud();
+        mmTimer -= dt;
+        if(mmTimer<=0){ drawMinimap(); mmTimer=2; }
+      }
     }
     render();
     _frameErrorCount = 0; // reset streak on any successful frame
@@ -7207,6 +7229,222 @@ document.querySelectorAll('.diff-opts').forEach(group=>{
   });
 });
 
+
+/* =========================================================================
+   LAND EDITOR — paint your own ground, set where the hold begins, and play it.
+   Shares a compact code rather than a server: the map is RLE'd into base64url,
+   so a land travels as a string you can paste to a friend.
+========================================================================= */
+let editorOn = false, editBrush = 'grass', editSize = 2;
+
+const EDIT_BRUSHES = [
+  { id:'grass',  ic:'🟩', label:'Grass' },
+  { id:'forest', ic:'🌲', label:'Forest' },
+  { id:'stone',  ic:'🪨', label:'Stone' },
+  { id:'water',  ic:'💧', label:'Water' },
+  { id:'wilds',  ic:'🌿', label:'Wilds' },
+  { id:'dirt',   ic:'🟫', label:'Dirt' },
+  { id:'tc',     ic:'🏛️', label:'Hold' },
+];
+const TCODE   = { grass:0, dirt:1, forest:2, stone:3, water:4 };
+const TCODE_R = ['grass','dirt','forest','stone','water'];
+
+/* Give a painted tile the resource values the simulation expects, so a hand-made
+   land plays exactly like a generated one. */
+function applyBrushTo(t, brush){
+  if(!t || t.building) return;
+  t.wilds = false; t.ford = false;
+  t.maxResource = 0; t.resourceAmount = 0; t.regrowAt = 0; t.workers = 0;
+  if(brush==='wilds'){
+    t.type = 'grass'; t.wilds = true;
+    t.maxResource = 3+Math.floor(Math.random()*3); t.resourceAmount = t.maxResource;
+  } else if(brush==='forest'){
+    t.type = 'forest';
+    t.maxResource = 4+Math.floor(Math.random()*4); t.resourceAmount = t.maxResource; t.baseMax = t.maxResource;
+  } else if(brush==='stone'){
+    t.type = 'stone';
+    t.maxResource = 5+Math.floor(Math.random()*5); t.resourceAmount = t.maxResource;
+  } else if(brush==='water'){
+    t.type = 'water';
+    t.maxResource = 4+Math.floor(Math.random()*4); t.resourceAmount = t.maxResource;
+  } else {
+    t.type = brush;   // grass | dirt
+  }
+}
+function paintAt(gx, gy){
+  gx = Math.round(gx); gy = Math.round(gy);
+  if(editBrush==='tc'){
+    // The hold needs a 2x2 of clear ground, and room to breathe around it.
+    const x = clamp(gx, 1, MAP_SIZE-3), y = clamp(gy, 1, MAP_SIZE-3);
+    TC_X = x; TC_Y = y; TC_CX = x+0.5; TC_CY = y+0.5;
+    for(let yy=y-1; yy<=y+2; yy++) for(let xx=x-1; xx<=x+2; xx++){
+      const t = tileAt(xx,yy); if(t){ applyBrushTo(t, (yy>=y&&yy<y+2&&xx>=x&&xx<x+2) ? 'dirt' : 'grass'); }
+    }
+    return;
+  }
+  const r = editSize-1;
+  for(let dy=-r; dy<=r; dy++) for(let dx=-r; dx<=r; dx++){
+    if(Math.abs(dx)+Math.abs(dy) > r) continue;   // round-ish brush
+    applyBrushTo(tileAt(gx+dx, gy+dy), editBrush);
+  }
+}
+
+/* ── SHARE CODES ── RLE over tile codes, then base64url. Built with a loop, not
+   String.fromCharCode(...bytes) — spreading a big array blows the stack. */
+function encodeLand(){
+  const runs = [];
+  let prev = -1, run = 0;
+  const flush = ()=>{ while(run>0){ const n = Math.min(run,255); runs.push(prev, n); run -= n; } };
+  for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<MAP_SIZE;x++){
+    const t = grid[y][x];
+    const c = t.wilds ? 5 : (TCODE[t.type] !== undefined ? TCODE[t.type] : 0);
+    if(c===prev) run++; else { flush(); prev = c; run = 1; }
+  }
+  flush();
+  const bytes = [MAP_SIZE, TC_X, TC_Y].concat(runs);
+  let bin = '';
+  for(const b of bytes) bin += String.fromCharCode(b & 255);
+  return 'OAK1' + btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function decodeLand(code){
+  try{
+    const raw = String(code||'').trim();
+    if(!raw.startsWith('OAK1')) return false;
+    const b64 = raw.slice(4).replace(/-/g,'+').replace(/_/g,'/');
+    const bin = atob(b64);
+    const bytes = []; for(let i=0;i<bin.length;i++) bytes.push(bin.charCodeAt(i));
+    const size = bytes[0], tx = bytes[1], ty = bytes[2];
+    if(!size || size<12 || size>80) return false;
+    MAP_SIZE = size; TC_X = tx; TC_Y = ty; TC_CX = tx+0.5; TC_CY = ty+0.5;
+    grid = []; forestTiles=[]; stoneTiles=[]; waterTiles=[]; wildsTiles=[];
+    for(let y=0;y<MAP_SIZE;y++){
+      const row = [];
+      for(let x=0;x<MAP_SIZE;x++) row.push({ gx:x, gy:y, type:'grass', resourceAmount:0, maxResource:0, workers:0, regrowAt:0, building:null, wilds:false });
+      grid.push(row);
+    }
+    let i = 3, idx = 0;
+    while(i+1 < bytes.length && idx < MAP_SIZE*MAP_SIZE){
+      const code2 = bytes[i], n = bytes[i+1]; i += 2;
+      for(let k=0;k<n && idx<MAP_SIZE*MAP_SIZE;k++,idx++){
+        const t = grid[(idx/MAP_SIZE)|0][idx%MAP_SIZE];
+        applyBrushTo(t, code2===5 ? 'wilds' : (TCODE_R[code2]||'grass'));
+      }
+    }
+    return true;
+  }catch(e){ return false; }
+}
+/* Rebuild the lookup lists the simulation walks every tick. */
+function reindexTiles(){
+  forestTiles=[]; stoneTiles=[]; waterTiles=[]; wildsTiles=[];
+  for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<MAP_SIZE;x++){
+    const t = grid[y][x];
+    if(t.type==='forest') forestTiles.push(t);
+    else if(t.type==='stone') stoneTiles.push(t);
+    else if(t.type==='water') waterTiles.push(t);
+    if(t.wilds) wildsTiles.push(t);
+  }
+}
+
+/* ── EDITOR LIFECYCLE ── */
+function blankLand(){
+  grid = [];
+  for(let y=0;y<MAP_SIZE;y++){
+    const row = [];
+    for(let x=0;x<MAP_SIZE;x++) row.push({ gx:x, gy:y, type:'grass', resourceAmount:0, maxResource:0, workers:0, regrowAt:0, building:null, wilds:false });
+    grid.push(row);
+  }
+  const c = Math.floor(MAP_SIZE/2)-1;
+  TC_X = c; TC_Y = c; TC_CX = c+0.5; TC_CY = c+0.5;
+  reindexTiles();
+}
+function editorTitle(){
+  const el = document.getElementById('editor-title');
+  if(el) el.textContent = `Land Editor · ${MAP_SIZE}² · hold ${TC_X},${TC_Y}`;
+}
+function centreOnHold(){
+  const c = project(TC_CX, TC_CY);
+  camera.panX = -c.x*camera.scale;
+  camera.panY = -c.y*camera.scale + 40;
+  clampCamera();
+}
+function enterEditor(){
+  resizeCanvas();
+  resetHoldState();      // clears state and reads MAP_SIZE from the size picker
+  blankLand();
+  editorOn = true;
+  document.body.classList.add('editing');
+  document.getElementById('editor-ui').classList.remove('hidden');
+  document.getElementById('title-overlay').classList.add('hidden');
+  preloadSprites(); buildAtlas(); loadTerrainStamps(); loadDecor();
+  initCameraZoom();
+  camera.scale = ZOOM_MIN;   // start on an overview — you paint the whole land, not one corner
+  centreOnHold();
+  // The brush panel owns the bottom of the screen — lift the land into what's left.
+  camera.panY -= cssH*0.14; clampCamera();
+  editorTitle();
+  started = true;
+  requestAnimationFrame(loop);
+}
+function exitEditor(){
+  // A hard reload is the honest reset: half-built editor state has no business
+  // leaking into a real hold.
+  location.reload();
+}
+function playLand(){
+  reindexTiles();
+  if(!tileAt(TC_X, TC_Y)){ toast('Place the hold somewhere on the land first.', true); return; }
+  editorOn = false;
+  document.body.classList.remove('editing');
+  document.getElementById('editor-ui').classList.add('hidden');
+  started = false;
+  landId = 'custom';
+  addBuilding('townCenter', TC_X, TC_Y);
+  for(let i=0;i<3;i++) spawnVillager();
+  chron('founding');
+  finishBoot();
+}
+
+/* ── EDITOR UI ── */
+(function bindEditor(){
+  const brushWrap = document.getElementById('editor-brushes');
+  if(!brushWrap) return;
+  brushWrap.innerHTML = EDIT_BRUSHES.map(b=>
+    `<button data-brush="${b.id}"${b.id===editBrush?' class="sel"':''}><span class="bi">${b.ic}</span>${b.label}</button>`).join('');
+  brushWrap.addEventListener('click', (e)=>{
+    const btn = e.target.closest('button[data-brush]'); if(!btn) return;
+    editBrush = btn.dataset.brush;
+    brushWrap.querySelectorAll('button').forEach(b=>b.classList.remove('sel'));
+    btn.classList.add('sel');
+  });
+  document.querySelectorAll('[data-esize]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      editSize = parseInt(btn.dataset.esize,10)||1;
+      document.querySelectorAll('[data-esize]').forEach(b=>b.classList.remove('sel'));
+      btn.classList.add('sel');
+    });
+  });
+  document.getElementById('editor-btn').addEventListener('click', enterEditor);
+  document.getElementById('editor-exit').addEventListener('click', exitEditor);
+  document.getElementById('editor-clear').addEventListener('click', ()=>{ blankLand(); editorTitle(); drawMinimap(); });
+  document.getElementById('editor-play').addEventListener('click', playLand);
+  document.getElementById('editor-share').addEventListener('click', ()=>{
+    const code = encodeLand();
+    document.getElementById('editor-code').value = code;
+    // writeText REJECTS rather than throws when the clipboard is denied, so the
+    // fallback has to hang off the promise or it never runs.
+    const fallback = ()=>{ const el = document.getElementById('editor-code'); el.focus(); el.select(); toast('Land code ready — copy it from the box.'); };
+    try{
+      const p = navigator.clipboard && navigator.clipboard.writeText(code);
+      if(p && p.then) p.then(()=>toast('Land code copied.'), fallback); else fallback();
+    }catch(e){ fallback(); }
+  });
+  document.getElementById('editor-load').addEventListener('click', ()=>{
+    const code = document.getElementById('editor-code').value;
+    if(decodeLand(code)){ reindexTiles(); initCameraZoom(); centreOnHold(); editorTitle(); drawMinimap(); toast('Land loaded.'); }
+    else toast('That land code could not be read.', true);
+  });
+})();
+
 function finishBoot(){
   preloadSprites();
   buildAtlas();
@@ -7229,8 +7467,9 @@ function finishBoot(){
   started = true;
   requestAnimationFrame(loop);
 }
-function startNewGame(){
-  resizeCanvas();
+/* Everything a fresh hold clears, minus the map generation itself — the land
+   editor reuses this so a hand-painted map starts from the same clean slate. */
+function resetHoldState(){
   // Read the player's hold identity from the start screen
   const nameEl = document.getElementById('hold-name-input');
   holdName = ((nameEl && nameEl.value) || '').trim().slice(0,22) || 'Oakenfall';
@@ -7247,6 +7486,10 @@ function startNewGame(){
   researched={}; activeResearch=null; currentTierIdx=0; weather={type:'clear',label:'Clear',ic:'☀️'};
   coins=0; bannerIdx=crestChoice; onboardDone=false; decrees={curfew:false,tithe:false,openGates:false,rationing:false}; decisionTimer=3.2; _lastDecision=''; ledger={in:{bounties:0,deeds:0,routes:0,quests:0,tithe:0},out:{shop:0}}; rollDailyBounties();
   applyDifficulty(readDifficultyConfig());
+}
+function startNewGame(){
+  resizeCanvas();
+  resetHoldState();
   genMap(landId);
   addBuilding('townCenter', TC_X, TC_Y);
   for(let i=0;i<3;i++) spawnVillager();

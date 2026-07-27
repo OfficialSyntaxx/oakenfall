@@ -587,6 +587,73 @@
     </div>
     <button id="begin-btn" class="display">Begin a New Hold</button>
     <button id="continue-btn" class="display hidden">Continue Your Hold</button>
+    <button id="editor-btn" class="display ghost">🎨 Design a Land</button>
+  </div>
+</div>
+
+<style>
+#editor-btn.ghost{ background:linear-gradient(180deg,#3a3021,#2a2317); border-color:#5a4a30; }
+body.editing #hud-top, body.editing #hud-right, body.editing #clock,
+body.editing #build-fab, body.editing #sheet-wrap, body.editing #onboard-ribbon,
+body.editing #steward-status{ display:none !important; }
+body.editing #minimap-wrap{ display:none !important; }
+#editor-ui{ position:fixed; inset:0; pointer-events:none; z-index:60; font-family:inherit; }
+#editor-ui.hidden{ display:none; }
+#editor-top{
+  position:absolute; top:calc(env(safe-area-inset-top,0px) + 8px); left:8px; right:8px;
+  display:flex; gap:8px; align-items:center; pointer-events:auto;
+}
+#editor-top .etitle{
+  flex:1; text-align:center; font-size:13px; letter-spacing:0.06em; text-transform:uppercase;
+  color:var(--parchment-dim); background:rgba(20,16,10,0.82); border:1px solid #4a3d28;
+  border-radius:10px; padding:8px 10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+#editor-bottom{
+  position:absolute; left:8px; right:8px; bottom:calc(env(safe-area-inset-bottom,0px) + 8px);
+  background:rgba(20,16,10,0.92); border:1px solid #4a3d28; border-radius:14px;
+  padding:8px; pointer-events:auto; display:flex; flex-direction:column; gap:8px;
+  max-height:46vh; overflow:auto;
+}
+#editor-brushes{ display:flex; gap:6px; flex-wrap:wrap; }
+#editor-ui button{
+  min-height:44px; min-width:44px; border-radius:10px; cursor:pointer;
+  background:linear-gradient(180deg,#332b1d,#241e14); border:1px solid #4a3d28;
+  color:var(--parchment); font-size:13px; padding:6px 10px; font-family:inherit;
+}
+#editor-ui button.sel{ background:linear-gradient(180deg,#6a5326,#4a3a1a); border-color:#c69b3f; color:#fff5dc; }
+#editor-brushes button{ display:flex; flex-direction:column; align-items:center; gap:2px; font-size:10.5px; line-height:1; }
+#editor-brushes button .bi{ font-size:17px; }
+.editor-row{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.editor-row .lbl{ font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--parchment-dim); }
+#editor-code{
+  flex:1; min-width:120px; min-height:40px; background:#15110a; border:1px solid #4a3d28;
+  border-radius:8px; color:var(--parchment); padding:8px; font-size:12px; font-family:monospace;
+}
+#editor-play{ background:linear-gradient(180deg,#7a5e22,#54401a) !important; border-color:#c69b3f !important; font-weight:bold; flex:1; }
+@media (orientation:landscape) and (max-height:560px){
+  #editor-bottom{ left:auto; width:min(360px,46vw); max-height:76vh; }
+}
+</style>
+
+<div id="editor-ui" class="hidden">
+  <div id="editor-top">
+    <button id="editor-exit" title="Leave the editor">✕</button>
+    <div class="etitle" id="editor-title">Land Editor</div>
+    <button id="editor-clear" title="Clear the land">🧹</button>
+  </div>
+  <div id="editor-bottom">
+    <div id="editor-brushes"></div>
+    <div class="editor-row">
+      <span class="lbl">Brush</span>
+      <button data-esize="1">•</button><button data-esize="2" class="sel">••</button>
+      <button data-esize="4">•••</button><button data-esize="6">••••</button>
+    </div>
+    <div class="editor-row">
+      <input id="editor-code" placeholder="Paste a land code…" spellcheck="false" autocomplete="off">
+      <button id="editor-load" title="Load a pasted land">📥</button>
+      <button id="editor-share" title="Copy this land's code">🔗</button>
+    </div>
+    <div class="editor-row"><button id="editor-play">▶ Play this land</button></div>
   </div>
 </div>
 

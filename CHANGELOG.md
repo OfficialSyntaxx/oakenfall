@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.72.0
+Make your own land. A new Design a Land option on the title screen opens a
+painter's view of empty ground: lay down grass, forest, stone, water, wilds and
+bare dirt with four brush sizes, then set where the hold itself begins. When it
+looks right, play it — settlers arrive on ground you shaped, and everything
+else works exactly as it does on a generated map. Lands travel as a short code
+you can copy and hand to a friend, who pastes it in and plays the same ground.
+
 ## 1.71.0
 Choose your land, and choose your ending. New holds now pick the ground they
 settle: a balanced River Valley, the timber-rich Forest Vale, stony Highlands
