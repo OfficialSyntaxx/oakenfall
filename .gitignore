@@ -20,5 +20,7 @@ ios/App/build/
 ios/App/DerivedData/
 ios/App/output/
 
-# Generated art waiting to be imported by tools/import-sprites.mjs
+# Scratch folder for generated art. NOTE: use incoming/ (tracked) when the art
+# has to travel through git — an ignored folder can't be `git add`ed, which
+# silently swallowed a whole asset batch once.
 drop/

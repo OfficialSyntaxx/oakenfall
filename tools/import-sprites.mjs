@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /* Turn freshly generated art into game-ready sprites.
  *
- * Drop PNGs into ./drop named after the thing they are (forestCamp.png,
+ * Drop PNGs into ./incoming named after the thing they are (forestCamp.png,
  * deer.png, stump.png) and run this. For each one it:
  *   1. knocks out the flat background the generator was asked for,
  *   2. trims to the opaque bounding box,
@@ -22,7 +22,7 @@ import path from 'node:path';
 import { chromium } from 'playwright';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
-const DROP = path.join(ROOT, process.argv[2] || 'drop');
+const DROP = path.join(ROOT, process.argv[2] || 'incoming');
 const KIND = process.argv[3] || 'sprites';     // sprites | decor
 const OUT = path.join(ROOT, 'public', 'assets', KIND);
 const MAX = 256;                                // sprites are drawn at ~80px wide
