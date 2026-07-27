@@ -22,7 +22,10 @@ modules, (3) Capacitor wrap + native storage.
   went 15.3MB → ~395KB.
 - **Step 2 in progress** — `index.html` is now a shell; code lives in `src/`,
   built by Vite (`npm run build` = `vite build && node site/build.js`).
-  Extracted so far: `src/math.ts` (typed), `src/assets.ts`, `src/defs.ts`.
+  Extracted so far: `src/math.ts` (typed), `src/assets.ts`, `src/defs.ts`,
+  `src/isokit.ts` (typed — the hand-drawn iso primitives, colour and shadow
+  helpers; takes the canvas via `initIsoKit(ctx)` and its clock via
+  `setKitTime(worldTime)` once per frame).
   `src/main.ts` still holds the rest under `@ts-nocheck`; split further with
   `tools/split-module.mjs`, verifying with `npm run smoke` after each move.
   Only lift declarations that are genuinely self-contained — anything closing
@@ -108,6 +111,16 @@ modules, (3) Capacitor wrap + native storage.
 - Splitting a function out of `main.ts` by brace-balancing must skip the
   parameter list: `function f(a,b){…}` closes to depth 0 at `)` before the body
   opens, which silently decapitates it (see `tools/split-module.mjs`).
+- Cutting a function out by matching `\nfunction name(` … `\n}\n` must put the
+  newline back. Splicing `s[:i] + s[j+3:]` consumes the separator, so the NEXT
+  function no longer starts at a line break and the following cut silently
+  deletes it too — functions disappear in pairs. Verify counts after any bulk
+  extraction.
+- Extracted drawing code can't reach `ctx`, `worldTime` or the sun angle. Push
+  them in (`initIsoKit`, `setKitTime`, `setSunShadow`) rather than re-exporting
+  mutable state — ES module bindings are read-only to importers, so a module
+  that wants to *assign* to shared state can't simply import it. This is the
+  reason the remaining split is blocked on state design, not on effort.
 
 ## Workflow preferences (from the project owner, Syntaxx)
 - Outline architecture before large code dumps; approve roadmap before big

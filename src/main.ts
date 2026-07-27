@@ -12,6 +12,12 @@
 import { LANDS, BUILD_DEFS, ROLE_DEFS, TECH_TREE, HOLD_TIERS, SEASON_NAMES, WEATHER_TABLE, MM_COLORS, VILLAGER_TINTS, RAIDER_VARIANTS, NUM_WORDS, UNLOCK_SKUS, GAME_MODES } from './defs';
 
 import { TILE_W, TILE_H, clamp, lerp, dist2, hash2, hashStr, project, inProject, fmt } from './math';
+import {
+  initIsoKit, setKitTime, setSunShadow,
+  shade, shadeColor, tileDiamond, roundRect,
+  isoBox, isoRoof, plankLines, stoneCourses,
+  glowWindow, doorArch, chimneySmoke, drawShadow, tintedFrame,
+} from './isokit';
 
 import { SPRITE_URLS, VANIM_B64, DECOR_B64, TERRAIN_B64, AUDIO_B64, MUSIC_URLS } from './assets';
 
@@ -2816,15 +2822,13 @@ function darknessFactor(){
   return 0.72; // night
 }
 // Sun-driven shadow shear: long shadows leaning at dawn/dusk, tight at noon
-let _shadowShear = 0, _shadowStretch = 1;
 function updateSunShadows(){
   const f = dayPhaseFrac(), dayFrac = DAY_LEN/CYCLE_LEN;
   if(f < dayFrac){
     const df = f/dayFrac;                 // 0..1 across the day
     const sun = (df-0.5)*2;               // -1 sunrise … +1 sunset
-    _shadowShear = -sun * 1.6;            // lean away from the sun
-    _shadowStretch = 1 + Math.abs(sun)*1.3; // long at dawn/dusk
-  } else { _shadowShear = 0; _shadowStretch = 1; }
+    setSunShadow(-sun * 1.6, 1 + Math.abs(sun)*1.3); // lean away, long at dawn/dusk
+  } else { setSunShadow(0, 1); }
 }
 function isNight(){
   const t = worldTime % CYCLE_LEN;
@@ -3619,6 +3623,7 @@ function update(rawDt){
 ========================================================================= */
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+initIsoKit(ctx);   // the iso drawing kit shares this one context
 
 let canvasDPR = 1;
 let _resizePending = false;
@@ -3712,14 +3717,6 @@ function visibleTileRange(){
   };
 }
 
-function tileDiamond(cx,cy,w,h){
-  ctx.beginPath();
-  ctx.moveTo(cx, cy-h/2);
-  ctx.lineTo(cx+w/2, cy);
-  ctx.lineTo(cx, cy+h/2);
-  ctx.lineTo(cx-w/2, cy);
-  ctx.closePath();
-}
 
 
 
@@ -4097,18 +4094,6 @@ function drawTerrain(range){
     }
   }
 }
-function drawShadow(cx,cy,r){
-  r = Math.abs(r);
-  if(r < 0.5) return;
-  ctx.save();
-  ctx.translate(cx, cy+2);
-  ctx.transform(1, 0, _shadowShear*0.35, 1, 0, 0); // shear toward sun-away side
-  ctx.fillStyle='rgba(0,0,0,0.32)';
-  ctx.beginPath();
-  ctx.ellipse(_shadowShear*r*0.5, 0, r*_shadowStretch*0.75 + r*0.25, r*0.42, 0, 0, Math.PI*2);
-  ctx.fill();
-  ctx.restore();
-}
 
 /* ── SPRITE ATLAS ── trees/rocks are the hottest draw path (100+ per frame).
    Pre-render variants once to offscreen canvases at 2x and blit — huge mobile win. */
@@ -4322,117 +4307,6 @@ function drawAnimal(gx,gy){
 
 /* ── ISO ART KIT ── shared helpers giving every building consistent
    three-face prism shading, wood/stone texture, and warm window glow. */
-function shade(hex, amt){ return shadeColor(hex, amt); }
-function isoBox(cx, baseY, w, d, hgt, col){
-  // A box standing on the iso ground: w = half-width along screen-x for the
-  // left face, d = half-width for the right face, hgt = wall height.
-  const topY = baseY - hgt;
-  // left face
-  ctx.fillStyle = shade(col, -0.16);
-  ctx.beginPath();
-  ctx.moveTo(cx - w, baseY - w*0.5);
-  ctx.lineTo(cx, baseY);
-  ctx.lineTo(cx, topY);
-  ctx.lineTo(cx - w, topY - w*0.5);
-  ctx.closePath(); ctx.fill();
-  // right face
-  ctx.fillStyle = shade(col, -0.34);
-  ctx.beginPath();
-  ctx.moveTo(cx + d, baseY - d*0.5);
-  ctx.lineTo(cx, baseY);
-  ctx.lineTo(cx, topY);
-  ctx.lineTo(cx + d, topY - d*0.5);
-  ctx.closePath(); ctx.fill();
-  // top
-  ctx.fillStyle = shade(col, 0.10);
-  ctx.beginPath();
-  ctx.moveTo(cx, topY);
-  ctx.lineTo(cx - w, topY - w*0.5);
-  ctx.lineTo(cx - w + d, topY - (w+d)*0.5);
-  ctx.lineTo(cx + d, topY - d*0.5);
-  ctx.closePath(); ctx.fill();
-  // crisp edge lines
-  ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 0.8;
-  ctx.beginPath(); ctx.moveTo(cx, baseY); ctx.lineTo(cx, topY); ctx.stroke();
-  return topY;
-}
-function isoRoof(cx, topY, w, d, rise, col){
-  // Gabled roof over an isoBox footprint; ridge runs left-face direction.
-  const peakY = topY - rise;
-  const eaveL = { x: cx - w*1.12, y: topY - w*0.56 };
-  const eaveR = { x: cx + d*1.12, y: topY - d*0.56 };
-  // near slope
-  ctx.fillStyle = shade(col, -0.05);
-  ctx.beginPath();
-  ctx.moveTo(eaveL.x, eaveL.y);
-  ctx.lineTo(cx - w*0.5, peakY - w*0.25);
-  ctx.lineTo(cx + d*0.62, peakY + d*0.02);
-  ctx.lineTo(cx + d*1.12, topY - d*0.56 + 2);
-  ctx.lineTo(cx, topY + 2);
-  ctx.closePath(); ctx.fill();
-  // far/right slope (darker)
-  ctx.fillStyle = shade(col, -0.32);
-  ctx.beginPath();
-  ctx.moveTo(cx + d*1.12, topY - d*0.56);
-  ctx.lineTo(cx + d*0.62, peakY + d*0.02);
-  ctx.lineTo(cx - w*0.5, peakY - w*0.25);
-  ctx.lineTo(cx - w*0.5 + 3, peakY - w*0.25 + 4);
-  ctx.closePath(); ctx.fill();
-  // ridge highlight
-  ctx.strokeStyle = 'rgba(255,235,200,0.10)'; ctx.lineWidth = 1.2;
-  ctx.beginPath(); ctx.moveTo(cx - w*0.5, peakY - w*0.25); ctx.lineTo(cx + d*0.62, peakY + d*0.02); ctx.stroke();
-  return peakY;
-}
-function plankLines(cx, baseY, w, hgt, side){
-  // Horizontal plank seams on one wall face. side: -1 left, +1 right.
-  ctx.strokeStyle = 'rgba(0,0,0,0.20)'; ctx.lineWidth = 0.7;
-  const rows = Math.max(2, Math.floor(hgt/7));
-  for(let i=1;i<rows;i++){
-    const y = baseY - (hgt*i/rows);
-    ctx.beginPath();
-    ctx.moveTo(cx, y);
-    ctx.lineTo(cx + side*w, y - w*0.5);
-    ctx.stroke();
-  }
-}
-function stoneCourses(cx, baseY, w, hgt, side){
-  ctx.strokeStyle = 'rgba(0,0,0,0.22)'; ctx.lineWidth = 0.7;
-  const rows = Math.max(2, Math.floor(hgt/8));
-  for(let i=1;i<rows;i++){
-    const y = baseY - (hgt*i/rows);
-    ctx.beginPath(); ctx.moveTo(cx, y); ctx.lineTo(cx + side*w, y - w*0.5); ctx.stroke();
-    // staggered vertical joints
-    const jx = cx + side*w*(i%2?0.35:0.65);
-    ctx.beginPath(); ctx.moveTo(jx, y - side>0? y : y); ctx.stroke();
-  }
-}
-function glowWindow(x, y, w2, h2, phase){
-  const g = 0.55 + Math.sin(worldTime*1.4 + (phase||0))*0.1;
-  ctx.fillStyle = `rgba(255,196,110,${g})`;
-  ctx.fillRect(x, y, w2, h2);
-  ctx.strokeStyle = 'rgba(20,12,4,0.8)'; ctx.lineWidth = 1;
-  ctx.strokeRect(x, y, w2, h2);
-  ctx.strokeStyle = 'rgba(20,12,4,0.5)'; ctx.lineWidth = 0.6;
-  ctx.beginPath(); ctx.moveTo(x+w2/2, y); ctx.lineTo(x+w2/2, y+h2); ctx.stroke();
-}
-function doorArch(cx, baseY, w2, hgt, col){
-  ctx.fillStyle = col || '#160e06';
-  ctx.beginPath();
-  ctx.moveTo(cx-w2/2, baseY);
-  ctx.lineTo(cx-w2/2, baseY-hgt+w2/2);
-  ctx.arc(cx, baseY-hgt+w2/2, w2/2, Math.PI, 0);
-  ctx.lineTo(cx+w2/2, baseY);
-  ctx.closePath(); ctx.fill();
-}
-function chimneySmoke(x, y){
-  ctx.fillStyle = 'rgba(200,200,205,0.16)';
-  for(let i=0;i<3;i++){
-    const t = (worldTime*0.5 + i*0.33) % 1;
-    ctx.beginPath();
-    ctx.arc(x + Math.sin(t*6+i)*4, y - t*22, 2.5 + t*3.5, 0, Math.PI*2);
-    ctx.fill();
-  }
-}
 
 function drawMemorial(m){
   const p = project(m.gx, m.gy);
@@ -5120,26 +4994,6 @@ function bubbleFor(v){
 // frame's own alpha mask so transparency and shading survive. Cached per
 // (frame,tint) — never allocated per draw.
 
-const _tintCache = new Map();
-function tintedFrame(img, tint){
-  if(!tint) return img;
-  const ck = (img.src||img._k||'') + '|' + tint;
-  let c = _tintCache.get(ck);
-  if(c) return c;
-  try {
-    c = document.createElement('canvas');
-    c.width = img.naturalWidth; c.height = img.naturalHeight;
-    const g = c.getContext('2d');
-    g.drawImage(img, 0, 0);
-    g.globalCompositeOperation = 'multiply';
-    g.fillStyle = tint;
-    g.fillRect(0, 0, c.width, c.height);
-    g.globalCompositeOperation = 'destination-in'; // re-mask to the sprite's alpha
-    g.drawImage(img, 0, 0);
-    _tintCache.set(ck, c);
-    return c;
-  } catch(e){ return img; }
-}
 function villagerTint(v){
   if(v._tint !== undefined) return v._tint;
   return (v._tint = VILLAGER_TINTS[hashStr((v.id||'')+'t') % VILLAGER_TINTS.length]);
@@ -5280,19 +5134,6 @@ function drawStatusBubble(v, bx, by){
   ctx.fillStyle=bg; ctx.fill();
   ctx.font='12px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
   ctx.fillText(bub.ic,bx,by-1);
-}
-function shadeColor(hex, amt){
-  const c = parseInt(hex.slice(1),16);
-  let r=(c>>16)&255, g=(c>>8)&255, b=c&255;
-  r = clamp(Math.round(r*(1+amt)),0,255);
-  g = clamp(Math.round(g*(1+amt)),0,255);
-  b = clamp(Math.round(b*(1+amt)),0,255);
-  return 'rgb('+r+','+g+','+b+')';
-}
-function roundRect(x,y,w,h,r){
-  ctx.beginPath();
-  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
-  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
 }
 
 function drawWorkerBadge(b){
@@ -5605,6 +5446,7 @@ function render(){
   // rebuilt on resize — allocating a gradient every frame is expensive.
   ctx.fillStyle = voidBackdrop();
   ctx.fillRect(0, 0, cssW, cssH);
+  setKitTime(worldTime);   // one clock push per frame, not one per sprite
 
   if(!grid.length) return; // map not yet generated
 
