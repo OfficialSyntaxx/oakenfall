@@ -1,3 +1,21 @@
 node_modules/
 _site/
 dist/
+
+# Capacitor: the native projects are committed (they hold manifests, icons and
+# signing config), but everything `cap sync` regenerates is not — the web
+# assets alone are 13MB per platform and are a build output.
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+ios/App/App/public/
+ios/App/App/capacitor.config.json
+ios/App/Pods/
+ios/App/build/
+ios/App/DerivedData/
+ios/App/output/

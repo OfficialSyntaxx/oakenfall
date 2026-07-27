@@ -30,7 +30,15 @@ modules, (3) Capacitor wrap + native storage.
   `tools/split-module.mjs`, verifying with `npm run smoke` after each move.
   Only lift declarations that are genuinely self-contained — anything closing
   over live game state (QUESTS, DECREE_DEFS) must wait for that state to move.
-- **Step 3 pending** — Capacitor.
+- **Step 3 DONE (scaffold)** — Capacitor wraps both platforms. `capacitor.config.ts`
+  points at `dist`; `npm run cap:sync` builds and copies; `npm run android` /
+  `npm run ios` open the native projects. The native projects ARE committed
+  (manifests, icons, signing live there) but everything `cap sync` regenerates
+  is gitignored — the copied web assets alone are 13MB per platform.
+  Saves go through `src/storage.ts`: host KV → Capacitor Preferences on native
+  → localStorage on web. Android's back button closes a sheet, leaves build
+  mode, then saves and exits. Building an IPA still needs Xcode on a Mac;
+  an APK needs the Android SDK.
 
 ## Verification
 - `npm run smoke` — builds, serves `_site`, boots the real game in Chromium at

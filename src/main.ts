@@ -18,6 +18,7 @@ import {
   isoBox, isoRoof, plankLines, stoneCourses,
   glowWindow, doorArch, chimneySmoke, drawShadow, tintedFrame,
 } from './isokit';
+import { installStorage, isNative } from './storage';
 
 import { SPRITE_URLS, VANIM_B64, DECOR_B64, TERRAIN_B64, AUDIO_B64, MUSIC_URLS } from './assets';
 
@@ -7117,15 +7118,28 @@ async function saveGame(){
     toast(res ? 'Hold saved.' : 'Save failed.', !res);
   } catch(e){ toast('Save failed.', true); }
 }
-// Storage fallback: the host normally provides window.storage (KV). On a
-// plain static deploy (e.g. the website) it doesn't exist — without this
-// polyfill every save/load silently failed there. localStorage-backed,
-// same {value} return shape as the host API.
-if(!window.storage){
-  window.storage = {
-    async set(key, val){ try{ localStorage.setItem(key, val); return true; }catch(e){ return false; } },
-    async get(key){ try{ const v = localStorage.getItem(key); return v===null ? null : { value:v }; }catch(e){ return null; } },
-  };
+// Storage: the host's KV if it provided one, Capacitor Preferences on a native
+// build, localStorage on the web. See src/storage.ts for why that order.
+installStorage();
+
+/* Native shell integration. Loaded only on a real device build — the web
+   bundle never imports these. */
+if(isNative()){
+  import('@capacitor/app').then(({ App })=>{
+    // Android's back button must mean "go back", not "throw away my hold".
+    App.addListener('backButton', ()=>{
+      if(document.body.classList.contains('sheet-open')){ closeSheet(); return; }
+      if(buildMode && buildMode.key){ exitBuildModeIfActive(); return; }
+      if(started){ saveGame(); }
+      App.exitApp();
+    });
+    // Backgrounding an app on a phone can mean it is never resumed.
+    App.addListener('pause', ()=>{ if(started) saveGame(); });
+  }).catch(()=>{});
+  import('@capacitor/status-bar').then(({ StatusBar, Style })=>{
+    StatusBar.setStyle({ style: Style.Dark }).catch(()=>{});
+    StatusBar.setBackgroundColor({ color:'#14120e' }).catch(()=>{});
+  }).catch(()=>{});
 }
 
 let _loadedSavedAt = 0;
