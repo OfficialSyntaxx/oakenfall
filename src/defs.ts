@@ -107,3 +107,35 @@ export const GAME_MODES = {
     wolfMul:1.2, banditsEnabled:true, decayMul:1, tradeMul:1.3, offlineOn:true, bountyCoinMul:2, festivalEvery:0, merchantOften:true,
   },
 };
+
+/* Lands — terrain generation presets. Each shapes what genMap lays down, so a
+   Highland start really is stone-rich and thin on timber, and the Marshes really
+   do make you fight for dry ground. Pure data: genMap reads these, they know
+   nothing about the running game. */
+export const LANDS = {
+  valley: {
+    name:'River Valley', ic:'🏞️',
+    desc:'A broad river through good soil. Balanced timber, stone and game — the classic hold.',
+    river:{ count:1, width:1, wind:2.4 }, forest:15, stone:7, wilds:6, fords:2,
+  },
+  forestvale: {
+    name:'Forest Vale', ic:'🌲',
+    desc:'Deep woods and plentiful game, but stone is scarce — you will trade for it or go without.',
+    river:{ count:1, width:1, wind:2.0 }, forest:30, stone:3, wilds:10, fords:2,
+  },
+  highland: {
+    name:'Highlands', ic:'⛰️',
+    desc:'Rock everywhere and thin soil. Stone is easy, timber is not, and streams are few.',
+    river:{ count:1, width:0, wind:1.4 }, forest:7, stone:18, wilds:5, fords:1,
+  },
+  marshes: {
+    name:'The Marshes', ic:'🪵',
+    desc:'Braided waterways cut the land apart. Fish are everywhere; dry ground to build on is not.',
+    river:{ count:3, width:1, wind:3.2 }, forest:12, stone:4, wilds:7, fords:4,
+  },
+  coastal: {
+    name:'Coastal Reach', ic:'🌊',
+    desc:'Open water along one shore, timber inland. Good fishing, and only one flank to watch.',
+    river:{ count:1, width:3, wind:0.8 }, forest:16, stone:6, wilds:6, fords:1,
+  },
+};
