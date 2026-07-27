@@ -19,8 +19,9 @@ import {
   glowWindow, doorArch, chimneySmoke, drawShadow, tintedFrame,
 } from './isokit';
 import { installStorage, isNative } from './storage';
+import { sfx, buzz, startMusic, stopMusic, isSfxOn, setSfxOn, isMusicOn, setMusicOn } from './audio';
 
-import { SPRITE_URLS, VANIM_B64, DECOR_B64, TERRAIN_B64, AUDIO_B64, MUSIC_URLS } from './assets';
+import { SPRITE_URLS, VANIM_B64, DECOR_B64, TERRAIN_B64 } from './assets';   // audio tables now belong to src/audio.ts
 
 
 (function(){
@@ -1243,91 +1244,6 @@ function renderFeedbackSheet(kind){
   });
 }
 
-/* ── SOUND ── real Kenney RPG Audio samples (CC0) as an upgrade layer over the
-   tiny procedural WebAudio synth below. Same philosophy as sprites: samples
-   are an upgrade, the synth fallback must keep working if one is missing or
-   playback fails (autoplay policy, decode error, etc). No network requests —
-   embedded as base64 data URIs. */
-// Asset URLs (files, not inlined base64) — bundled locally, cached by the
-// service worker, so offline play is unaffected. Procedural fallbacks still
-// cover a failed or slow load.
-
-const audioCache = {};
-function playSample(kind){
-  const src = AUDIO_B64[kind];
-  if(!src || !sfxOn) return false;
-  try {
-    let el = audioCache[kind];
-    if(!el){ el = new Audio(src); el.preload='auto'; audioCache[kind]=el; }
-    else { el.currentTime = 0; }
-    el.volume = 0.5;
-    const p = el.play();
-    if(p && p.catch) p.catch(()=>{}); // autoplay-policy rejection is fine — synth already covers this call
-    return true;
-  } catch(e){ return false; }
-}
-
-/* ── MUSIC ── optional ambient background loops; off by default (mobile-first
-   data weight), user opts in via the music toggle (satisfies the user-gesture
-   requirement for autoplay). Loops advance to the next track when one ends. */
-// Music now streams from separate files instead of ~12MB of inlined base64.
-// It is off by default, so inlining it made every player download audio they
-// might never hear. Files are bundled locally (and cached by the service
-// worker), so the game still works fully offline.
-
-const MUSIC_KEYS = Object.keys(MUSIC_URLS).filter(k=>MUSIC_URLS[k]);
-let musicOn = false, musicEl = null, musicIdx = 0;
-function playCurrentTrack(){
-  if(!musicOn || !musicEl || !MUSIC_KEYS.length) return;
-  try {
-    musicEl.src = MUSIC_URLS[MUSIC_KEYS[musicIdx]];
-    musicEl.volume = 0.35;
-    const p = musicEl.play();
-    if(p && p.catch) p.catch(()=>{});
-  } catch(e){}
-}
-function startMusic(){
-  if(!MUSIC_KEYS.length) return;
-  if(!musicEl){
-    musicEl = new Audio();
-    musicEl.preload = 'auto';
-    musicEl.addEventListener('ended', ()=>{ musicIdx = (musicIdx+1) % MUSIC_KEYS.length; playCurrentTrack(); });
-  }
-  playCurrentTrack();
-}
-function stopMusic(){ if(musicEl){ try{ musicEl.pause(); }catch(e){} } }
-
-/* ── SOUND ── tiny procedural WebAudio synth; no assets, unlocks on first touch.
-   Kept as the fallback for every kind, including ones with a sample above —
-   NEVER remove: samples are an upgrade layer, not a dependency. */
-let AC=null, sfxOn=true;
-function ac(){ if(!AC){ try{ AC=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(AC&&AC.state==='suspended') AC.resume(); return AC; }
-function sfx(kind){
-  if(!sfxOn) return;
-  if(AUDIO_B64[kind] && playSample(kind)) return;
-  const a=ac(); if(!a) return;
-  const t=a.currentTime;
-  const o=a.createOscillator(), g=a.createGain();
-  o.connect(g); g.connect(a.destination);
-  if(kind==='tap'){ o.type='triangle'; o.frequency.setValueAtTime(520,t); o.frequency.exponentialRampToValueAtTime(330,t+0.06); g.gain.setValueAtTime(0.08,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.09); o.start(t); o.stop(t+0.1); }
-  else if(kind==='build'){ o.type='square'; o.frequency.setValueAtTime(110,t); o.frequency.exponentialRampToValueAtTime(65,t+0.16); g.gain.setValueAtTime(0.14,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.22); o.start(t); o.stop(t+0.24);
-    const o2=a.createOscillator(),g2=a.createGain(); o2.connect(g2); g2.connect(a.destination); o2.type='triangle'; o2.frequency.setValueAtTime(880,t+0.04); g2.gain.setValueAtTime(0.05,t+0.04); g2.gain.exponentialRampToValueAtTime(0.001,t+0.14); o2.start(t+0.04); o2.stop(t+0.15); }
-  else if(kind==='coin'){ o.type='sine'; o.frequency.setValueAtTime(880,t); o.frequency.setValueAtTime(1320,t+0.07); g.gain.setValueAtTime(0.10,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.24); o.start(t); o.stop(t+0.26); }
-  else if(kind==='tier'){ [523,659,784,1047].forEach((f,i)=>{ const oo=a.createOscillator(),gg=a.createGain(); oo.connect(gg); gg.connect(a.destination); oo.type='triangle'; oo.frequency.setValueAtTime(f,t+i*0.09); gg.gain.setValueAtTime(0.09,t+i*0.09); gg.gain.exponentialRampToValueAtTime(0.001,t+i*0.09+0.22); oo.start(t+i*0.09); oo.stop(t+i*0.09+0.24); }); g.gain.setValueAtTime(0.0001,t); o.start(t); o.stop(t+0.01); }
-  else if(kind==='warn'){ o.type='sawtooth'; o.frequency.setValueAtTime(220,t); o.frequency.setValueAtTime(180,t+0.12); g.gain.setValueAtTime(0.07,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.28); o.start(t); o.stop(t+0.3); }
-  else if(kind==='repair'){ o.type='square'; o.frequency.setValueAtTime(660,t); o.frequency.setValueAtTime(660,t+0.08); o.frequency.setValueAtTime(880,t+0.12); g.gain.setValueAtTime(0.06,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.2); o.start(t); o.stop(t+0.22); }
-  else if(kind==='chop'){ o.type='square'; o.frequency.setValueAtTime(140,t); o.frequency.exponentialRampToValueAtTime(70,t+0.05); g.gain.setValueAtTime(0.12,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.09); o.start(t); o.stop(t+0.1); }
-  else if(kind==='mine'){ o.type='triangle'; o.frequency.setValueAtTime(300,t); o.frequency.exponentialRampToValueAtTime(160,t+0.06); g.gain.setValueAtTime(0.11,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.1); o.start(t); o.stop(t+0.11); }
-  else if(kind==='open'){ o.type='triangle'; o.frequency.setValueAtTime(260,t); o.frequency.exponentialRampToValueAtTime(420,t+0.1); g.gain.setValueAtTime(0.07,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.14); o.start(t); o.stop(t+0.15); }
-  else if(kind==='close'){ o.type='triangle'; o.frequency.setValueAtTime(420,t); o.frequency.exponentialRampToValueAtTime(220,t+0.08); g.gain.setValueAtTime(0.07,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.12); o.start(t); o.stop(t+0.13); }
-  // ── Event stingers ──
-  else if(kind==='deed'){ [659,988,1319].forEach((f,i)=>{ const oo=a.createOscillator(),gg=a.createGain(); oo.connect(gg); gg.connect(a.destination); oo.type='triangle'; oo.frequency.setValueAtTime(f,t+i*0.07); gg.gain.setValueAtTime(0.08,t+i*0.07); gg.gain.exponentialRampToValueAtTime(0.001,t+i*0.07+0.24); oo.start(t+i*0.07); oo.stop(t+i*0.07+0.26); }); g.gain.setValueAtTime(0.0001,t); o.start(t); o.stop(t+0.01); }
-  else if(kind==='festival'){ [523,659,784,1047].forEach((f)=>{ const oo=a.createOscillator(),gg=a.createGain(); oo.connect(gg); gg.connect(a.destination); oo.type='sine'; oo.frequency.setValueAtTime(f,t); gg.gain.setValueAtTime(0.055,t); gg.gain.exponentialRampToValueAtTime(0.001,t+0.5); oo.start(t); oo.stop(t+0.52); }); g.gain.setValueAtTime(0.0001,t); o.start(t); o.stop(t+0.01); }
-  else if(kind==='fire'){ o.type='sawtooth'; o.frequency.setValueAtTime(140,t); o.frequency.linearRampToValueAtTime(90,t+0.4); const lfo=a.createOscillator(),lg=a.createGain(); lfo.type='square'; lfo.frequency.setValueAtTime(11,t); lg.gain.setValueAtTime(30,t); lfo.connect(lg); lg.connect(o.frequency); g.gain.setValueAtTime(0.09,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.45); o.start(t); lfo.start(t); o.stop(t+0.46); lfo.stop(t+0.46); }
-  else if(kind==='blight'){ o.type='triangle'; o.frequency.setValueAtTime(233,t); o.frequency.exponentialRampToValueAtTime(155,t+0.5); g.gain.setValueAtTime(0.09,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.55); o.start(t); o.stop(t+0.56); const o2=a.createOscillator(),g2=a.createGain(); o2.connect(g2); g2.connect(a.destination); o2.type='sine'; o2.frequency.setValueAtTime(220,t); o2.frequency.exponentialRampToValueAtTime(146,t+0.5); g2.gain.setValueAtTime(0.05,t); g2.gain.exponentialRampToValueAtTime(0.001,t+0.5); o2.start(t); o2.stop(t+0.52); }
-  else if(kind==='raid'){ [[330,0],[247,0.18]].forEach(([f,d])=>{ const oo=a.createOscillator(),gg=a.createGain(); oo.connect(gg); gg.connect(a.destination); oo.type='sawtooth'; oo.frequency.setValueAtTime(f,t+d); gg.gain.setValueAtTime(0.1,t+d); gg.gain.exponentialRampToValueAtTime(0.001,t+d+0.22); oo.start(t+d); oo.stop(t+d+0.24); }); g.gain.setValueAtTime(0.0001,t); o.start(t); o.stop(t+0.01); }
-}
-function buzz(ms){ try{ if(navigator.vibrate) navigator.vibrate(ms); }catch(e){} }
 let courtshipTimer = 90, birthTimer = 130;
 let coins = 0;
 // Trader's ledger — cumulative coin flow by category, for the economy view.
@@ -7036,15 +6952,14 @@ if(redeemBtn) redeemBtn.addEventListener('click', ()=>{
 });
 const sndBtn = document.getElementById('snd-btn');
 if(sndBtn) sndBtn.addEventListener('click', ()=>{
-  sfxOn = !sfxOn;
-  sndBtn.textContent = sfxOn ? '🔊' : '🔇';
-  if(sfxOn) sfx('tap');
+  setSfxOn(!isSfxOn());
+  sndBtn.textContent = isSfxOn() ? '🔊' : '🔇';
+  if(isSfxOn()) sfx('tap');
 });
 const musicBtn = document.getElementById('music-btn');
 if(musicBtn) musicBtn.addEventListener('click', ()=>{
-  musicOn = !musicOn;
-  musicBtn.textContent = musicOn ? '🎵' : '🔇';
-  if(musicOn) startMusic(); else stopMusic();
+  setMusicOn(!isMusicOn());
+  musicBtn.textContent = isMusicOn() ? '🎵' : '🔇';
   sfx('tap');
 });
 speedBtn.addEventListener('click', ()=>{

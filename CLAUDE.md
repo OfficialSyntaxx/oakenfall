@@ -25,7 +25,27 @@ modules, (3) Capacitor wrap + native storage.
   Extracted so far: `src/math.ts` (typed), `src/assets.ts`, `src/defs.ts`,
   `src/isokit.ts` (typed — the hand-drawn iso primitives, colour and shadow
   helpers; takes the canvas via `initIsoKit(ctx)` and its clock via
-  `setKitTime(worldTime)` once per frame).
+  `setKitTime(worldTime)` once per frame), `src/audio.ts` (typed — samples +
+  synth fallback + music, owns its own on/off state), `src/storage.ts` (typed —
+  host KV / Capacitor Preferences / localStorage).
+
+  **The remaining split, and the decision that unblocks it.** Everything left in
+  `main.ts` reads *and writes* shared mutable state, and a module cannot assign
+  to an imported binding — `import { grid }` gives you a read-only view, so
+  `grid = []` in an extracted module is a compile error, and that is the whole
+  reason the split stalled. The decided answer is a single `src/state.ts`
+  exporting one live object:
+
+      export const G = { grid: [], MAP_SIZE: 36, villagers: [], ... };
+
+  `G` is a const binding, so importing it is legal, while `G.grid = []` is an
+  ordinary property write that every module can do. Migration is per cluster,
+  not big-bang: move one group of variables (map, then villagers, then economy,
+  then UI), rewrite its references to `G.x` in `main.ts`, run `npm run verify`,
+  commit. `serializeState`/`restoreState` collapse into save/load of `G`'s own
+  fields, which is the point — the save format stops being a hand-maintained
+  list that drifts from the state it mirrors (TC_X was missing from it until
+  the land editor exposed the bug).
   `src/main.ts` still holds the rest under `@ts-nocheck`; split further with
   `tools/split-module.mjs`, verifying with `npm run smoke` after each move.
   Only lift declarations that are genuinely self-contained — anything closing
