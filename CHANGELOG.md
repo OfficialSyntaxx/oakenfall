@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.76.0
+Land that looks made rather than scattered. Timber now grows in real stands,
+rock breaks the surface in outcrops, and meadows spread where the ground
+suits them, instead of every feature wandering across the map in stringy
+patches. Still lakes sit in the low ground where the rivers didn't reach, and
+bare mud banks mark where grass gives way to water. Every land keeps exactly
+the character it promised — the Highlands are still rock and thin timber, the
+Marshes still more water than dry ground. And the wind blows: tall grass leans
+and ripples across the wilds, harder in rain and harder still in a storm, while
+the shallows around the hold breathe with the swell.
+
 ## 1.75.0
 The hold sits in a sea. The black nothing around the island is now open water,
 drawn in the world rather than painted on the screen, with shallows breaking

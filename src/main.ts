@@ -1087,7 +1087,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.75.0';
+const GAME_VERSION = '1.76.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -2209,6 +2209,21 @@ let cssW=window.innerWidth, cssH=window.innerHeight;
 /* =========================================================================
    MAP GENERATION
 ========================================================================= */
+/* Smooth value noise in [0,1). Two octaves is plenty at 36 tiles across —
+   more only adds cost the eye can't resolve at this scale. */
+function noise2(x, y, seed){
+  const xi = Math.floor(x), yi = Math.floor(y);
+  const xf = x - xi, yf = y - yi;
+  const u = xf*xf*(3-2*xf), v = yf*yf*(3-2*yf);
+  const a = hash2(xi+seed, yi),   b = hash2(xi+1+seed, yi);
+  const c = hash2(xi+seed, yi+1), d = hash2(xi+1+seed, yi+1);
+  return lerp(lerp(a,b,u), lerp(c,d,u), v);
+}
+function fbm2(x, y, seed){
+  return noise2(x, y, seed)*0.62
+       + noise2(x*2.3+11, y*2.3+7, seed+31)*0.28
+       + noise2(x*4.7+3,  y*4.7+19, seed+97)*0.10;
+}
 function genMap(landId){
   for(let y=0;y<MAP_SIZE;y++){
     const row = [];
@@ -2254,54 +2269,69 @@ function genMap(landId){
     for(const t of grid[fy]) if(t.type==='water') t.ford = true;
   }
 
-  // forest clusters
-  for(let c=0;c<land.forest;c++){
-    let sx = Math.floor(Math.random()*MAP_SIZE), sy = Math.floor(Math.random()*MAP_SIZE);
-    if(inTCZone(sx,sy)) continue;
-    let cx=sx, cy=sy;
-    const len = 16 + Math.floor(Math.random()*22);
-    for(let i=0;i<len;i++){
-      cx = clamp(cx + Math.floor(Math.random()*3)-1, 0, MAP_SIZE-1);
-      cy = clamp(cy + Math.floor(Math.random()*3)-1, 0, MAP_SIZE-1);
-      if(inTCZone(cx,cy)) continue;
-      const t = grid[cy][cx];
-      if(t.type==='grass'){
-        t.type='forest'; t.maxResource = 4+Math.floor(Math.random()*4); t.resourceAmount=t.maxResource; t.baseMax=t.maxResource;
-      }
+  // --- lakes: still water the rivers didn't cut, sunk into the low ground ---
+  for(let l=0; l<(land.lakes||0); l++){
+    const lx = 3 + Math.floor(Math.random()*(MAP_SIZE-6));
+    const ly = 3 + Math.floor(Math.random()*(MAP_SIZE-6));
+    const rad = 2 + Math.random()*2.2;
+    for(let y=Math.floor(ly-rad-1); y<=ly+rad+1; y++) for(let x=Math.floor(lx-rad-1); x<=lx+rad+1; x++){
+      if(x<0||x>=MAP_SIZE||y<0||y>=MAP_SIZE) continue;
+      if(inTCZone(x,y)) continue;
+      // A wobbling edge, so a lake isn't a circle stamped on the ground.
+      const d = Math.hypot(x-lx, y-ly) - (fbm2(x*0.6, y*0.6, l*17+5)-0.5)*1.8;
+      if(d > rad) continue;
+      const t = grid[y][x];
+      if(t.type!=='grass') continue;
+      t.type='water'; t.maxResource = 4+Math.floor(Math.random()*4); t.resourceAmount = t.maxResource;
     }
   }
-  // stone clusters
-  for(let c=0;c<land.stone;c++){
-    let sx = Math.floor(Math.random()*MAP_SIZE), sy = Math.floor(Math.random()*MAP_SIZE);
-    if(inTCZone(sx,sy)) continue;
-    let cx=sx, cy=sy;
-    const len = 8 + Math.floor(Math.random()*12);
-    for(let i=0;i<len;i++){
-      cx = clamp(cx + Math.floor(Math.random()*3)-1, 0, MAP_SIZE-1);
-      cy = clamp(cy + Math.floor(Math.random()*3)-1, 0, MAP_SIZE-1);
-      if(inTCZone(cx,cy)) continue;
-      const t = grid[cy][cx];
-      if(t.type==='grass'){
-        t.type='stone'; t.maxResource = 5+Math.floor(Math.random()*5); t.resourceAmount=t.maxResource;
-      }
-    }
+
+  /* --- ground cover ---
+     Coherent regions from a noise field rather than random walks, which left
+     stringy blobs scattered evenly across the map. Each cover type gets its own
+     field and its own scale — stone in tight outcrops, timber in broad stands,
+     wilds in loose meadows — and the threshold is chosen by QUANTILE, so a land
+     gets exactly the coverage its definition asks for whatever the noise does.
+     That is what keeps "highlands are stone-rich, timber-poor" true by
+     construction instead of by luck. */
+  const free = [];
+  for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<MAP_SIZE;x++){
+    const t = grid[y][x];
+    if(t.type==='grass' && !inTCZone(x,y)) free.push(t);
   }
-  // wilds (hunting grounds) - patches of taller grass where game roams, kept clear of other features
-  for(let c=0;c<land.wilds;c++){
-    let sx = Math.floor(Math.random()*MAP_SIZE), sy = Math.floor(Math.random()*MAP_SIZE);
-    if(inTCZone(sx,sy)) continue;
-    let cx=sx, cy=sy;
-    const len = 10 + Math.floor(Math.random()*10);
-    for(let i=0;i<len;i++){
-      cx = clamp(cx + Math.floor(Math.random()*3)-1, 0, MAP_SIZE-1);
-      cy = clamp(cy + Math.floor(Math.random()*3)-1, 0, MAP_SIZE-1);
-      if(inTCZone(cx,cy)) continue;
-      const t = grid[cy][cx];
-      if(t.type==='grass' && !t.wilds){
-        t.wilds = true; t.maxResource = 3+Math.floor(Math.random()*3); t.resourceAmount=t.maxResource;
-      }
-    }
+  const seedBase = Math.floor(Math.random()*10000);
+  function laySpread(count, perUnit, scale, seed, apply){
+    const want = Math.min(free.length, Math.round(free.length * count * perUnit));
+    if(want <= 0) return;
+    const scored = free.filter(t=>t.type==='grass' && !t.wilds)
+      .map(t=>({ t, v: fbm2(t.gx*scale, t.gy*scale, seed) }))
+      .sort((a,b)=>b.v-a.v);
+    for(let i=0;i<want && i<scored.length;i++) apply(scored[i].t);
   }
+  // Per-unit coverage matched to what the old cluster walks actually produced,
+  // so no land's balance shifts under players who already know them.
+  laySpread(land.stone, 0.0055, 0.42, seedBase+11, (t)=>{
+    t.type='stone'; t.maxResource = 5+Math.floor(Math.random()*5); t.resourceAmount=t.maxResource;
+  });
+  laySpread(land.forest, 0.0110, 0.24, seedBase+53, (t)=>{
+    t.type='forest'; t.maxResource = 4+Math.floor(Math.random()*4); t.resourceAmount=t.maxResource; t.baseMax=t.maxResource;
+  });
+  laySpread(land.wilds, 0.0050, 0.33, seedBase+91, (t)=>{
+    t.wilds = true; t.maxResource = 3+Math.floor(Math.random()*3); t.resourceAmount=t.maxResource;
+  });
+
+  // --- banks: bare mud where the grass meets water, so a shore looks like one ---
+  for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<MAP_SIZE;x++){
+    const t = grid[y][x];
+    if(t.type!=='grass' || t.wilds || inTCZone(x,y)) continue;
+    let wet = false;
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const n = grid[y+dy] && grid[y+dy][x+dx];
+      if(n && n.type==='water'){ wet = true; break; }
+    }
+    if(wet && hash2(x*3.7, y*2.9) < 0.28) t.type = 'dirt';
+  }
+
   // clear TC footprint explicitly
   for(let y=TC_Y;y<TC_Y+2;y++) for(let x=TC_X;x<TC_X+2;x++){ grid[y][x].type='dirt'; grid[y][x].wilds=false; }
 
@@ -3603,6 +3633,7 @@ function update(rawDt){
   processStewardOrders(dt);
   updateWildlife(dt);
   updateGroundCover(dt);
+  updateWind(dt);
   checkQuests();
   checkScenario();
 
@@ -3872,6 +3903,23 @@ const TILE_COLORS = {
    afterwards, and snow builds up over a fall instead of appearing all at once.
    Two numbers for the whole map: the per-tile look is derived from them plus the
    tile's own hash, which keeps this free of per-tile state or allocation. */
+/* ── WIND ──
+   One field the whole surface leans with, so a storm looks like weather rather
+   than a particle effect over a still world. Strength follows the sky; the
+   phase advances faster when it blows harder. */
+let windPhase = 0, windGust = 0.22;
+function updateWind(dt){
+  const base = weather.type==='storm' ? 1.0
+             : weather.type==='rain'  ? 0.55
+             : weather.type==='snow'  ? 0.40 : 0.22;
+  const target = base * (0.75 + 0.25*Math.sin(worldTime*0.37));
+  windGust += (target - windGust) * Math.min(1, dt*0.5);
+  windPhase += dt * (0.6 + windGust*0.9);
+}
+/* Lean at this tile, roughly -1..1. Neighbouring tiles share a phase, so gusts
+   travel across the map instead of every blade twitching on its own. */
+function windAt(gx, gy){ return Math.sin(windPhase*1.6 + (gx+gy)*0.55) * windGust; }
+
 let groundWet = 0, groundSnow = 0;
 function updateGroundCover(dt){
   const raining = weather.type==='rain' || weather.type==='storm';
@@ -3944,6 +3992,23 @@ function drawTerrain(range){
           tileDiamond(p.x + (h2-0.7)*12, yTop + 3, TILE_W*0.42*g, TILE_H*0.42*g); ctx.fill();
           ctx.fillStyle = 'rgba(180,210,230,'+(g*0.10).toFixed(3)+')';   // sky caught in it
           tileDiamond(p.x + (h2-0.7)*12, yTop + 2, TILE_W*0.26*g, TILE_H*0.26*g); ctx.fill();
+        }
+        // Tall grass leans with the wind. Only the wilds get blades — they are
+        // a few percent of the map, so this is three strokes on a handful of
+        // visible tiles, not a per-tile cost.
+        if(t.wilds && groundSnow < 0.5){
+          const w = windAt(gx, gy);
+          ctx.strokeStyle = 'rgba(158,186,102,0.55)';
+          ctx.lineWidth = 1;
+          for(let i=0;i<3;i++){
+            const bx = p.x + (hash2(gx*2.1+i, gy*3.3)-0.5)*22;
+            const by = yTop + (hash2(gx*1.7, gy*2.9+i)-0.5)*9 + 3;
+            const bh = 5 + hash2(gx+i, gy)*4;
+            ctx.beginPath();
+            ctx.moveTo(bx, by);
+            ctx.quadraticCurveTo(bx + w*2.4, by - bh*0.6, bx + w*5, by - bh);
+            ctx.stroke();
+          }
         }
         // Snow lies unevenly — the tile's own hash decides how deeply it drifts.
         if(groundSnow > 0.02){
@@ -5413,8 +5478,10 @@ function drawSea(){
   const deep = [[3.6,0.06],[2.7,0.12],[2.1,0.20],[1.7,0.30],[1.42,0.42],[1.22,0.56],[1.09,0.70]];
   for(const [grow,a] of deep){ ctx.fillStyle = 'rgba(31,54,66,'+a+')'; dia(grow); ctx.fill(); }
   // Shallows: the giveaway that land meets water rather than simply stopping.
-  ctx.fillStyle = 'rgba(58,98,112,0.55)'; dia(1.045); ctx.fill();
-  ctx.fillStyle = 'rgba(92,138,150,0.42)'; dia(1.016); ctx.fill();
+  // The rim breathes with the swell — one sine, no extra fills.
+  const swell = 0.5 + Math.sin(windPhase*0.7)*0.5;
+  ctx.fillStyle = 'rgba(58,98,112,'+(0.48 + swell*0.12).toFixed(3)+')'; dia(1.040 + swell*0.010); ctx.fill();
+  ctx.fillStyle = 'rgba(92,138,150,'+(0.36 + swell*0.10).toFixed(3)+')'; dia(1.014 + swell*0.006); ctx.fill();
   ctx.restore();
 }
 /* A soft skirt of haze hugging the map's edge. The land ends on a hard

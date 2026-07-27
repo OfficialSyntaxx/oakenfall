@@ -116,26 +116,26 @@ export const LANDS = {
   valley: {
     name:'River Valley', ic:'🏞️',
     desc:'A broad river through good soil. Balanced timber, stone and game — the classic hold.',
-    river:{ count:1, width:1, wind:2.4 }, forest:15, stone:7, wilds:6, fords:2,
+    river:{ count:1, width:1, wind:2.4 }, forest:15, stone:7, wilds:6, fords:2, lakes:1,
   },
   forestvale: {
     name:'Forest Vale', ic:'🌲',
     desc:'Deep woods and plentiful game, but stone is scarce — you will trade for it or go without.',
-    river:{ count:1, width:1, wind:2.0 }, forest:30, stone:3, wilds:10, fords:2,
+    river:{ count:1, width:1, wind:2.0 }, forest:30, stone:3, wilds:10, fords:2, lakes:1,
   },
   highland: {
     name:'Highlands', ic:'⛰️',
     desc:'Rock everywhere and thin soil. Stone is easy, timber is not, and streams are few.',
-    river:{ count:1, width:0, wind:1.4 }, forest:7, stone:18, wilds:5, fords:1,
+    river:{ count:1, width:0, wind:1.4 }, forest:7, stone:18, wilds:5, fords:1, lakes:0,
   },
   marshes: {
     name:'The Marshes', ic:'🪵',
     desc:'Braided waterways cut the land apart. Fish are everywhere; dry ground to build on is not.',
-    river:{ count:3, width:1, wind:3.2 }, forest:12, stone:4, wilds:7, fords:4,
+    river:{ count:3, width:1, wind:3.2 }, forest:12, stone:4, wilds:7, fords:4, lakes:3,
   },
   coastal: {
     name:'Coastal Reach', ic:'🌊',
     desc:'Open water along one shore, timber inland. Good fishing, and only one flank to watch.',
-    river:{ count:1, width:3, wind:0.8 }, forest:16, stone:6, wilds:6, fords:1,
+    river:{ count:1, width:3, wind:0.8 }, forest:16, stone:6, wilds:6, fords:1, lakes:2,
   },
 };
