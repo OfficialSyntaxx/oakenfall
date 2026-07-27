@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.71.0
+Choose your land, and choose your ending. New holds now pick the ground they
+settle: a balanced River Valley, the timber-rich Forest Vale, stony Highlands
+where good wood is scarce, braided Marshes with little dry ground, or a Coastal
+Reach with open sea on one flank. Each really does change what you find. You can
+also set a goal — endure five winters, rise to a town, saw three hundred planks,
+or drive off eight raids — and the hold tracks your progress toward it. Reaching
+one is a moment, not an ending: you are congratulated, offered a chronicle card
+to keep, and then left to carry on exactly as you were.
+
 ## 1.70.0
 The ground answers the sky. Rain now gathers in puddles across the hold, pooling
 in the low spots while it falls and drying off slowly once it passes. Snow

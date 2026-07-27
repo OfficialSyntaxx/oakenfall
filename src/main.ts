@@ -9,7 +9,7 @@
  * Safe under module scope: the game has no inline HTML event handlers, and
  * every intentional global is an explicit window.* assignment.
  */
-import { BUILD_DEFS, ROLE_DEFS, TECH_TREE, HOLD_TIERS, SEASON_NAMES, WEATHER_TABLE, MM_COLORS, VILLAGER_TINTS, RAIDER_VARIANTS, NUM_WORDS, UNLOCK_SKUS, GAME_MODES } from './defs';
+import { LANDS, BUILD_DEFS, ROLE_DEFS, TECH_TREE, HOLD_TIERS, SEASON_NAMES, WEATHER_TABLE, MM_COLORS, VILLAGER_TINTS, RAIDER_VARIANTS, NUM_WORDS, UNLOCK_SKUS, GAME_MODES } from './defs';
 
 import { TILE_W, TILE_H, clamp, lerp, dist2, hash2, hashStr, project, inProject, fmt } from './math';
 
@@ -151,6 +151,9 @@ function applyDifficulty(cfg){
   TC_CX = TC_X+0.5; TC_CY = TC_Y+0.5;
   wolfRiskMul = cfg.wolfMul * gameMode.wolfMul;
   stockpile = Object.assign({}, cfg.startRes);
+  landId = cfg.landId || 'valley';
+  scenarioId = cfg.goalId || 'endless';
+  scenarioWon = false;
 }
 
 const HUNGER_RATE = 100/340;   // per second — ~5.7 min to starve at 1× speed
@@ -240,7 +243,7 @@ function gainResource(type, amount){
   stockpile[type] = clamp(stockpile[type]+amount, 0, cap);
   const actuallyGained = stockpile[type]-before;
   if(actuallyGained>0){
-    totals[type] += actuallyGained;
+    totals[type] = (totals[type]||0) + actuallyGained;   // planks/flour/bread were NaN before
     if(typeof dailyProgress==='object' && dailyProgress[type]!==undefined) dailyProgress[type] += actuallyGained;
   }
   if(stockpile[type]>=cap && amount>0){
@@ -269,6 +272,63 @@ let wolfEvents = 0;
 let questsCompleted = {};
 // Lifetime journal — persists across sessions within a save; tracks bests for the stats page
 let journal = { peakPopulation:0, daysSurvived:0, wolvesSurvived:0, buildingsRaised:0, settlersWelcomed:0, wintersEndured:0 };
+
+/* ── SCENARIOS ── an optional end-goal for the hold. These close over live game
+   state, so unlike LANDS they stay here rather than in defs.ts. Reaching one is
+   never an ending unless you want it to be: the victory notice offers to conclude
+   the tale or to carry on with the hold exactly as it stands. */
+const SCENARIOS = {
+  endless:  { name:'Endless',        ic:'♾️', desc:'No set goal. Build the hold you want, for as long as you like.',
+              done:()=>false, progress:()=>'' },
+  winters:  { name:'Five Winters',   ic:'❄️', desc:'Endure five winters. The cold is the oldest enemy.',
+              done:()=>journal.wintersEndured>=5, progress:()=>journal.wintersEndured+'/5 winters' },
+  town:     { name:'Rise to a Town', ic:'🏰', desc:'Grow the hold from outpost to town.',
+              done:()=>currentTierIdx>=3, progress:()=>HOLD_TIERS[currentTierIdx].name+' → Town' },
+  timber:   { name:'Timber Trade',   ic:'🪚', desc:'Saw 300 planks — a hold that exports is a hold that lasts.',
+              done:()=>(totals.planks||0)>=300, progress:()=>Math.floor(totals.planks||0)+'/300 planks' },
+  bulwark:  { name:'Bulwark',        ic:'🛡️', desc:'Drive off eight raids without losing the hold.',
+              done:()=>(journal.raidsRepelled||0)>=8, progress:()=>(journal.raidsRepelled||0)+'/8 raids repelled' },
+};
+let landId = 'valley';
+let scenarioId = 'endless';
+let scenarioWon = false;      // goal met and acknowledged — play continues
+function checkScenario(){
+  if(scenarioWon || scenarioId==='endless') return;
+  const sc = SCENARIOS[scenarioId];
+  if(!sc || !sc.done()) return;
+  scenarioWon = true;
+  showVictory(sc);
+}
+/* Reaching the goal is a moment, not a wall. The notice congratulates, offers a
+   chronicle card to keep, and then either bows out or gets out of the way — the
+   hold is never taken away from you. */
+function showVictory(sc){
+  try{ sfx('tier'); }catch(e){}
+  chron('goal', sc.name);
+  toast('🏆 '+sc.ic+' '+sc.name+' — achieved!');
+  const wrap = document.createElement('div');
+  wrap.id = 'victory-wrap';
+  wrap.innerHTML = `
+    <div id="victory-card">
+      <div class="v-ic">${sc.ic}</div>
+      <div class="v-title">${sc.name}</div>
+      <div class="v-sub">Achieved on day ${dayCount}, ${seasonName()} — ${holdName||'Oakenfall'} stands.</div>
+      <div class="v-stats">
+        <span>👥 ${villagers.length} settlers</span>
+        <span>🏗️ ${journal.buildingsRaised} raised</span>
+        <span>❄️ ${journal.wintersEndured} winters</span>
+        <span>${HOLD_TIERS[currentTierIdx].ic} ${HOLD_TIERS[currentTierIdx].name}</span>
+      </div>
+      <button class="action-btn primary" id="v-continue">Carry on with the hold</button>
+      <button class="action-btn" id="v-card">🖼️ Keep a chronicle card</button>
+      <div class="v-note">Your hold continues exactly as it stands. Nothing is ended unless you choose it.</div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const close = ()=>{ wrap.remove(); };
+  wrap.querySelector('#v-continue').addEventListener('click', close);
+  wrap.querySelector('#v-card').addEventListener('click', ()=>{ try{ exportHoldCard(); }catch(e){} });
+  wrap.addEventListener('click', (e)=>{ if(e.target===wrap) close(); });
+}
 /* ── STATS ── per-day snapshots for the Statistics view; capped, persists */
 let statHistory = []; // {day, pop, food, wood, stone}
 function captureStatSnapshot(){
@@ -391,6 +451,12 @@ window.__oakDebug = function(){
     needs: (typeof roleNeedScores==='function') ? roleNeedScores().slice(0,3) : [],
     critters: (typeof critters!=='undefined') ? critters.length : 0,
     raiders: raiders.length,
+    land: landId,
+    scenario: scenarioId,
+    scenarioWon,
+    scenarioProgress: (SCENARIOS[scenarioId] ? SCENARIOS[scenarioId].progress() : ''),
+    winters: journal.wintersEndured,
+    terrain: (()=>{ const c={}; for(const row of grid) for(const t of row){ const k = t.wilds?'wilds':t.type; c[k]=(c[k]||0)+1; } return c; })(),
   };
 };
 function adminGrant(kind){
@@ -424,10 +490,15 @@ function adminGrant(kind){
     // the day counter never moved and none of the daily rollover — weather,
     // bounties, trade routes, stat snapshot — ever fired.
     case 'tDay':   worldTime = (Math.floor(worldTime/CYCLE_LEN)+1)*CYCLE_LEN - 0.05; toast('🛠️ Advanced one full day.'); break;
-    case 'tSeason':
-      worldTime += SEASON_LEN;
-      dayCount = Math.floor(worldTime/CYCLE_LEN) + 1;   // resync: a jump skips the per-day rollovers
+    case 'tSeason': {
+      // Same trap as the day skip: land just short of the next season boundary
+      // so update() crosses it and the season actually turns (winter tally,
+      // wildlife re-seed, toasts). Adding SEASON_LEN outright skipped all of it.
+      const target = (Math.floor(worldTime/SEASON_LEN)+1)*SEASON_LEN;
+      worldTime = target - 0.05;
+      dayCount = Math.floor(worldTime/CYCLE_LEN) + 1;   // catch the counter up over the skipped days
       toast('🛠️ Advanced one season.'); break;
+    }
     // ── Hazards (test the drama) ──
     case 'raid':   launchRaid(4, true, raidEntryPoint(buildings.filter(b=>b.type==='bridge'))); toast('🛠️ Raiders incoming!'); sfx&&sfx('raid'); break;
     case 'fire':   { const cand = buildings.filter(b=>b.type!=='road'&&b.type!=='well'); if(cand.length){ igniteBuilding(cand[Math.floor(Math.random()*cand.length)], true); toast('🛠️ A fire breaks out!'); } break; }
@@ -999,7 +1070,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.70.0';
+const GAME_VERSION = '1.71.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -2121,7 +2192,7 @@ let cssW=window.innerWidth, cssH=window.innerHeight;
 /* =========================================================================
    MAP GENERATION
 ========================================================================= */
-function genMap(){
+function genMap(landId){
   for(let y=0;y<MAP_SIZE;y++){
     const row = [];
     for(let x=0;x<MAP_SIZE;x++){
@@ -2131,29 +2202,43 @@ function genMap(){
   }
   function inTCZone(x,y){ return x>=TC_X-3 && x<=TC_X+4 && y>=TC_Y-3 && y<=TC_Y+4; }
 
-  // --- river: a winding diagonal band of water tiles across the map ---
-  let rx = -4 + Math.random()*3;
-  for(let gy=-2; gy<MAP_SIZE+2; gy++){
-    rx += (Math.random()-0.5)*2.4;
-    rx = clamp(rx, -3, MAP_SIZE+2);
-    const cx = Math.round(rx + gy*0.18);
-    const width = 1 + (hash2(gy*0.3,1)>0.7 ? 1:0);
-    for(let dx=-width; dx<=width; dx++){
-      const x = cx+dx, y = gy;
-      if(x<0||x>=MAP_SIZE||y<0||y>=MAP_SIZE) continue;
-      if(inTCZone(x,y)) continue;
-      const t = grid[y][x];
-      t.type='water'; t.maxResource = 4+Math.floor(Math.random()*4); t.resourceAmount = t.maxResource;
+  const land = LANDS[landId] || LANDS.valley;
+
+  // --- waterways: one or more winding bands, shaped by the chosen land ---
+  for(let r=0; r<land.river.count; r++){
+    let rx = (land.river.count===1) ? (-4 + Math.random()*3)
+                                    : (MAP_SIZE*(r+0.5)/land.river.count) + (Math.random()-0.5)*4;
+    for(let gy=-2; gy<MAP_SIZE+2; gy++){
+      rx += (Math.random()-0.5)*land.river.wind;
+      rx = clamp(rx, -3, MAP_SIZE+2);
+      const cx = Math.round(rx + gy*0.18);
+      const width = land.river.width + (hash2(gy*0.3, 1+r)>0.7 ? 1:0);
+      for(let dx=-width; dx<=width; dx++){
+        const x = cx+dx, y = gy;
+        if(x<0||x>=MAP_SIZE||y<0||y>=MAP_SIZE) continue;
+        if(inTCZone(x,y)) continue;
+        const t = grid[y][x];
+        t.type='water'; t.maxResource = 4+Math.floor(Math.random()*4); t.resourceAmount = t.maxResource;
+      }
     }
   }
-  // fords: two shallow rows where settlers can wade (slowly) without a bridge
-  for(const fy of [Math.floor(MAP_SIZE/3), Math.floor(MAP_SIZE*2/3)]){
+  // Coastal: flood the far edge into open sea rather than another stream.
+  if(landId === 'coastal'){
+    for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<Math.max(3, (MAP_SIZE*0.16)|0); x++){
+      if(inTCZone(x,y)) continue;
+      const t = grid[y][x];
+      t.type='water'; t.maxResource = 5+Math.floor(Math.random()*4); t.resourceAmount = t.maxResource;
+    }
+  }
+  // fords: shallow rows where settlers can wade (slowly) without a bridge
+  for(let i=1; i<=land.fords; i++){
+    const fy = Math.floor(MAP_SIZE*i/(land.fords+1));
     if(!grid[fy]) continue;
     for(const t of grid[fy]) if(t.type==='water') t.ford = true;
   }
 
   // forest clusters
-  for(let c=0;c<15;c++){
+  for(let c=0;c<land.forest;c++){
     let sx = Math.floor(Math.random()*MAP_SIZE), sy = Math.floor(Math.random()*MAP_SIZE);
     if(inTCZone(sx,sy)) continue;
     let cx=sx, cy=sy;
@@ -2169,7 +2254,7 @@ function genMap(){
     }
   }
   // stone clusters
-  for(let c=0;c<7;c++){
+  for(let c=0;c<land.stone;c++){
     let sx = Math.floor(Math.random()*MAP_SIZE), sy = Math.floor(Math.random()*MAP_SIZE);
     if(inTCZone(sx,sy)) continue;
     let cx=sx, cy=sy;
@@ -2185,7 +2270,7 @@ function genMap(){
     }
   }
   // wilds (hunting grounds) - patches of taller grass where game roams, kept clear of other features
-  for(let c=0;c<6;c++){
+  for(let c=0;c<land.wilds;c++){
     let sx = Math.floor(Math.random()*MAP_SIZE), sy = Math.floor(Math.random()*MAP_SIZE);
     if(inTCZone(sx,sy)) continue;
     let cx=sx, cy=sy;
@@ -3142,6 +3227,7 @@ function update(rawDt){
       const raidN = 2 + Math.floor(Math.random()*2) + (currentTierIdx>=3?1:0);
       launchRaid(raidN, mitigation <= 0.72, raidEntryPoint(openBridges));
       if(mitigation > 0.72){
+        journal.raidsRepelled = (journal.raidsRepelled||0) + 1;
         toast('🛡️ Bandits probed the walls — your guards drove them off!'); sfx('raid');
       } else {
         const stealFrac = (1 - mitigation) * 0.35;
@@ -3318,6 +3404,7 @@ function update(rawDt){
   updateWildlife(dt);
   updateGroundCover(dt);
   checkQuests();
+  checkScenario();
 
   // population growth
   spawnTimer -= dt;
@@ -6864,6 +6951,7 @@ function serializeState(){
     v:2, savedAt: Date.now(),
     worldTime, dayCount, stockpile, totals, questsCompleted, wolfEvents,
     idleSlotCounter, usedNames, journal, researched, activeResearch, coins, dailyBounties, dailyProgress, bannerIdx, gameModeId,
+    landId, scenarioId, scenarioWon,
     grid: grid.map(row=>row.map(t=>({type:t.type,wilds:t.wilds,ford:t.ford||undefined,resourceAmount:t.resourceAmount,maxResource:t.maxResource,baseMax:t.baseMax,regrowAt:t.regrowAt}))),
     buildings: buildings.map(b=>({type:b.type,gx:b.gx,gy:b.gy,condition:Math.round(b.condition===undefined?100:b.condition),herd:b.herd})),
     villagers: villagers.map(v=>({name:v.name, role:v.role, gx:v.gx, gy:v.gy, hunger:v.hunger, fatigue:v.fatigue, trait:v.trait, sick:v.sick, morale:v.morale||65, partner:v.partner||null, parents:v.parents||null, relations:v.relations||[], memories:v.memories||[], age:v.age, stage:v.stage, lifespan:v.lifespan, skills:v.skills||{}})),
@@ -7016,6 +7104,10 @@ function restoreState(data){
   dailyProgress = Object.assign({wood:0,stone:0,food:0,bread:0,planks:0,flour:0,built:0}, data.dailyProgress);
   bannerIdx = data.bannerIdx||0;
   gameModeId = data.gameModeId||'settler';
+  // Holds saved before scenarios existed simply have no goal set.
+  landId = data.landId || 'valley';
+  scenarioId = data.scenarioId || 'endless';
+  scenarioWon = !!data.scenarioWon;
   gameMode = GAME_MODES[gameModeId] || GAME_MODES.settler;
   if(data.ui && data.ui.mmBig) document.getElementById('minimap-wrap').classList.add('mm-big');
   // Restore the map at ITS OWN saved size — the save may be from a Small (26)
@@ -7085,13 +7177,26 @@ document.querySelectorAll('.diff-opts[data-group="mode"] button').forEach(btn=>{
     if(d) d.textContent = GAME_MODES[btn.dataset.val].desc;
   });
 });
+// Land and Goal pickers describe themselves as you choose, so the trade-offs are
+// visible before you commit to a hold rather than discovered ten minutes in.
+for(const [group, defs, elId] of [['land', LANDS, 'land-desc'], ['goal', SCENARIOS, 'goal-desc']]){
+  document.querySelectorAll(`.diff-opts[data-group="${group}"] button`).forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const d = defs[btn.dataset.val];
+      const el = document.getElementById(elId);
+      if(d && el) el.textContent = d.desc;
+    });
+  });
+}
 function readDifficultyConfig(){
   const get = (g)=>document.querySelector(`.diff-opts[data-group="${g}"] .sel`).dataset.val;
   const mapSize = parseInt(get('mapSize'),10);
   const wolfMul = parseFloat(get('wolfMul'));
   const startRes = Object.assign({}, START_RES_PRESETS[get('startRes')]);
   const modeId = get('mode');
-  return { mapSize, wolfMul, startRes, modeId };
+  const landId = get('land');
+  const goalId = get('goal');
+  return { mapSize, wolfMul, startRes, modeId, landId, goalId };
 }
 document.querySelectorAll('.diff-opts').forEach(group=>{
   group.querySelectorAll('button').forEach(btn=>{
@@ -7142,7 +7247,7 @@ function startNewGame(){
   researched={}; activeResearch=null; currentTierIdx=0; weather={type:'clear',label:'Clear',ic:'☀️'};
   coins=0; bannerIdx=crestChoice; onboardDone=false; decrees={curfew:false,tithe:false,openGates:false,rationing:false}; decisionTimer=3.2; _lastDecision=''; ledger={in:{bounties:0,deeds:0,routes:0,quests:0,tithe:0},out:{shop:0}}; rollDailyBounties();
   applyDifficulty(readDifficultyConfig());
-  genMap();
+  genMap(landId);
   addBuilding('townCenter', TC_X, TC_Y);
   for(let i=0;i<3;i++) spawnVillager();
   chron('founding');
