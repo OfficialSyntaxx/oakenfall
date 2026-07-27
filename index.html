@@ -585,6 +585,10 @@
         </div>
       </div>
     </div>
+    <div id="slot-block">
+      <div class="slot-head">Saved Holds</div>
+      <div id="slot-list"></div>
+    </div>
     <button id="begin-btn" class="display">Begin a New Hold</button>
     <button id="continue-btn" class="display hidden">Continue Your Hold</button>
     <button id="editor-btn" class="display ghost">🎨 Design a Land</button>
@@ -592,7 +596,37 @@
 </div>
 
 <style>
-#editor-btn.ghost{ background:linear-gradient(180deg,#3a3021,#2a2317); border-color:#5a4a30; }
+#slot-block{ width:100%; max-width:420px; margin:6px auto 12px auto; }
+.slot-head{
+  font-family:'Cinzel',Georgia,serif; font-size:12px; letter-spacing:0.1em; text-transform:uppercase;
+  color:var(--parchment-dim); margin:0 0 6px 2px;
+}
+#slot-list{ display:flex; flex-direction:column; gap:6px; }
+.slot{
+  position:relative; display:flex; flex-direction:column; gap:2px; cursor:pointer;
+  background:linear-gradient(180deg,#2b2418,#1c1710); border:1px solid #4a3d28;
+  border-radius:10px; padding:8px 44px 8px 10px; min-height:56px; justify-content:center;
+}
+.slot.sel{ border-color:var(--amber); box-shadow:0 0 0 1px rgba(231,162,61,0.35) inset; }
+.slot.empty .slot-meta{ opacity:0.6; font-style:italic; }
+.slot-name{
+  background:transparent; border:none; padding:0; width:100%;
+  color:var(--parchment-text); font-family:'Cinzel',Georgia,serif; font-size:14.5px;
+  border-bottom:1px dashed transparent; min-height:22px;
+}
+.slot-name:hover, .slot-name:focus{ border-bottom-color:#6a5a3a; outline:none; }
+.slot-meta{ font-size:11.5px; color:var(--parchment-dim); }
+.slot-del{
+  position:absolute; right:4px; top:50%; transform:translateY(-50%);
+  width:36px; height:44px; background:none; border:none; color:var(--parchment-dim);
+  font-size:15px; cursor:pointer;
+}
+.slot-del:hover{ color:var(--blood); }
+#editor-btn.ghost{
+  width:100%; margin-top:10px; padding:13px; border-radius:9px;
+  background:linear-gradient(180deg,#3a3021,#2a2317); border:1px solid #5a4a30;
+  color:var(--parchment-text); font-family:'Cinzel',serif; font-size:15px; letter-spacing:0.04em;
+}
 body.editing #hud-top, body.editing #hud-right, body.editing #clock,
 body.editing #build-fab, body.editing #sheet-wrap, body.editing #onboard-ribbon,
 body.editing #steward-status{ display:none !important; }
@@ -624,6 +658,7 @@ body.editing #minimap-wrap{ display:none !important; }
 #editor-brushes button{ display:flex; flex-direction:column; align-items:center; gap:2px; font-size:10.5px; line-height:1; }
 #editor-brushes button .bi{ font-size:17px; }
 .editor-row{ display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+.editor-note{ font-size:11.5px; color:var(--parchment-dim); opacity:0.9; padding:0 2px; }
 .editor-row .lbl{ font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--parchment-dim); }
 #editor-code{
   flex:1; min-width:120px; min-height:40px; background:#15110a; border:1px solid #4a3d28;
@@ -639,6 +674,7 @@ body.editing #minimap-wrap{ display:none !important; }
   <div id="editor-top">
     <button id="editor-exit" title="Leave the editor">✕</button>
     <div class="etitle" id="editor-title">Land Editor</div>
+    <button id="editor-undo" title="Undo the last stroke" disabled>↩</button>
     <button id="editor-clear" title="Clear the land">🧹</button>
   </div>
   <div id="editor-bottom">
@@ -653,6 +689,7 @@ body.editing #minimap-wrap{ display:none !important; }
       <button id="editor-load" title="Load a pasted land">📥</button>
       <button id="editor-share" title="Copy this land's code">🔗</button>
     </div>
+    <div class="editor-note">Custom lands are sandboxes — no goal, no ending.</div>
     <div class="editor-row"><button id="editor-play">▶ Play this land</button></div>
   </div>
 </div>

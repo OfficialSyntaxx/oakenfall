@@ -1071,7 +1071,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.72.0';
+const GAME_VERSION = '1.73.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -6715,7 +6715,7 @@ canvas.addEventListener('touchstart', (e)=>{
     touchState.startX=t.clientX; touchState.startY=t.clientY;
     touchState.startPanX=camera.panX; touchState.startPanY=camera.panY;
     touchState.moved=false; touchState.startTime=performance.now();
-    if(editorOn){ touchState.mode='paint'; paintScreen(t.clientX, t.clientY); }
+    if(editorOn){ touchState.mode='paint'; pushUndo(); paintScreen(t.clientX, t.clientY); }
   } else if(e.touches.length>=2){
     const mid = getTouchMid(e.touches[0], e.touches[1]);
     touchState.mode='pinch';
@@ -6807,7 +6807,7 @@ canvas.addEventListener('touchcancel', ()=>{ touchState.mode=null; }, {passive:f
 // Mouse fallback (desktop testing convenience)
 let mouseDown=false, mouseMoved=false, mouseStart={x:0,y:0}, mouseStartPan={x:0,y:0}, mouseStartTime=0;
 canvas.addEventListener('mousedown', (e)=>{
-  if(editorOn && e.button===0){ mouseDown=false; editPaintDrag=true; paintScreen(e.clientX, e.clientY); return; }
+  if(editorOn && e.button===0){ mouseDown=false; editPaintDrag=true; pushUndo(); paintScreen(e.clientX, e.clientY); return; }
   mouseDown=true; mouseMoved=false; mouseStart={x:e.clientX,y:e.clientY};
   mouseStartPan={x:camera.panX,y:camera.panY}; mouseStartTime=performance.now(); camGlide.active=false;
 });
@@ -6973,7 +6973,7 @@ function serializeState(){
     v:2, savedAt: Date.now(),
     worldTime, dayCount, stockpile, totals, questsCompleted, wolfEvents,
     idleSlotCounter, usedNames, journal, researched, activeResearch, coins, dailyBounties, dailyProgress, bannerIdx, gameModeId,
-    landId, scenarioId, scenarioWon,
+    landId, scenarioId, scenarioWon, tcX: TC_X, tcY: TC_Y,
     grid: grid.map(row=>row.map(t=>({type:t.type,wilds:t.wilds,ford:t.ford||undefined,resourceAmount:t.resourceAmount,maxResource:t.maxResource,baseMax:t.baseMax,regrowAt:t.regrowAt}))),
     buildings: buildings.map(b=>({type:b.type,gx:b.gx,gy:b.gy,condition:Math.round(b.condition===undefined?100:b.condition),herd:b.herd})),
     villagers: villagers.map(v=>({name:v.name, role:v.role, gx:v.gx, gy:v.gy, hunger:v.hunger, fatigue:v.fatigue, trait:v.trait, sick:v.sick, morale:v.morale||65, partner:v.partner||null, parents:v.parents||null, relations:v.relations||[], memories:v.memories||[], age:v.age, stage:v.stage, lifespan:v.lifespan, skills:v.skills||{}})),
@@ -6984,10 +6984,65 @@ function serializeState(){
     ui: { mmBig: document.getElementById('minimap-wrap').classList.contains('mm-big') },
   };
 }
+/* =========================================================================
+   SAVE SLOTS
+   Four holds, each in its own key, with a light index so the title screen can
+   list them without parsing four full maps.
+========================================================================= */
+const SAVE_SLOTS = 4;
+let currentSlot = 1;
+let slotMeta = {};                       // { "1": {name, savedAt, day, pop, holdName} }
+const slotKey = (n)=>`oakenfall-save-${n}`;
+
+async function saveSlotIndex(){
+  try{ await window.storage.set('oakenfall-slots', JSON.stringify(slotMeta), false); }catch(e){}
+  try{ await window.storage.set('oakenfall-slot', String(currentSlot), false); }catch(e){}
+}
+async function loadSlotIndex(){
+  try{
+    const res = await window.storage.get('oakenfall-slots', false);
+    if(res && res.value) slotMeta = JSON.parse(res.value) || {};
+  }catch(e){ slotMeta = {}; }
+  try{
+    const res = await window.storage.get('oakenfall-slot', false);
+    const n = res && parseInt(res.value,10);
+    if(n>=1 && n<=SAVE_SLOTS) currentSlot = n;
+  }catch(e){}
+}
+/* One-time move of the single-save era into slot 1, so nobody loses a hold. */
+async function migrateLegacySave(){
+  try{
+    if(slotMeta['1']) return;
+    let res = await window.storage.get(slotKey(1), false);
+    if(res && res.value) return;
+    res = await window.storage.get('oakenfall-save', false);
+    if(!res || !res.value){ res = await window.storage.get('pinehold-save', false); }
+    if(!res || !res.value) return;
+    await window.storage.set(slotKey(1), res.value, false);
+    const d = JSON.parse(res.value);
+    slotMeta['1'] = { name: d.holdName || 'Oakenfall', savedAt: d.savedAt||0,
+      day: d.dayCount||1, pop: (d.villagers||[]).length, holdName: d.holdName || 'Oakenfall' };
+    await saveSlotIndex();
+  }catch(e){}
+}
+function noteSlotSaved(){
+  const prev = slotMeta[String(currentSlot)] || {};
+  slotMeta[String(currentSlot)] = {
+    name: prev.name || holdName || 'Oakenfall',
+    holdName, savedAt: Date.now(), day: dayCount, pop: villagers.length,
+  };
+}
+async function deleteSlot(n){
+  try{ await window.storage.set(slotKey(n), '', false); }catch(e){}
+  delete slotMeta[String(n)];
+  await saveSlotIndex();
+}
+
 async function saveGame(){
   try{
     const data = serializeState();
-    const res = await window.storage.set('oakenfall-save', JSON.stringify(data), false);
+    const res = await window.storage.set(slotKey(currentSlot), JSON.stringify(data), false);
+    if(res){ noteSlotSaved(); await saveSlotIndex(); }
     toast(res ? 'Hold saved.' : 'Save failed.', !res);
   } catch(e){ toast('Save failed.', true); }
 }
@@ -7020,12 +7075,8 @@ async function loadUnlocks(){
 }
 async function loadGame(){
   try{
-    let res = await window.storage.get('oakenfall-save', false);
-    if(!res || !res.value){
-      // Migrate from the old Pinehold save key if present
-      try{ res = await window.storage.get('pinehold-save', false); }catch(e){ res=null; }
-      if(!res || !res.value) return false;
-    }
+    const res = await window.storage.get(slotKey(currentSlot), false);
+    if(!res || !res.value) return false;
     const data = JSON.parse(res.value);
     _loadedSavedAt = data.savedAt || 0;
     restoreState(data);
@@ -7137,7 +7188,8 @@ function restoreState(data){
   // the saved grid prevents out-of-bounds reads / truncated restores.
   if(data.grid && data.grid.length){
     MAP_SIZE = data.grid.length;
-    TC_X = Math.floor(MAP_SIZE/2)-1; TC_Y = Math.floor(MAP_SIZE/2)-1;
+    TC_X = (data.tcX !== undefined) ? data.tcX : Math.floor(MAP_SIZE/2)-1;
+    TC_Y = (data.tcY !== undefined) ? data.tcY : Math.floor(MAP_SIZE/2)-1;
     TC_CX = TC_X+0.5; TC_CY = TC_Y+0.5;
   }
   grid=[]; forestTiles=[]; stoneTiles=[]; waterTiles=[]; wildsTiles=[];
@@ -7345,6 +7397,41 @@ function reindexTiles(){
   }
 }
 
+/* ── UNDO ── A stroke's worth of ground, kept as one byte per tile. Cheap
+   enough (a large map is 2.1KB) to snapshot before every stroke. */
+let undoStack = [];
+function landSnapshot(){
+  const a = new Uint8Array(MAP_SIZE*MAP_SIZE);
+  let i = 0;
+  for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<MAP_SIZE;x++){
+    const t = grid[y][x];
+    a[i++] = t.wilds ? 5 : (TCODE[t.type] !== undefined ? TCODE[t.type] : 0);
+  }
+  return { size:MAP_SIZE, tx:TC_X, ty:TC_Y, a };
+}
+function pushUndo(){
+  if(!editorOn) return;
+  undoStack.push(landSnapshot());
+  if(undoStack.length > 24) undoStack.shift();
+  refreshUndoBtn();
+}
+function undoEdit(){
+  const s = undoStack.pop();
+  if(!s) return;
+  if(s.size !== MAP_SIZE){ MAP_SIZE = s.size; blankLand(); }
+  TC_X = s.tx; TC_Y = s.ty; TC_CX = s.tx+0.5; TC_CY = s.ty+0.5;
+  let i = 0;
+  for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<MAP_SIZE;x++){
+    const c = s.a[i++];
+    applyBrushTo(grid[y][x], c===5 ? 'wilds' : (TCODE_R[c]||'grass'));
+  }
+  reindexTiles(); editorTitle(); refreshUndoBtn();
+}
+function refreshUndoBtn(){
+  const b = document.getElementById('editor-undo');
+  if(b) b.disabled = undoStack.length === 0;
+}
+
 /* ── EDITOR LIFECYCLE ── */
 function blankLand(){
   grid = [];
@@ -7371,6 +7458,7 @@ function enterEditor(){
   resizeCanvas();
   resetHoldState();      // clears state and reads MAP_SIZE from the size picker
   blankLand();
+  undoStack = []; refreshUndoBtn();
   editorOn = true;
   document.body.classList.add('editing');
   document.getElementById('editor-ui').classList.remove('hidden');
@@ -7398,6 +7486,10 @@ function playLand(){
   document.getElementById('editor-ui').classList.add('hidden');
   started = false;
   landId = 'custom';
+  claimSlotName();
+  // A land you drew yourself is a sandbox — a goal you set the terrain for
+  // isn't a goal. Build it however you like, for as long as you like.
+  scenarioId = 'endless'; scenarioWon = false;
   addBuilding('townCenter', TC_X, TC_Y);
   for(let i=0;i<3;i++) spawnVillager();
   chron('founding');
@@ -7423,9 +7515,14 @@ function playLand(){
       btn.classList.add('sel');
     });
   });
-  document.getElementById('editor-btn').addEventListener('click', enterEditor);
+  document.getElementById('editor-btn').addEventListener('click', ()=>{
+    const m = slotMeta[String(currentSlot)];
+    if(m && !window.confirm(`Slot ${currentSlot} holds ${m.name || 'a hold'} (day ${m.day}). Playing a land you design will replace it. Continue?`)) return;
+    enterEditor();
+  });
   document.getElementById('editor-exit').addEventListener('click', exitEditor);
-  document.getElementById('editor-clear').addEventListener('click', ()=>{ blankLand(); editorTitle(); drawMinimap(); });
+  document.getElementById('editor-clear').addEventListener('click', ()=>{ pushUndo(); blankLand(); editorTitle(); });
+  document.getElementById('editor-undo').addEventListener('click', undoEdit);
   document.getElementById('editor-play').addEventListener('click', playLand);
   document.getElementById('editor-share').addEventListener('click', ()=>{
     const code = encodeLand();
@@ -7440,6 +7537,7 @@ function playLand(){
   });
   document.getElementById('editor-load').addEventListener('click', ()=>{
     const code = document.getElementById('editor-code').value;
+    pushUndo();
     if(decodeLand(code)){ reindexTiles(); initCameraZoom(); centreOnHold(); editorTitle(); drawMinimap(); toast('Land loaded.'); }
     else toast('That land code could not be read.', true);
   });
@@ -7487,9 +7585,16 @@ function resetHoldState(){
   coins=0; bannerIdx=crestChoice; onboardDone=false; decrees={curfew:false,tithe:false,openGates:false,rationing:false}; decisionTimer=3.2; _lastDecision=''; ledger={in:{bounties:0,deeds:0,routes:0,quests:0,tithe:0},out:{shop:0}}; rollDailyBounties();
   applyDifficulty(readDifficultyConfig());
 }
+/* A fresh hold names its slot after itself. Founding over an old hold replaces
+   it outright, so carrying the old name across would just be misleading. */
+function claimSlotName(){
+  slotMeta[String(currentSlot)] = { name: holdName, holdName, day:1, pop:0, savedAt:0 };
+  saveSlotIndex();
+}
 function startNewGame(){
   resizeCanvas();
   resetHoldState();
+  claimSlotName();
   genMap(landId);
   addBuilding('townCenter', TC_X, TC_Y);
   for(let i=0;i<3;i++) spawnVillager();
@@ -7507,15 +7612,74 @@ async function continueGame(){
   else toast('Welcome back to Oakenfall.');
 }
 
-document.getElementById('begin-btn').addEventListener('click', startNewGame);
+document.getElementById('begin-btn').addEventListener('click', ()=>{
+  // Founding over an occupied slot destroys that hold — ask first.
+  const m = slotMeta[String(currentSlot)];
+  if(m && !window.confirm(`Slot ${currentSlot} holds ${m.name || 'a hold'} (day ${m.day}). Found a new hold over it?`)) return;
+  startNewGame();
+});
 document.getElementById('continue-btn').addEventListener('click', continueGame);
+
+function slotAgo(ts){
+  if(!ts) return '';
+  const mins = Math.floor((Date.now()-ts)/60000);
+  if(mins < 1) return 'just now';
+  if(mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins/60);
+  if(hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs/24)}d ago`;
+}
+function renderSlots(){
+  const wrap = document.getElementById('slot-list');
+  if(!wrap) return;
+  let html = '';
+  for(let n=1;n<=SAVE_SLOTS;n++){
+    const m = slotMeta[String(n)];
+    const sel = n===currentSlot ? ' sel' : '';
+    const name = (m && (m.name || m.holdName)) || `Slot ${n}`;
+    const meta = m ? `Day ${m.day} · ${m.pop} settler${m.pop===1?'':'s'} · ${slotAgo(m.savedAt)}` : 'Empty';
+    html += `<div class="slot${sel}${m?'':' empty'}" data-slot="${n}">
+      <input class="slot-name" data-slot="${n}" value="${String(name).replace(/"/g,'&quot;')}" maxlength="18" spellcheck="false" aria-label="Name for slot ${n}">
+      <div class="slot-meta">${meta}</div>
+      ${m ? `<button class="slot-del" data-del="${n}" title="Erase this hold" aria-label="Erase slot ${n}">🗑</button>` : ''}
+    </div>`;
+  }
+  wrap.innerHTML = html;
+  const occupied = !!slotMeta[String(currentSlot)];
+  document.getElementById('continue-btn').classList.toggle('hidden', !occupied);
+  document.getElementById('begin-btn').textContent = 'Begin a New Hold';
+}
+document.getElementById('slot-list').addEventListener('click', async (e)=>{
+  const del = e.target.closest('[data-del]');
+  if(del){
+    const n = parseInt(del.dataset.del,10);
+    // Erasing a hold is not undoable — make them mean it.
+    if(!window.confirm(`Erase the hold in slot ${n}? This cannot be undone.`)) return;
+    await deleteSlot(n); renderSlots(); return;
+  }
+  // Tapping the name selects the slot too — the name IS the card on a phone,
+  // and a card you can see but not pick is just a bug with a border.
+  const card = e.target.closest('[data-slot]');
+  if(!card) return;
+  currentSlot = parseInt(card.dataset.slot,10);
+  saveSlotIndex(); renderSlots();
+});
+document.getElementById('slot-list').addEventListener('change', (e)=>{
+  const inp = e.target.closest('.slot-name');
+  if(!inp) return;
+  const n = String(parseInt(inp.dataset.slot,10));
+  const nm = inp.value.trim().slice(0,18) || `Slot ${n}`;
+  slotMeta[n] = Object.assign({}, slotMeta[n], { name: nm });
+  saveSlotIndex();
+});
 
 (async function checkForSave(){
   try{
     await loadUnlocks(); // entitlements are account-level, load them before any game
-    const res = await window.storage.get('oakenfall-save', false);
-    if(res && res.value) document.getElementById('continue-btn').classList.remove('hidden');
+    await loadSlotIndex();
+    await migrateLegacySave();
   } catch(e){ /* no save yet */ }
+  renderSlots();
 })();
 
 setInterval(()=>{ if(started) saveGame(); }, 90000);

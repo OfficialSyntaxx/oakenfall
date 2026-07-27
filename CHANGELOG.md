@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.73.0
+Four holds, not one. The title screen now keeps four saved holds side by side —
+each named, each showing the day it reached and how many settlers live there,
+each erasable on its own. Rename any of them by tapping the name. An existing
+hold from before this moves into the first slot untouched. The land editor
+gained an undo, so a stroke in the wrong place costs nothing, and lands you
+draw yourself are now plainly sandboxes: no goal is imposed and there is
+nothing to win, just ground to build on.
+
 ## 1.72.0
 Make your own land. A new Design a Land option on the title screen opens a
 painter's view of empty ground: lay down grass, forest, stone, water, wilds and

@@ -12,8 +12,8 @@
     "build:site": "node site/build.js",
     "typecheck": "tsc --noEmit",
     "gameplay": "npm run build && node tools/gameplay-test.mjs",
-    "verify": "npm run build && node tools/smoke-test.mjs && node tools/gameplay-test.mjs && node tools/scenario-test.mjs && node tools/editor-test.mjs",
-    "editor": "npm run build && node tools/editor-test.mjs",
+    "verify": "npm run build && node tools/smoke-test.mjs && node tools/gameplay-test.mjs && node tools/scenario-test.mjs && node tools/editor-test.mjs && node tools/slots-test.mjs",
+    "editor": "npm run build && node tools/editor-test.mjs && node tools/slots-test.mjs",
     "scenario": "npm run build && node tools/scenario-test.mjs"
   },
   "devDependencies": {

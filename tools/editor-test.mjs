@@ -37,6 +37,7 @@ page.on('pageerror', (e) => errors.push(String(e.message).slice(0, 200)));
 await page.goto(`http://127.0.0.1:${PORT}/game/`, { waitUntil: 'load' });
 await page.waitForSelector('#editor-btn');
 
+await page.click('.diff-opts[data-group="goal"] button[data-val="winters"]');  // must NOT carry into a custom land
 await page.click('#editor-btn');
 await page.waitForTimeout(900);
 check('editor opens', await page.locator('#editor-ui:not(.hidden)').count() > 0);
@@ -58,6 +59,21 @@ await page.mouse.up();
 await page.waitForTimeout(200);
 const painted = await page.evaluate(() => window.__oakDebug().terrain);
 check('painting lays down forest', (painted.forest || 0) > 20, `${painted.forest || 0} forest tiles`);
+
+// Undo puts the last stroke back the way it was.
+await page.click('#editor-undo');
+await page.waitForTimeout(200);
+const undone = await page.evaluate(() => window.__oakDebug().terrain);
+check('undo takes a stroke back', !undone.forest, JSON.stringify(undone));
+check('undo greys out with nothing left', await page.locator('#editor-undo[disabled]').count() === 1);
+// Repaint it so the rest of the test has something to work with.
+await page.mouse.move(box.x + box.width * 0.35, box.y + box.height * 0.45);
+await page.mouse.down();
+for (let i = 0; i <= 12; i++) {
+  await page.mouse.move(box.x + box.width * (0.35 + 0.025 * i), box.y + box.height * (0.45 + 0.01 * i));
+}
+await page.mouse.up();
+await page.waitForTimeout(200);
 
 // Water too, so the code has more than one run type to carry.
 await page.click('#editor-brushes button[data-brush="water"]');
@@ -93,6 +109,7 @@ check('HUD returns', await page.locator('#hud-top').isVisible() === true);
 check('the hold is founded on the painted land', live.buildings.length > 0 && live.villagers === 3,
   `${live.buildings.join(',')} · ${live.villagers} settlers`);
 check('painted terrain survives into play', (live.terrain.forest || 0) > 20, JSON.stringify(live.terrain));
+check('a custom land is a sandbox with no goal', live.scenario === 'endless', live.scenario);
 await page.waitForTimeout(1500);
 const live2 = await page.evaluate(() => window.__oakDebug());
 check('the world runs', live2.time > live.time, `t ${live.time} -> ${live2.time}`);

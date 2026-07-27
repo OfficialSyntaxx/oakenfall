@@ -357,9 +357,16 @@
     ['master','★','Master of the Craft']
   ];
   var earned = {}, holdName = '';
+  // Holds live in four slots now — read them all and show the most recent.
   try {
-    var raw = localStorage.getItem('oakenfall-save');
-    if (raw) { var s = JSON.parse(raw); earned = (s && s.deeds) || {}; holdName = (s && s.holdName) || ''; }
+    var best = null;
+    for (var n = 1; n <= 4; n++) {
+      var raw = localStorage.getItem('oakenfall-save-' + n) || (n === 1 ? localStorage.getItem('oakenfall-save') : null);
+      if (!raw) continue;
+      var s = JSON.parse(raw);
+      if (s && (!best || (s.savedAt || 0) > (best.savedAt || 0))) best = s;
+    }
+    if (best) { earned = best.deeds || {}; holdName = best.holdName || ''; }
   } catch (e) { earned = {}; }
   var got = DEEDS.filter(function(d){ return earned[d[0]]; });
   if (!got.length) return; // nothing to show — leave the section hidden
@@ -378,7 +385,7 @@
 
 <section class="district">
   <p class="district-kicker">The mason's oath</p>
-  <h2>One file. No installs. No accounts.</h2>
-  <p>The whole of Oakenfall — every sprite, every system, every villager's name — lives in a single HTML file. It loads once and plays anywhere a browser runs, built touch-first for phones: drag to pan, pinch to zoom, everything within reach of a thumb. Close it mid-winter and your hold keeps working while you're away.</p>
+  <h2>No installs. No accounts.</h2>
+  <p>The whole of Oakenfall — every sprite, every system, every villager's name — is bundled and cached on first visit. Nothing is fetched from anywhere else, so it plays anywhere a browser runs, online or off, built touch-first for phones: drag to pan, pinch to zoom, everything within reach of a thumb. Close it mid-winter and your hold keeps working while you're away.</p>
   <p><a class="btn" href="/play/">⚔ &nbsp;Take the gate</a></p>
 </section>
