@@ -1080,7 +1080,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.74.0';
+const GAME_VERSION = '1.75.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -5541,14 +5541,39 @@ function voidBackdrop(){
   const t = band/4;
   // Day: slate-teal deep water. Night: near-black with a cold blue cast.
   const mix = (a,b)=> a.map((v,i)=> Math.round(v + (b[i]-v)*t));
-  const inner = mix([26,38,44],[10,14,26]);
-  const outer = mix([9,14,18],[4,6,12]);
+  const inner = mix([34,54,64],[12,18,30]);
+  const outer = mix([13,21,28],[5,8,14]);
   const g = ctx.createRadialGradient(cssW/2, cssH*0.46, Math.min(cssW,cssH)*0.12,
                                      cssW/2, cssH*0.46, Math.max(cssW,cssH)*0.78);
   g.addColorStop(0, `rgb(${inner[0]},${inner[1]},${inner[2]})`);
   g.addColorStop(1, `rgb(${outer[0]},${outer[1]},${outer[2]})`);
   _voidGrad = g; _voidKey = key;
   return g;
+}
+/* The sea the hold sits in. Drawn in world space, so it pans and zooms with the
+   land — a backdrop pinned to the screen reads as a painted wall behind a
+   floating slab, which is exactly what the black void looked like. Nested flat
+   diamonds: deep water fading outward to the backdrop, and a bright rim of
+   shallows hugging the shore. No gradients, nine fills. */
+function drawSea(){
+  const c = [ project(0,0), project(MAP_SIZE,0), project(MAP_SIZE,MAP_SIZE), project(0,MAP_SIZE) ];
+  const cx = (c[0].x + c[2].x)/2, cy = (c[0].y + c[2].y)/2;
+  const dia = (grow)=>{
+    ctx.beginPath();
+    for(let k=0;k<4;k++){
+      const x = cx + (c[k].x-cx)*grow, y = cy + (c[k].y-cy)*grow;
+      k ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
+    }
+    ctx.closePath();
+  };
+  ctx.save();
+  // Open water, densest near the shore so the far distance stays dark.
+  const deep = [[3.6,0.06],[2.7,0.12],[2.1,0.20],[1.7,0.30],[1.42,0.42],[1.22,0.56],[1.09,0.70]];
+  for(const [grow,a] of deep){ ctx.fillStyle = 'rgba(31,54,66,'+a+')'; dia(grow); ctx.fill(); }
+  // Shallows: the giveaway that land meets water rather than simply stopping.
+  ctx.fillStyle = 'rgba(58,98,112,0.55)'; dia(1.045); ctx.fill();
+  ctx.fillStyle = 'rgba(92,138,150,0.42)'; dia(1.016); ctx.fill();
+  ctx.restore();
 }
 /* A soft skirt of haze hugging the map's edge. The land ends on a hard
    geometric line, which is the thing that actually read as unfinished; fading
@@ -5560,7 +5585,7 @@ function drawIslandSkirt(){
   ctx.save();
   for(let i=6;i>=1;i--){
     const grow = 1 + i*0.055;
-    ctx.fillStyle = 'rgba(6,10,16,'+(0.16 - i*0.018).toFixed(3)+')';
+    ctx.fillStyle = 'rgba(6,10,16,'+(0.10 - i*0.013).toFixed(3)+')';
     ctx.beginPath();
     for(let k=0;k<4;k++){
       const x = cx + (c[k].x-cx)*grow, y = cy + (c[k].y-cy)*grow;
@@ -5587,6 +5612,7 @@ function render(){
   ctx.translate(cssW/2+camera.panX, cssH/2+camera.panY);
   ctx.scale(camera.scale, camera.scale);
 
+  try { drawSea(); } catch(e){ /* guard */ }
   try { drawIslandSkirt(); } catch(e){ /* guard */ }
 
   const range = visibleTileRange();
@@ -6799,7 +6825,7 @@ function renderBuildPalette(){
       };
       return ['home','food','industry','trade','defense','road'].map(cat=>{
         const inCat = keys.filter(k=>(CATOF[k]||'trade')===cat);
-        return inCat.length ? `<div class="build-cat">${CAT[cat]}</div><div class="row">${inCat.map(card).join('')}</div>` : '';
+        return inCat.length ? `<div class="build-cat">${CAT[cat]}</div><div class="build-grid">${inCat.map(card).join('')}</div>` : '';
       }).join('');
     })()}
   `;

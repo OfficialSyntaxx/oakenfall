@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.75.0
+The hold sits in a sea. The black nothing around the island is now open water,
+drawn in the world rather than painted on the screen, with shallows breaking
+along the shore and deep water fading into the distance as you pan. On phones
+the build palette lays out in proper columns — a category with one building no
+longer stretches that card across the whole sheet — the build button no longer
+floats over the sheet it opened, notices no longer land on top of your stores,
+and in landscape the palette is tightened so you can see what you're choosing
+from without scrolling first.
+
 ## 1.74.0
 The Steward's Word listens properly. One sentence can now carry several orders
 — "build 2 farms and put 3 to farming" is two instructions, not one misread —

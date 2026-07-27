@@ -121,11 +121,13 @@
     box-shadow:0 6px 18px rgba(0,0,0,0.55);
   }
   #minimap-wrap #mm-zoom{
-    position:absolute; left:0; bottom:0; width:40px; height:40px;
-    display:flex; align-items:center; justify-content:center;
-    background:rgba(20,15,10,0.75); border:1px solid var(--panel-edge);
-    border-radius:0 8px 0 8px; color:var(--parchment-dim); font-size:15px; padding:0;
+    position:absolute; left:0; top:0; width:44px; height:44px;
+    display:flex; align-items:flex-start; justify-content:flex-start;
+    background:none; border:none; padding:5px;
+    color:var(--parchment-dim); font-size:14px; line-height:1;
+    text-shadow:0 1px 3px rgba(0,0,0,0.9), 0 0 6px rgba(0,0,0,0.7);
   }
+  #minimap-wrap #mm-zoom:active{ color:var(--amber); }
   #minimap-wrap.mm-big{ width:200px; height:200px; }
   /* photo mode: hide every UI layer for one clean frame */
   body.photo-hide #hud-top, body.photo-hide #hud-right, body.photo-hide #clock,
@@ -297,7 +299,11 @@
     color:#fff3d8;
   }
   .role-btn:disabled, .build-card.disabled{opacity:0.38;}
-  .build-card{min-width:120px;text-align:left;position:relative;}
+  .build-card{min-width:0;text-align:left;position:relative;}
+  /* auto-FILL, not auto-fit: a lone card keeps one column's width instead of
+     stretching across the sheet. */
+  .build-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:6px;margin-bottom:4px;}
+  .build-grid .build-card{flex:none;}
   .build-card .name{font-family:'Cinzel',serif;font-size:13.5px;color:var(--parchment-text);}
   .build-card .cost{font-size:12px;color:var(--parchment-dim);margin-top:3px;}
   .build-card.selected{border-color:var(--amber);box-shadow:0 0 0 2px rgba(231,162,61,0.5) inset;}
@@ -354,7 +360,10 @@
     display:flex;flex-direction:column;align-items:center;gap:5px;pointer-events:none;
   }
   /* When a sheet/menu is open, float notices to the top so they never cover it. */
-  body.sheet-open #toast-container{ bottom:auto; top:calc(env(safe-area-inset-top,0px) + 52px); }
+  /* Toasts belong under the stores, not over them. */
+  body.sheet-open #toast-container{ bottom:auto; top:calc(var(--hud-bottom, 100px) + 6px); }
+  /* Nothing floats over an open sheet — least of all the button that opened it. */
+  body.sheet-open #build-fab{ display:none !important; }
   .toast{
     background:linear-gradient(180deg,#3a2c1d,#1d1610);border:1px solid var(--panel-edge);
     color:var(--parchment-text);padding:6px 12px;border-radius:8px;font-size:12.5px;line-height:1.25;
@@ -452,7 +461,20 @@
       top:calc(env(safe-area-inset-top,0px) + 56px) !important;
       right:calc(env(safe-area-inset-right,0px) + 106px) !important;
     }
-    #minimap-wrap{ width:88px !important; height:88px !important; }
+    #minimap-wrap{ width:100px !important; height:100px !important; }
+    /* A landscape phone is ~390px tall: full-size cards showed two rows of the
+       palette. Tighten them so a category fits on screen. */
+    .build-grid{ grid-template-columns:repeat(auto-fill,minmax(128px,1fr)); }
+    .build-card{ padding:6px 8px; }
+    .build-card .ic{ font-size:16px; margin-bottom:1px; }
+    .build-card .name{ font-size:12.5px; }
+    .build-card .cost{ font-size:11px; margin-top:1px; }
+    /* The sheet header was eating three quarters of a landscape phone before a
+       single building came into view. */
+    .sheet-title{ font-size:15.5px; margin-bottom:1px; }
+    .sheet-sub{ font-size:12px; margin-bottom:6px; }
+    .action-btn{ padding:7px 10px; }
+    .build-cat{ margin-top:6px; }
     #toast-container{ top:calc(env(safe-area-inset-top,0px) + 44px); }
   }
   #minimap-wrap{
