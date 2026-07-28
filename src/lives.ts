@@ -1,17 +1,20 @@
-/* Lives: friendship, marriage, birth, growing up, and passing on.
+/* Lives: friendship, marriage, birth, growing up, passing on — and what
+ * settlers do with themselves in between.
  *
  * The part of the simulation the player remembers. Settlers who work near each
  * other become friends or grate on each other, the fond ones wed, children are
- * born and come of age, elders slow, and the dead are laid out in a memorial
- * grove by the town centre. One cycle, so it lives in one module.
+ * born and trail their parents about, elders slow, and the dead are laid out in
+ * a memorial grove by the town centre. One cycle, so it lives in one module.
  *
  * Reports through initLives() rather than reaching for main.ts's toast and
  * chronicle. It also needs one thing back from main: when a settler passes,
  * anything the UI is holding onto them for has to let go.
  */
 import { G } from './state';
-import { clamp } from './math';
+import { clamp, dist2 } from './math';
 import { roleLabel } from './defs';
+import { isNight, seasonIndex } from './time';
+import { getWeather } from './weather';
 import { skillTier } from './skills';
 
 type Deps = {
@@ -24,8 +27,11 @@ type Deps = {
   /** Raise a new settler. Returns the villager, so a newborn can be placed
    *  beside its parents and set to the 'child' stage. */
   spawnVillager: (nameOverride?: any, traitOverride?: any) => any;
+  /** Middle of a building's footprint — where a bucket brigade runs to. */
+  buildingCenter: (b: any) => { gx: number; gy: number };
 };
-let d: Deps = { toast: () => {}, chron: () => {}, onPassed: () => {}, popCapacity: () => 0, spawnVillager: () => null };
+let d: Deps = { toast: () => {}, chron: () => {}, onPassed: () => {}, popCapacity: () => 0, spawnVillager: () => null,
+  buildingCenter: (b: any) => ({ gx: b.gx, gy: b.gy }) };
 export function initLives(deps: Deps): void { d = deps; }
 
 export function hasTrait(v: any, id: string): boolean { return v.trait && v.trait.id === id; }
@@ -221,4 +227,74 @@ export function familyTick(dt: number): void {
     d.chron('born', child.name, parent.name + ' and ' + parent.partner);
     G.journal.childrenBorn++;
   }
+}
+
+/* ── AMBIENT LIFE ── idle and young settlers do not just stand there. They
+   gather at the hearth after dark, seek shelter from foul weather, drift toward
+   friends and spouses, and the children trail their parents. This only steers
+   an idle wander target and a mood bubble — it never overrides assigned work. */
+export function ambientIdle(v: any): void {
+  const wander = (gx: number, gy: number, spreadX: number, spreadY: number, emote: string | null) => {
+    v.idleGX = clamp(gx + (Math.random() - 0.5) * spreadX, 1, G.MAP_SIZE - 2);
+    v.idleGY = clamp(gy + (Math.random() - 0.5) * spreadY, 1, G.MAP_SIZE - 2);
+    v.ambientEmote = emote;
+  };
+
+  // Bucket brigade: idle adults run to the nearest fire to help fight it.
+  if (v.stage !== 'child') {
+    let nearest = null, nearestD = Infinity;
+    for (const b of G.buildings) {
+      if (!b._fire) continue;
+      const c = d.buildingCenter(b);
+      const dd = dist2(v.gx, v.gy, c.gx, c.gy);
+      if (dd < nearestD) { nearestD = dd; nearest = c; }
+    }
+    if (nearest && nearestD < 100) {              // within ~10 tiles — run over
+      wander(nearest.gx, nearest.gy + 1.0, 2.2, 1.4, '🪣');
+      return;
+    }
+  }
+
+  const night = isNight();
+  const winter = seasonIndex() === 3;
+  const tav = G.buildings.find((b: any) => b.type === 'tavern');
+  const hearth = tav ? { gx: tav.gx + 0.5, gy: tav.gy + 1.1 } : { gx: G.TC_CX, gy: G.TC_CY + 1.4 };
+
+  // Foul weather drives folk to shelter — a storm clears the yards fastest.
+  const w = getWeather().type;
+  const storm = w === 'storm', rain = w === 'rain' || w === 'snow';
+  if (storm || night || (winter && (hasTrait(v, 'frail') || Math.random() < 0.4)) || (rain && Math.random() < 0.5)) {
+    wander(hearth.gx, hearth.gy, 1.8, 1.0,
+      storm ? '⛈️' : (rain && !night) ? '☔' : (winter && !night) ? '🥶' : '🔥');
+    return;
+  }
+
+  const friends = (v.relations || []).filter((r: any) => r.type === 'friend' && r.s > 50);
+  if (friends.length && Math.random() < 0.5) {
+    const pick = friends[Math.floor(Math.random() * friends.length)];
+    const o = G.villagers.find((x: any) => x.name === pick.name);
+    if (o) { wander(o.gx, o.gy, 1.2, 1.2, '💬'); return; }
+  }
+
+  if (v.stage === 'child') {
+    // Children keep near a parent when there is one — they trail whoever is
+    // working rather than milling about the square on their own.
+    const kin = (v.parents || []).map((n: string) => G.villagers.find((x: any) => x.name === n)).filter(Boolean);
+    const emote = Math.random() < 0.5 ? '🙂' : '🎈';
+    if (kin.length && Math.random() < 0.65) {
+      const p = kin[Math.floor(Math.random() * kin.length)];
+      wander(p.gx, p.gy + 0.8, 2.0, 1.4, emote);
+    } else {
+      wander(G.TC_CX, G.TC_CY + 1.5, 4, 3, emote);
+    }
+    return;
+  }
+
+  // Married folk seek each other out when the day's work is done.
+  if (v.partner && Math.random() < 0.45) {
+    const spouse = G.villagers.find((x: any) => x.name === v.partner);
+    if (spouse) { wander(spouse.gx, spouse.gy, 1.4, 1.2, '💞'); return; }
+  }
+
+  wander(v.idleGX, v.idleGY, 2.2, 2.2, night ? '✨' : (Math.random() < 0.3 ? '🎵' : null));
 }

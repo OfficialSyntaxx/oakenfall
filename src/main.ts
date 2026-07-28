@@ -27,7 +27,7 @@ import { DAY_LEN, NIGHT_LEN, CYCLE_LEN, SEASON_LEN, setForceWinter, seasonIndex,
 function updateSunShadows(){ setSunShadow(...sunShadow()); }
 import { tileAt, genMap, reindexTiles } from './mapgen';
 import { tileWalkable, nearestWalkable, pathFind } from './pathfind';
-import { initLives, familyTick, hasTrait, relTo, remember, bumpRel, relationsTick, releaseClaims,
+import { initLives, familyTick, ambientIdle, hasTrait, relTo, remember, bumpRel, relationsTick, releaseClaims,
   memorialSpot, agingTick, passVillager, seedRelMoments,
   AGE_YEAR, ADULT_AGE, ELDER_BEFORE, LIFESPAN_BASE } from './lives';
 import { initWork, roleNeedScores, seekWork, maybeSwitchTrade } from './work';
@@ -1309,65 +1309,6 @@ function chron(type, a, b, n){
    at the hearth after dark, seek warmth in winter, drift toward friends, and
    the children play. Only steers idle wander targets + a mood bubble — never
    overrides assigned work. */
-function ambientIdle(v){
-  // Bucket brigade: idle adults rush to the nearest fire to help fight it.
-  if(v.stage!=='child'){
-    let fb=null, fbD=Infinity;
-    for(const b of G.buildings){ if(!b._fire) continue; const c=buildingCenter(b); const d=dist2(v.gx,v.gy,c.gx,c.gy); if(d<fbD){fbD=d;fb=c;} }
-    if(fb && fbD < 100){ // within ~10 tiles — run over
-      v.idleGX = clamp(fb.gx + (Math.random()-0.5)*2.2, 1, G.MAP_SIZE-2);
-      v.idleGY = clamp(fb.gy + 1.0 + (Math.random()-0.5)*1.4, 1, G.MAP_SIZE-2);
-      v.ambientEmote = '🪣';
-      return;
-    }
-  }
-  const night = (typeof isNight==='function') && isNight();
-  const winter = (typeof seasonIndex==='function') && seasonIndex()===3;
-  const tav = G.buildings.find(b=>b.type==='tavern');
-  const hearth = tav ? {gx:tav.gx+0.5, gy:tav.gy+1.1} : {gx:G.TC_CX, gy:G.TC_CY+1.4};
-  // Foul weather drives folk to shelter — a storm clears the yards fastest.
-  const storm = getWeather().type==='storm', rain = getWeather().type==='rain' || getWeather().type==='snow';
-  if(storm || night || (winter && (hasTrait(v,'frail') || Math.random()<0.4)) || (rain && Math.random()<0.5)){
-    v.idleGX = clamp(hearth.gx + (Math.random()-0.5)*1.8, 1, G.MAP_SIZE-2);
-    v.idleGY = clamp(hearth.gy + (Math.random()-0.5)*1.0, 1, G.MAP_SIZE-2);
-    v.ambientEmote = storm ? '⛈️' : (rain && !night) ? '☔' : (winter && !night) ? '🥶' : '🔥';
-    return;
-  }
-  const fr = (v.relations||[]).filter(r=>r.type==='friend' && r.s>50);
-  if(fr.length && Math.random()<0.5){
-    const o = G.villagers.find(x=>x.name===fr[Math.floor(Math.random()*fr.length)].name);
-    if(o){ v.idleGX=clamp(o.gx+(Math.random()-0.5)*1.2,1,G.MAP_SIZE-2); v.idleGY=clamp(o.gy+(Math.random()-0.5)*1.2,1,G.MAP_SIZE-2); v.ambientEmote='💬'; return; }
-  }
-  if(v.stage==='child'){
-    // Children keep near a parent when there is one to keep near — they trail
-    // whoever is working rather than milling about the square on their own.
-    const kin = (v.parents||[]).map(n=>G.villagers.find(x=>x.name===n)).filter(Boolean);
-    if(kin.length && Math.random()<0.65){
-      const p = kin[Math.floor(Math.random()*kin.length)];
-      v.idleGX = clamp(p.gx + (Math.random()-0.5)*2.0, 1, G.MAP_SIZE-2);
-      v.idleGY = clamp(p.gy + 0.8 + (Math.random()-0.5)*1.4, 1, G.MAP_SIZE-2);
-      v.ambientEmote = Math.random()<0.5 ? '🙂' : '🎈';
-      return;
-    }
-    v.idleGX = clamp(G.TC_CX + (Math.random()-0.5)*4, 1, G.MAP_SIZE-2);
-    v.idleGY = clamp(G.TC_CY + 1.5 + (Math.random()-0.5)*3, 1, G.MAP_SIZE-2);
-    v.ambientEmote = Math.random()<0.5 ? '🙂' : '🎈';
-    return;
-  }
-  // Married folk seek each other out when the day's work is done.
-  if(v.partner && Math.random()<0.45){
-    const spouse = G.villagers.find(x=>x.name===v.partner);
-    if(spouse){
-      v.idleGX = clamp(spouse.gx + (Math.random()-0.5)*1.4, 1, G.MAP_SIZE-2);
-      v.idleGY = clamp(spouse.gy + (Math.random()-0.5)*1.2, 1, G.MAP_SIZE-2);
-      v.ambientEmote = '💞';
-      return;
-    }
-  }
-  v.idleGX = clamp(v.idleGX + (Math.random()-0.5)*2.2, 1, G.MAP_SIZE-2);
-  v.idleGY = clamp(v.idleGY + (Math.random()-0.5)*2.2, 1, G.MAP_SIZE-2);
-  v.ambientEmote = night ? '✨' : (Math.random()<0.3 ? '🎵' : null);
-}
 
 const DECAY_RATE = 100/(10*245); // full decay over ~10 day cycles
 
@@ -3082,7 +3023,7 @@ initSkills({ toast, chron });
 initWork({ capFor, hasActiveBuilding, reassignRole, currentTier: ()=>currentTierIdx });
 /* Lives needs one thing back: when a settler passes, whatever the UI was
    holding them open for has to let go. */
-initLives({ toast, chron, popCapacity, spawnVillager,
+initLives({ toast, chron, popCapacity, spawnVillager, buildingCenter,
   onPassed: (v)=>{ if(selection && selection.ref===v) deselectAll(); } });
 
 const TILE_COLORS = {
