@@ -29,23 +29,28 @@ modules, (3) Capacitor wrap + native storage.
   synth fallback + music, owns its own on/off state), `src/storage.ts` (typed —
   host KV / Capacitor Preferences / localStorage).
 
-  **The remaining split, and the decision that unblocks it.** Everything left in
-  `main.ts` reads *and writes* shared mutable state, and a module cannot assign
-  to an imported binding — `import { grid }` gives you a read-only view, so
-  `grid = []` in an extracted module is a compile error, and that is the whole
-  reason the split stalled. The decided answer is a single `src/state.ts`
-  exporting one live object:
+  **State lives in `src/state.ts` as one live object `G`.** A module cannot
+  assign to an imported binding — `import { grid }` is a read-only view, so
+  `grid = []` elsewhere is a compile error — which is why the split stalled for
+  months. `G` is a const binding with mutable contents, so `G.grid = []` is an
+  ordinary property write any module can do. `src/mapgen.ts` proves it: it
+  writes the whole map cluster and could not have existed before.
 
-      export const G = { grid: [], MAP_SIZE: 36, villagers: [], ... };
+  **Migration is per cluster, never big-bang.** Move one group of variables into
+  `G`, rewrite `main.ts`'s references, `npm run verify`, commit. Done: the map
+  (MAP_SIZE, grid, TC_*, the four tile lists). Next, in rough order of
+  independence: villagers, buildings, economy/stockpile, then UI/session flags.
 
-  `G` is a const binding, so importing it is legal, while `G.grid = []` is an
-  ordinary property write that every module can do. Migration is per cluster,
-  not big-bang: move one group of variables (map, then villagers, then economy,
-  then UI), rewrite its references to `G.x` in `main.ts`, run `npm run verify`,
-  commit. `serializeState`/`restoreState` collapse into save/load of `G`'s own
-  fields, which is the point — the save format stops being a hand-maintained
-  list that drifts from the state it mirrors (TC_X was missing from it until
-  the land editor exposed the bug).
+  Rewriting references is a scripted regex, and two traps bite every time:
+  a bare name preceded by `.` is a property access (`data.grid` must NOT become
+  `data.G.grid`), and a bare name followed by `:` may be an object key (`grid:`
+  in `serializeState`) OR a ternary (`wildsTiles ? … : …`) — so exclude on the
+  leading dot, not on the trailing colon, and fix the handful of keys by hand.
+
+  The end state: `serializeState`/`restoreState` collapse into save/load of
+  `G`'s own fields, so the save format stops being a hand-maintained list that
+  drifts from the state it mirrors. It drifted once already — TC_X was missing
+  until the land editor put a hold somewhere other than the middle.
   `src/main.ts` still holds the rest under `@ts-nocheck`; split further with
   `tools/split-module.mjs`, verifying with `npm run smoke` after each move.
   Only lift declarations that are genuinely self-contained — anything closing

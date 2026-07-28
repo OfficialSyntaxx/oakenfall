@@ -19,6 +19,8 @@ import {
   glowWindow, doorArch, chimneySmoke, drawShadow, tintedFrame,
 } from './isokit';
 import { installStorage, isNative } from './storage';
+import { G } from './state';
+import { tileAt, genMap, reindexTiles } from './mapgen';
 import { sfx, buzz, startMusic, stopMusic, isSfxOn, setSfxOn, isMusicOn, setMusicOn } from './audio';
 
 import { SPRITE_URLS, VANIM_B64, DECOR_B64, TERRAIN_B64 } from './assets';   // audio tables now belong to src/audio.ts
@@ -143,9 +145,6 @@ function blitSprite(type, cx, baseY){
   }
 }
 
-let MAP_SIZE = 36;
-let TC_X = 16, TC_Y = 16; // town center anchor (occupies 2x2: TC_X..TC_X+1, TC_Y..TC_Y+1)
-let TC_CX = TC_X + 0.5, TC_CY = TC_Y + 0.5; // visual/logical center
 let wolfRiskMul = 1;
 // GAME_MODES now arrives as a module import, so it is initialised before any of
 // this file runs — the old ordering hazard (it used to be declared far below,
@@ -157,9 +156,9 @@ function applyDifficulty(cfg){
   gameModeId = cfg.modeId || 'settler';
   gameMode = GAME_MODES[gameModeId] || GAME_MODES.settler;
   if(gameModeId==='merchant'){ cfg.startRes.food = (cfg.startRes.food||0)+10; }
-  MAP_SIZE = cfg.mapSize;
-  TC_X = Math.floor(MAP_SIZE/2)-1; TC_Y = Math.floor(MAP_SIZE/2)-1;
-  TC_CX = TC_X+0.5; TC_CY = TC_Y+0.5;
+  G.MAP_SIZE = cfg.mapSize;
+  G.TC_X = Math.floor(G.MAP_SIZE/2)-1; G.TC_Y = Math.floor(G.MAP_SIZE/2)-1;
+  G.TC_CX = G.TC_X+0.5; G.TC_CY = G.TC_Y+0.5;
   wolfRiskMul = cfg.wolfMul * gameMode.wolfMul;
   stockpile = Object.assign({}, cfg.startRes);
   landId = cfg.landId || 'valley';
@@ -196,21 +195,11 @@ function rollName(){
 
 
 
-function tileAt(gx,gy){
-  gx = Math.round(gx); gy = Math.round(gy);
-  if(gx<0||gy<0||gx>=MAP_SIZE||gy>=MAP_SIZE) return null;
-  return grid[gy] ? grid[gy][gx] || null : null;
-}
 
 
 /* =========================================================================
    STATE
 ========================================================================= */
-let grid = [];
-let forestTiles = [];
-let stoneTiles = [];
-let waterTiles = [];
-let wildsTiles = [];
 let buildings = [];
 // Safe Town Centre lookup — always returns a building or null, never throws
 function findTC(){ return findTC() || null; }
@@ -471,13 +460,13 @@ window.__oakDebug = function(){
     scenarioWon,
     scenarioProgress: (SCENARIOS[scenarioId] ? SCENARIOS[scenarioId].progress() : ''),
     winters: journal.wintersEndured,
-    terrain: (()=>{ const c={}; for(const row of grid) for(const t of row){ const k = t.wilds?'wilds':t.type; c[k]=(c[k]||0)+1; } return c; })(),
+    terrain: (()=>{ const c={}; for(const row of G.grid) for(const t of row){ const k = t.wilds?'wilds':t.type; c[k]=(c[k]||0)+1; } return c; })(),
   };
 };
 /* Terrain as one letter per tile ('w' = wilds), read-only like __oakDebug.
    Kept out of the snapshot itself so every other caller isn't paying for it. */
 window.__oakGrid = function(){
-  return grid.map(row=>row.map(t=> t.wilds ? 'w' : t.type.charAt(0)));
+  return G.grid.map(row=>row.map(t=> t.wilds ? 'w' : t.type.charAt(0)));
 };
 function adminGrant(kind){
   const bump = (k,n)=>{ stockpile[k] = (stockpile[k]||0) + n; };
@@ -562,7 +551,7 @@ function raidEntryPoint(openBridges){
   if(openBridges && openBridges.length){ const b=openBridges[Math.floor(Math.random()*openBridges.length)]; return {gx:b.gx, gy:b.gy}; }
   // else nearest map edge to a random side
   const side = Math.floor(Math.random()*4);
-  const m = MAP_SIZE-1;
+  const m = G.MAP_SIZE-1;
   if(side===0) return {gx:Math.random()*m, gy:0};
   if(side===1) return {gx:Math.random()*m, gy:m};
   if(side===2) return {gx:0, gy:Math.random()*m};
@@ -571,14 +560,14 @@ function raidEntryPoint(openBridges){
 
 function launchRaid(n, didSteal, entry){
   for(let i=0;i<n;i++){
-    raiders.push({ gx:clamp(entry.gx+(Math.random()-0.5)*2,0,MAP_SIZE-1), gy:clamp(entry.gy+(Math.random()-0.5)*2,0,MAP_SIZE-1),
+    raiders.push({ gx:clamp(entry.gx+(Math.random()-0.5)*2,0,G.MAP_SIZE-1), gy:clamp(entry.gy+(Math.random()-0.5)*2,0,G.MAP_SIZE-1),
       state:'advance', didSteal, phase:Math.random()*6, spd:1.5+Math.random()*0.6, facing:1, life:34, _flee:null,
       variant: RAIDER_VARIANTS[Math.floor(Math.random()*RAIDER_VARIANTS.length)] });
   }
 }
 function raiderTick(dt){
   if(!raiders.length) return;
-  const tc = { gx:TC_CX, gy:TC_CY+1 };
+  const tc = { gx:G.TC_CX, gy:G.TC_CY+1 };
   for(const r of raiders.slice()){
     r.phase += dt*7; r.life -= dt;
     if(r.life<=0){ raiders.splice(raiders.indexOf(r),1); continue; }
@@ -591,7 +580,7 @@ function raiderTick(dt){
       if(guard || d < reach){
         try{ spawnBoom(r.gx, r.gy); }catch(e){}
         r.state='flee';
-        r._flee = { gx: r.gx + (r.gx<MAP_SIZE/2?-7:7), gy: r.gy + (r.gy<MAP_SIZE/2?-7:7) };
+        r._flee = { gx: r.gx + (r.gx<G.MAP_SIZE/2?-7:7), gy: r.gy + (r.gy<G.MAP_SIZE/2?-7:7) };
         continue;
       }
     } else if(d < 0.6){ raiders.splice(raiders.indexOf(r),1); continue; }
@@ -642,10 +631,10 @@ const CRITTER_KINDS = {
 };
 function spawnWildlife(){
   critters = [];
-  const wild = (typeof wildsTiles!=='undefined' && wildsTiles.length) ? wildsTiles : [];
+  const wild = (typeof G.wildsTiles!=='undefined' && G.wildsTiles.length) ? G.wildsTiles : [];
   const winter = seasonIndex()===3;
   const pickWild = ()=> wild.length ? wild[(Math.random()*wild.length)|0]
-                                    : { gx:TC_CX+(Math.random()-0.5)*12, gy:TC_CY+(Math.random()-0.5)*12 };
+                                    : { gx:G.TC_CX+(Math.random()-0.5)*12, gy:G.TC_CY+(Math.random()-0.5)*12 };
   const beast = (kind, t)=> critters.push({ kind, gx:t.gx, gy:t.gy, tx:t.gx, ty:t.gy,
     phase:Math.random()*6, face:1, rest:Math.random()*4, moving:false });
 
@@ -657,27 +646,27 @@ function spawnWildlife(){
 
   // Rabbits keep to open grass rather than the deep wilds.
   const grass = [];
-  for(let y=2;y<MAP_SIZE-2;y+=3) for(let x=2;x<MAP_SIZE-2;x+=3){
-    const t = grid[y] && grid[y][x];
+  for(let y=2;y<G.MAP_SIZE-2;y+=3) for(let x=2;x<G.MAP_SIZE-2;x+=3){
+    const t = G.grid[y] && G.grid[y][x];
     if(t && t.type==='grass' && !t.building) grass.push(t);
   }
   const rabbitN = winter ? 2 : 5;
   for(let i=0;i<rabbitN && grass.length;i++) beast('rabbit', grass[(Math.random()*grass.length)|0]);
 
   for(let i=0;i<4;i++){
-    critters.push({ kind:'bird', gx:Math.random()*MAP_SIZE, gy:Math.random()*MAP_SIZE,
+    critters.push({ kind:'bird', gx:Math.random()*G.MAP_SIZE, gy:Math.random()*G.MAP_SIZE,
       dir:Math.random()*6.28, phase:Math.random()*6, spd:0.5+Math.random()*0.5 });
   }
   // Fish break the surface of open water — none once the river freezes over.
-  if(typeof waterTiles!=='undefined' && waterTiles.length && !riverFrozen()){
+  if(typeof G.waterTiles!=='undefined' && G.waterTiles.length && !riverFrozen()){
     for(let i=0;i<4;i++){
-      const t = waterTiles[(Math.random()*waterTiles.length)|0];
+      const t = G.waterTiles[(Math.random()*G.waterTiles.length)|0];
       critters.push({ kind:'fish', gx:t.gx, gy:t.gy, phase:Math.random()*6, next:Math.random()*6 });
     }
     // Ducks paddle in circles near where they settled rather than wandering the
     // map — a duck that walks onto a field is worse than no duck at all.
     for(let i=0;i<3;i++){
-      const t = waterTiles[(Math.random()*waterTiles.length)|0];
+      const t = G.waterTiles[(Math.random()*G.waterTiles.length)|0];
       critters.push({ kind:'duck', gx:t.gx, gy:t.gy, homeX:t.gx, homeY:t.gy,
         phase:Math.random()*6, dir:Math.random()*6.28, face:1, moving:true });
     }
@@ -716,14 +705,14 @@ function updateWildlife(dt){
       const spooked = fv && fd < spec.flee;
       if(spooked){
         const a = Math.atan2(c.gy-fv.gy, c.gx-fv.gx) || 0;
-        c.tx = clamp(c.gx+Math.cos(a)*4, 1, MAP_SIZE-2);
-        c.ty = clamp(c.gy+Math.sin(a)*4, 1, MAP_SIZE-2);
+        c.tx = clamp(c.gx+Math.cos(a)*4, 1, G.MAP_SIZE-2);
+        c.ty = clamp(c.gy+Math.sin(a)*4, 1, G.MAP_SIZE-2);
         c.rest = 1.5;
       } else {
         c.rest -= dt;
         if(c.rest <= 0){ c.rest = 2+Math.random()*4;
-          const nx = clamp(c.gx+(Math.random()-0.5)*spec.wander, 1, MAP_SIZE-2);
-          const ny = clamp(c.gy+(Math.random()-0.5)*spec.wander, 1, MAP_SIZE-2);
+          const nx = clamp(c.gx+(Math.random()-0.5)*spec.wander, 1, G.MAP_SIZE-2);
+          const ny = clamp(c.gy+(Math.random()-0.5)*spec.wander, 1, G.MAP_SIZE-2);
           if(typeof tileWalkable==='function' && tileWalkable(Math.round(nx), Math.round(ny))){ c.tx=nx; c.ty=ny; }
         }
       }
@@ -733,8 +722,8 @@ function updateWildlife(dt){
     } else if(c.kind==='bird'){
       c.phase += dt*8;
       c.gx += Math.cos(c.dir)*c.spd*dt; c.gy += Math.sin(c.dir)*c.spd*dt;
-      if(c.gx<0) c.gx=MAP_SIZE; else if(c.gx>MAP_SIZE) c.gx=0;
-      if(c.gy<0) c.gy=MAP_SIZE; else if(c.gy>MAP_SIZE) c.gy=0;
+      if(c.gx<0) c.gx=G.MAP_SIZE; else if(c.gx>G.MAP_SIZE) c.gx=0;
+      if(c.gy<0) c.gy=G.MAP_SIZE; else if(c.gy>G.MAP_SIZE) c.gy=0;
       if(Math.random()<0.006) c.dir += (Math.random()-0.5);
     } else if(c.kind==='fish'){
       // Mostly below the surface; breaks it now and then in a short arc.
@@ -744,8 +733,8 @@ function updateWildlife(dt){
     } else if(c.kind==='flit'){
       c.phase += dt*7;
       c.dir += (Math.random()-0.5)*0.5;
-      c.gx = clamp(c.gx + Math.cos(c.dir)*0.35*dt, 1, MAP_SIZE-2);
-      c.gy = clamp(c.gy + Math.sin(c.dir)*0.35*dt, 1, MAP_SIZE-2);
+      c.gx = clamp(c.gx + Math.cos(c.dir)*0.35*dt, 1, G.MAP_SIZE-2);
+      c.gy = clamp(c.gy + Math.sin(c.dir)*0.35*dt, 1, G.MAP_SIZE-2);
     }
   }
 }
@@ -928,7 +917,7 @@ function foresterTick(dt){
   const groves = buildings.filter(b=>b.type==='forester' && (b.condition===undefined||b.condition>=35));
   if(!groves.length) return;
   for(const g of groves){
-    for(const t of forestTiles){
+    for(const t of G.forestTiles){
       if(dist2(t.gx,t.gy,g.gx,g.gy) > 20) continue; // within ~4.5 tiles
       const base = t.baseMax || 6;
       if(t.maxResource < base){
@@ -1275,7 +1264,7 @@ window.addEventListener('unhandledrejection', (e)=>{ logError('promise', e.reaso
 function buildDiagnostics(){
   const lines = [];
   lines.push('## Oakenfall Report');
-  lines.push('- Version: ' + GAME_VERSION + ' · Mode: ' + gameModeId + ' · Map: ' + MAP_SIZE);
+  lines.push('- Version: ' + GAME_VERSION + ' · Mode: ' + gameModeId + ' · Map: ' + G.MAP_SIZE);
   lines.push('- Day ' + dayCount + ' · ' + seasonName() + ' · ' + weather.label + ' · Tier: ' + HOLD_TIERS[currentTierIdx].name);
   lines.push('- Pop: ' + villagers.length + '/' + popCapacity() + ' · Buildings: ' + buildings.length + ' · Coins: ' + coins);
   lines.push('- Stock: ' + Object.entries(stockpile).map(([k,v])=>k+':'+Math.round(v)).join(' '));
@@ -1696,7 +1685,7 @@ function memorialSpot(){
   // 40 plots so that when an old grave is reclaimed a new one takes its place
   // (rather than every grave stacking once the cap is reached).
   const n=(journal.passed||0)%40;
-  return { gx: TC_X - 4 + (n%4)*0.85, gy: TC_Y + 3 + Math.floor(n/4)*0.85 };
+  return { gx: G.TC_X - 4 + (n%4)*0.85, gy: G.TC_Y + 3 + Math.floor(n/4)*0.85 };
 }
 function agingTick(dt){
   const dy = dt/AGE_YEAR;
@@ -1835,8 +1824,8 @@ function ambientIdle(v){
     let fb=null, fbD=Infinity;
     for(const b of buildings){ if(!b._fire) continue; const c=buildingCenter(b); const d=dist2(v.gx,v.gy,c.gx,c.gy); if(d<fbD){fbD=d;fb=c;} }
     if(fb && fbD < 100){ // within ~10 tiles — run over
-      v.idleGX = clamp(fb.gx + (Math.random()-0.5)*2.2, 1, MAP_SIZE-2);
-      v.idleGY = clamp(fb.gy + 1.0 + (Math.random()-0.5)*1.4, 1, MAP_SIZE-2);
+      v.idleGX = clamp(fb.gx + (Math.random()-0.5)*2.2, 1, G.MAP_SIZE-2);
+      v.idleGY = clamp(fb.gy + 1.0 + (Math.random()-0.5)*1.4, 1, G.MAP_SIZE-2);
       v.ambientEmote = '🪣';
       return;
     }
@@ -1844,19 +1833,19 @@ function ambientIdle(v){
   const night = (typeof isNight==='function') && isNight();
   const winter = (typeof seasonIndex==='function') && seasonIndex()===3;
   const tav = buildings.find(b=>b.type==='tavern');
-  const hearth = tav ? {gx:tav.gx+0.5, gy:tav.gy+1.1} : {gx:TC_CX, gy:TC_CY+1.4};
+  const hearth = tav ? {gx:tav.gx+0.5, gy:tav.gy+1.1} : {gx:G.TC_CX, gy:G.TC_CY+1.4};
   // Foul weather drives folk to shelter — a storm clears the yards fastest.
   const storm = weather.type==='storm', rain = weather.type==='rain' || weather.type==='snow';
   if(storm || night || (winter && (hasTrait(v,'frail') || Math.random()<0.4)) || (rain && Math.random()<0.5)){
-    v.idleGX = clamp(hearth.gx + (Math.random()-0.5)*1.8, 1, MAP_SIZE-2);
-    v.idleGY = clamp(hearth.gy + (Math.random()-0.5)*1.0, 1, MAP_SIZE-2);
+    v.idleGX = clamp(hearth.gx + (Math.random()-0.5)*1.8, 1, G.MAP_SIZE-2);
+    v.idleGY = clamp(hearth.gy + (Math.random()-0.5)*1.0, 1, G.MAP_SIZE-2);
     v.ambientEmote = storm ? '⛈️' : (rain && !night) ? '☔' : (winter && !night) ? '🥶' : '🔥';
     return;
   }
   const fr = (v.relations||[]).filter(r=>r.type==='friend' && r.s>50);
   if(fr.length && Math.random()<0.5){
     const o = villagers.find(x=>x.name===fr[Math.floor(Math.random()*fr.length)].name);
-    if(o){ v.idleGX=clamp(o.gx+(Math.random()-0.5)*1.2,1,MAP_SIZE-2); v.idleGY=clamp(o.gy+(Math.random()-0.5)*1.2,1,MAP_SIZE-2); v.ambientEmote='💬'; return; }
+    if(o){ v.idleGX=clamp(o.gx+(Math.random()-0.5)*1.2,1,G.MAP_SIZE-2); v.idleGY=clamp(o.gy+(Math.random()-0.5)*1.2,1,G.MAP_SIZE-2); v.ambientEmote='💬'; return; }
   }
   if(v.stage==='child'){
     // Children keep near a parent when there is one to keep near — they trail
@@ -1864,13 +1853,13 @@ function ambientIdle(v){
     const kin = (v.parents||[]).map(n=>villagers.find(x=>x.name===n)).filter(Boolean);
     if(kin.length && Math.random()<0.65){
       const p = kin[Math.floor(Math.random()*kin.length)];
-      v.idleGX = clamp(p.gx + (Math.random()-0.5)*2.0, 1, MAP_SIZE-2);
-      v.idleGY = clamp(p.gy + 0.8 + (Math.random()-0.5)*1.4, 1, MAP_SIZE-2);
+      v.idleGX = clamp(p.gx + (Math.random()-0.5)*2.0, 1, G.MAP_SIZE-2);
+      v.idleGY = clamp(p.gy + 0.8 + (Math.random()-0.5)*1.4, 1, G.MAP_SIZE-2);
       v.ambientEmote = Math.random()<0.5 ? '🙂' : '🎈';
       return;
     }
-    v.idleGX = clamp(TC_CX + (Math.random()-0.5)*4, 1, MAP_SIZE-2);
-    v.idleGY = clamp(TC_CY + 1.5 + (Math.random()-0.5)*3, 1, MAP_SIZE-2);
+    v.idleGX = clamp(G.TC_CX + (Math.random()-0.5)*4, 1, G.MAP_SIZE-2);
+    v.idleGY = clamp(G.TC_CY + 1.5 + (Math.random()-0.5)*3, 1, G.MAP_SIZE-2);
     v.ambientEmote = Math.random()<0.5 ? '🙂' : '🎈';
     return;
   }
@@ -1878,14 +1867,14 @@ function ambientIdle(v){
   if(v.partner && Math.random()<0.45){
     const spouse = villagers.find(x=>x.name===v.partner);
     if(spouse){
-      v.idleGX = clamp(spouse.gx + (Math.random()-0.5)*1.4, 1, MAP_SIZE-2);
-      v.idleGY = clamp(spouse.gy + (Math.random()-0.5)*1.2, 1, MAP_SIZE-2);
+      v.idleGX = clamp(spouse.gx + (Math.random()-0.5)*1.4, 1, G.MAP_SIZE-2);
+      v.idleGY = clamp(spouse.gy + (Math.random()-0.5)*1.2, 1, G.MAP_SIZE-2);
       v.ambientEmote = '💞';
       return;
     }
   }
-  v.idleGX = clamp(v.idleGX + (Math.random()-0.5)*2.2, 1, MAP_SIZE-2);
-  v.idleGY = clamp(v.idleGY + (Math.random()-0.5)*2.2, 1, MAP_SIZE-2);
+  v.idleGX = clamp(v.idleGX + (Math.random()-0.5)*2.2, 1, G.MAP_SIZE-2);
+  v.idleGY = clamp(v.idleGY + (Math.random()-0.5)*2.2, 1, G.MAP_SIZE-2);
   v.ambientEmote = night ? '✨' : (Math.random()<0.3 ? '🎵' : null);
 }
 
@@ -1998,7 +1987,7 @@ function rollRandomEvent(){
     toast('🎉 A festival lifts every heart — the hold works faster for a while!'); sfx('festival');
   } else if(roll < 0.85){
     // Resource vein — a random stone tile refills to double
-    const cand = stoneTiles.filter(t=>t.resourceAmount < t.maxResource);
+    const cand = G.stoneTiles.filter(t=>t.resourceAmount < t.maxResource);
     if(cand.length){
       const t = cand[Math.floor(Math.random()*cand.length)];
       t.resourceAmount = t.maxResource*2;
@@ -2071,7 +2060,7 @@ const FLAMMABLE = new Set(['house','manor','tavern','bakery','sawmill','forestCa
   'farm','granary','windmill','huntingCabin','fishingHut','tradingPost','guardPost']);
 function removeBuilding(b){
   for(let yy=b.gy; yy<b.gy+b.h; yy++) for(let xx=b.gx; xx<b.gx+b.w; xx++){
-    if(grid[yy] && grid[yy][xx] && grid[yy][xx].building===b) grid[yy][xx].building = null;
+    if(G.grid[yy] && G.grid[yy][xx] && G.grid[yy][xx].building===b) G.grid[yy][xx].building = null;
   }
   villagers.forEach(v=>{
     if(v.targetBuilding===b){ v.targetBuilding=null; v.path=[]; v.pathTarget=null;
@@ -2222,14 +2211,14 @@ function initCameraZoom(){
 }
 function clampCamera(){
   // The isometric diamond spans world X in [-half, +half] (centered on 0)
-  // and world Y in [0, MAP_SIZE*TILE_H]. The screen-center look-at point in
+  // and world Y in [0, G.MAP_SIZE*TILE_H]. The screen-center look-at point in
   // world coords is (-panX/scale, -panY/scale); clamp THAT to the map bounds
   // so the camera can never wander into the void.
   camera.scale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, camera.scale));
   const s = camera.scale;
-  const halfW = MAP_SIZE * (TILE_W/2);
+  const halfW = G.MAP_SIZE * (TILE_W/2);
   const minWX = -halfW, maxWX = halfW;
-  const minWY = 0, maxWY = MAP_SIZE * TILE_H;
+  const minWY = 0, maxWY = G.MAP_SIZE * TILE_H;
   // pan = -lookAt*scale  →  lookAt = -pan/scale
   camera.panX = Math.max(-maxWX*s, Math.min(-minWX*s, camera.panX));
   camera.panY = Math.max(-maxWY*s, Math.min(-minWY*s, camera.panY));
@@ -2241,138 +2230,6 @@ let cssW=window.innerWidth, cssH=window.innerHeight;
 ========================================================================= */
 /* Smooth value noise in [0,1). Two octaves is plenty at 36 tiles across —
    more only adds cost the eye can't resolve at this scale. */
-function noise2(x, y, seed){
-  const xi = Math.floor(x), yi = Math.floor(y);
-  const xf = x - xi, yf = y - yi;
-  const u = xf*xf*(3-2*xf), v = yf*yf*(3-2*yf);
-  const a = hash2(xi+seed, yi),   b = hash2(xi+1+seed, yi);
-  const c = hash2(xi+seed, yi+1), d = hash2(xi+1+seed, yi+1);
-  return lerp(lerp(a,b,u), lerp(c,d,u), v);
-}
-function fbm2(x, y, seed){
-  return noise2(x, y, seed)*0.62
-       + noise2(x*2.3+11, y*2.3+7, seed+31)*0.28
-       + noise2(x*4.7+3,  y*4.7+19, seed+97)*0.10;
-}
-function genMap(landId){
-  for(let y=0;y<MAP_SIZE;y++){
-    const row = [];
-    for(let x=0;x<MAP_SIZE;x++){
-      row.push({ gx:x, gy:y, type:'grass', resourceAmount:0, maxResource:0, workers:0, regrowAt:0, building:null, wilds:false });
-    }
-    grid.push(row);
-  }
-  function inTCZone(x,y){ return x>=TC_X-3 && x<=TC_X+4 && y>=TC_Y-3 && y<=TC_Y+4; }
-
-  const land = LANDS[landId] || LANDS.valley;
-
-  // --- waterways: one or more winding bands, shaped by the chosen land ---
-  for(let r=0; r<land.river.count; r++){
-    let rx = (land.river.count===1) ? (-4 + Math.random()*3)
-                                    : (MAP_SIZE*(r+0.5)/land.river.count) + (Math.random()-0.5)*4;
-    for(let gy=-2; gy<MAP_SIZE+2; gy++){
-      rx += (Math.random()-0.5)*land.river.wind;
-      rx = clamp(rx, -3, MAP_SIZE+2);
-      const cx = Math.round(rx + gy*0.18);
-      const width = land.river.width + (hash2(gy*0.3, 1+r)>0.7 ? 1:0);
-      for(let dx=-width; dx<=width; dx++){
-        const x = cx+dx, y = gy;
-        if(x<0||x>=MAP_SIZE||y<0||y>=MAP_SIZE) continue;
-        if(inTCZone(x,y)) continue;
-        const t = grid[y][x];
-        t.type='water'; t.maxResource = 4+Math.floor(Math.random()*4); t.resourceAmount = t.maxResource;
-      }
-    }
-  }
-  // Coastal: flood the far edge into open sea rather than another stream.
-  if(landId === 'coastal'){
-    for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<Math.max(3, (MAP_SIZE*0.16)|0); x++){
-      if(inTCZone(x,y)) continue;
-      const t = grid[y][x];
-      t.type='water'; t.maxResource = 5+Math.floor(Math.random()*4); t.resourceAmount = t.maxResource;
-    }
-  }
-  // fords: shallow rows where settlers can wade (slowly) without a bridge
-  for(let i=1; i<=land.fords; i++){
-    const fy = Math.floor(MAP_SIZE*i/(land.fords+1));
-    if(!grid[fy]) continue;
-    for(const t of grid[fy]) if(t.type==='water') t.ford = true;
-  }
-
-  // --- lakes: still water the rivers didn't cut, sunk into the low ground ---
-  for(let l=0; l<(land.lakes||0); l++){
-    const lx = 3 + Math.floor(Math.random()*(MAP_SIZE-6));
-    const ly = 3 + Math.floor(Math.random()*(MAP_SIZE-6));
-    const rad = 2 + Math.random()*2.2;
-    for(let y=Math.floor(ly-rad-1); y<=ly+rad+1; y++) for(let x=Math.floor(lx-rad-1); x<=lx+rad+1; x++){
-      if(x<0||x>=MAP_SIZE||y<0||y>=MAP_SIZE) continue;
-      if(inTCZone(x,y)) continue;
-      // A wobbling edge, so a lake isn't a circle stamped on the ground.
-      const d = Math.hypot(x-lx, y-ly) - (fbm2(x*0.6, y*0.6, l*17+5)-0.5)*1.8;
-      if(d > rad) continue;
-      const t = grid[y][x];
-      if(t.type!=='grass') continue;
-      t.type='water'; t.maxResource = 4+Math.floor(Math.random()*4); t.resourceAmount = t.maxResource;
-    }
-  }
-
-  /* --- ground cover ---
-     Coherent regions from a noise field rather than random walks, which left
-     stringy blobs scattered evenly across the map. Each cover type gets its own
-     field and its own scale — stone in tight outcrops, timber in broad stands,
-     wilds in loose meadows — and the threshold is chosen by QUANTILE, so a land
-     gets exactly the coverage its definition asks for whatever the noise does.
-     That is what keeps "highlands are stone-rich, timber-poor" true by
-     construction instead of by luck. */
-  const free = [];
-  for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<MAP_SIZE;x++){
-    const t = grid[y][x];
-    if(t.type==='grass' && !inTCZone(x,y)) free.push(t);
-  }
-  const seedBase = Math.floor(Math.random()*10000);
-  function laySpread(count, perUnit, scale, seed, apply){
-    const want = Math.min(free.length, Math.round(free.length * count * perUnit));
-    if(want <= 0) return;
-    const scored = free.filter(t=>t.type==='grass' && !t.wilds)
-      .map(t=>({ t, v: fbm2(t.gx*scale, t.gy*scale, seed) }))
-      .sort((a,b)=>b.v-a.v);
-    for(let i=0;i<want && i<scored.length;i++) apply(scored[i].t);
-  }
-  // Per-unit coverage matched to what the old cluster walks actually produced,
-  // so no land's balance shifts under players who already know them.
-  laySpread(land.stone, 0.0055, 0.42, seedBase+11, (t)=>{
-    t.type='stone'; t.maxResource = 5+Math.floor(Math.random()*5); t.resourceAmount=t.maxResource;
-  });
-  laySpread(land.forest, 0.0110, 0.24, seedBase+53, (t)=>{
-    t.type='forest'; t.maxResource = 4+Math.floor(Math.random()*4); t.resourceAmount=t.maxResource; t.baseMax=t.maxResource;
-  });
-  laySpread(land.wilds, 0.0050, 0.33, seedBase+91, (t)=>{
-    t.wilds = true; t.maxResource = 3+Math.floor(Math.random()*3); t.resourceAmount=t.maxResource;
-  });
-
-  // --- banks: bare mud where the grass meets water, so a shore looks like one ---
-  for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<MAP_SIZE;x++){
-    const t = grid[y][x];
-    if(t.type!=='grass' || t.wilds || inTCZone(x,y)) continue;
-    let wet = false;
-    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
-      const n = grid[y+dy] && grid[y+dy][x+dx];
-      if(n && n.type==='water'){ wet = true; break; }
-    }
-    if(wet && hash2(x*3.7, y*2.9) < 0.28) t.type = 'dirt';
-  }
-
-  // clear TC footprint explicitly
-  for(let y=TC_Y;y<TC_Y+2;y++) for(let x=TC_X;x<TC_X+2;x++){ grid[y][x].type='dirt'; grid[y][x].wilds=false; }
-
-  for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<MAP_SIZE;x++){
-    const t = grid[y][x];
-    if(t.type==='forest') forestTiles.push(t);
-    else if(t.type==='stone') stoneTiles.push(t);
-    else if(t.type==='water') waterTiles.push(t);
-    if(t.wilds) wildsTiles.push(t);
-  }
-}
 
 /* =========================================================================
    BUILDINGS
@@ -2383,9 +2240,9 @@ function addBuilding(type, gx, gy){
   if(type==='townCenter'){ b.w=2; b.h=2; }
   if(BUILD_DEFS[type] && BUILD_DEFS[type].proc) b.procTimer = BUILD_DEFS[type].proc.every;
   buildings.push(b);
-  if(b.w===1){ if(grid[gy] && grid[gy][gx]) grid[gy][gx].building = b; }
+  if(b.w===1){ if(G.grid[gy] && G.grid[gy][gx]) G.grid[gy][gx].building = b; }
   else {
-    for(let yy=gy; yy<gy+b.h; yy++) for(let xx=gx; xx<gx+b.w; xx++) if(grid[yy] && grid[yy][xx]) grid[yy][xx].building = b;
+    for(let yy=gy; yy<gy+b.h; yy++) for(let xx=gx; xx<gx+b.w; xx++) if(G.grid[yy] && G.grid[yy][xx]) G.grid[yy][xx].building = b;
   }
   return b;
 }
@@ -2474,7 +2331,7 @@ function spawnVillager(nameOverride, traitOverride){
   const speedBonus = trait.id==='swift' ? 0.26 : 0;
   // Spawn at the Town Center's front door (south face of the 2x2 footprint)
   // rather than a floating point, so new arrivals visibly emerge from the hall.
-  const doorGX = TC_CX, doorGY = TC_CY + 1.05;
+  const doorGX = G.TC_CX, doorGY = G.TC_CY + 1.05;
   const v = {
     id:'v'+Math.random().toString(36).slice(2,9),
     name: nameOverride || rollName(),
@@ -2484,7 +2341,7 @@ function spawnVillager(nameOverride, traitOverride){
     spawnTimer: 1.1,
     sick:false, sickTimer:0,
     gx: doorGX, gy: doorGY,
-    idleGX: TC_CX + Math.cos(ang)*rad, idleGY: TC_CY + Math.sin(ang)*rad,
+    idleGX: G.TC_CX + Math.cos(ang)*rad, idleGY: G.TC_CY + Math.sin(ang)*rad,
     tx:0, ty:0,
     targetTile:null, targetBuilding:null,
     carrying:null,
@@ -2603,9 +2460,9 @@ const BUILD_WANTS_NEAR = {
   pasture:      (t)=>t.type==='grass',
 };
 function stewardFindSpot(bkey){
-  const cx = Math.round(TC_CX), cy = Math.round(TC_CY);
+  const cx = Math.round(G.TC_CX), cy = Math.round(G.TC_CY);
   const want = BUILD_WANTS_NEAR[bkey];
-  const R = Math.floor(MAP_SIZE/2);
+  const R = Math.floor(G.MAP_SIZE/2);
   let best = null, bestScore = -Infinity;
   for(let dy=-R; dy<=R; dy++) for(let dx=-R; dx<=R; dx++){
     const ring = Math.max(Math.abs(dx), Math.abs(dy));
@@ -2740,7 +2597,7 @@ function processStewardOrders(dt){
       stewardOrders.shift(); return;
     }
     // Farthest from the hold first — you rarely mean the one at your gate.
-    match.sort((a,b)=> dist2(b.gx,b.gy,TC_CX,TC_CY) - dist2(a.gx,a.gy,TC_CX,TC_CY));
+    match.sort((a,b)=> dist2(b.gx,b.gy,G.TC_CX,G.TC_CY) - dist2(a.gx,a.gy,G.TC_CX,G.TC_CY));
     demolishBuilding(match[0]); o.done++;
     if(o.done>=o.count){ toast('📜 '+o.done+' '+o.label+' torn down.'); stewardOrders.shift(); }
   } else if(o.kind==='repair'){
@@ -2904,8 +2761,8 @@ function dayPhaseFrac(){
 // bridged, forded, or frozen over; occupied tiles are blocked except for the
 // walk-through structures (farm plots, roads, bridges).
 function tileWalkable(gx,gy){
-  if(gx<0||gy<0||gx>=MAP_SIZE||gy>=MAP_SIZE) return false;
-  const t = grid[gy] && grid[gy][gx];
+  if(gx<0||gy<0||gx>=G.MAP_SIZE||gy>=G.MAP_SIZE) return false;
+  const t = G.grid[gy] && G.grid[gy][gx];
   if(!t) return false;
   if(t.type==='water'){
     const crossable = (t.building && t.building.type==='bridge') || t.ford || riverFrozen();
@@ -2933,7 +2790,7 @@ function pathFind(fromGX, fromGY, toGX, toGY){
   const startGX=Math.round(fromGX), startGY=Math.round(fromGY);
   const goalGX=Math.round(toGX), goalGY=Math.round(toGY);
   if(startGX===goalGX && startGY===goalGY) return [];
-  const inBounds=(x,y)=>x>=0&&y>=0&&x<MAP_SIZE&&y<MAP_SIZE;
+  const inBounds=(x,y)=>x>=0&&y>=0&&x<G.MAP_SIZE&&y<G.MAP_SIZE;
   if(!inBounds(startGX,startGY)||!inBounds(goalGX,goalGY)) return [];
   const key=(x,y)=>x*1000+y;
   const open=[{x:startGX,y:startGY,g:0,h:Math.abs(startGX-goalGX)+Math.abs(startGY-goalGY),parent:null}];
@@ -2944,7 +2801,7 @@ function pathFind(fromGX, fromGY, toGX, toGY){
   let iters=0;
   // Cap scales a little with map size so long, obstructed routes resolve instead
   // of the settler giving up and standing still on bigger holds.
-  const ITER_CAP = Math.min(600, Math.max(240, MAP_SIZE*MAP_SIZE/2));
+  const ITER_CAP = Math.min(600, Math.max(240, G.MAP_SIZE*G.MAP_SIZE/2));
   while(open.length>0 && iters++<ITER_CAP){
     // find min-f node (small array, no heap needed)
     let bi=0;
@@ -2963,7 +2820,7 @@ function pathFind(fromGX, fromGY, toGX, toGY){
       if(!inBounds(nx,ny)) continue;
       const nk=key(nx,ny);
       if(closed.has(nk)) continue;
-      const t=grid[ny]&&grid[ny][nx];
+      const t=G.grid[ny]&&G.grid[ny][nx];
       if(!t) continue;
       // Water is impassable — except over a bridge, wading a ford (slow),
       // or across winter ice when the river freezes.
@@ -3001,7 +2858,7 @@ function moveToward(v, tgx, tgy, dt, speedMul){
   const dx=wp.gx-v.gx, dy=wp.gy-v.gy;
   const d=Math.sqrt(dx*dx+dy*dy);
   if(d<0.12){ v.gx=wp.gx; v.gy=wp.gy; v.path.shift(); return v.path.length===0; }
-  const curTile=grid[Math.round(v.gy)]&&grid[Math.round(v.gy)][Math.round(v.gx)];
+  const curTile=G.grid[Math.round(v.gy)]&&G.grid[Math.round(v.gy)][Math.round(v.gx)];
   const onRoad=curTile&&curTile.building&&curTile.building.type==='road';
   const speed=v.speed*speedMul*effMultiplier(v)*(onRoad?1.3:1)*weatherMoveMul();
   const step=speed*dt;
@@ -3202,8 +3059,8 @@ function updateVillager(v, dt){
       if(near && nd < 6.25){ // within ~2.5 tiles
         releaseClaims(v);
         const ang = Math.atan2(v.gy-near.gy, v.gx-near.gx) || 0;
-        v.idleGX = clamp(v.gx + Math.cos(ang)*3.2, 1, MAP_SIZE-2);
-        v.idleGY = clamp(v.gy + Math.sin(ang)*3.2, 1, MAP_SIZE-2);
+        v.idleGX = clamp(v.gx + Math.cos(ang)*3.2, 1, G.MAP_SIZE-2);
+        v.idleGY = clamp(v.gy + Math.sin(ang)*3.2, 1, G.MAP_SIZE-2);
         v.state = 'idle'; v.idleCooldown = Math.max(v.idleCooldown||0, 1.0); v.ambientEmote = '😱';
       }
     }
@@ -3239,20 +3096,20 @@ function updateVillager(v, dt){
             v.ambientEmote = isNight() ? '🔦' : null;
           }
         } else if(v.role==='lumberjack'){
-          const t = findResourceTarget(v, forestTiles);
+          const t = findResourceTarget(v, G.forestTiles);
           if(t){ t.workers++; v.targetTile=t; v.state='walkingToResource'; v.resKind='wood'; }
         } else if(v.role==='miner'){
-          const t = findResourceTarget(v, stoneTiles);
+          const t = findResourceTarget(v, G.stoneTiles);
           if(t){ t.workers++; v.targetTile=t; v.state='walkingToResource'; v.resKind='stone'; }
         } else if(v.role==='fisher'){
           if(riverFrozen()){
             if(!window._frozenFisherToast){ window._frozenFisherToast=true; toast('❄️ The river is frozen over — the fishers wait for thaw.', true); }
           } else {
-            const t = findResourceTarget(v, waterTiles);
+            const t = findResourceTarget(v, G.waterTiles);
             if(t){ t.workers++; v.targetTile=t; v.state='walkingToResource'; v.resKind='fish'; }
           }
         } else if(v.role==='hunter'){
-          const t = findResourceTarget(v, wildsTiles);
+          const t = findResourceTarget(v, G.wildsTiles);
           if(t){ t.workers++; v.targetTile=t; v.state='walkingToResource'; v.resKind='meat'; }
         } else if(v.role==='farmer'){
           const b = nearestBuildingOfTypes(['farm'], v.gx, v.gy, true);
@@ -3480,7 +3337,7 @@ function update(rawDt){
       const allBridges = buildings.filter(b=>b.type==='bridge');
       const guardPosts = buildings.filter(b=>b.type==='guardPost' && (b.condition===undefined||b.condition>=35));
       const openBridges = allBridges.filter(br=> !guardPosts.some(gp=> Math.max(Math.abs(gp.gx-br.gx), Math.abs(gp.gy-br.gy)) <= 3));
-      const riverMoat = (waterTiles.length && !riverFrozen()) ? Math.max(0, 5 - openBridges.length*1.5) : 0;
+      const riverMoat = (G.waterTiles.length && !riverFrozen()) ? Math.max(0, 5 - openBridges.length*1.5) : 0;
       const defense = guards*(researched.militia?8:4) + palisades*0.8 + towers*2 + riverMoat;
       const strength = 10 + currentTierIdx*6 + Math.random()*8;
       const mitigation = Math.min(0.95, defense / (defense + strength));
@@ -3648,16 +3505,16 @@ function update(rawDt){
   // Forests tire as they're felled: each regrowth yields a little less, and a
   // fully-worked stand eventually goes barren — unless a Forester's Grove
   // replants it. (See foresterTick.)
-  for(const t of forestTiles){
+  for(const t of G.forestTiles){
     if(t.resourceAmount<=0 && worldTime>=t.regrowAt){
       if(t.maxResource>0){ t.maxResource = Math.max(0, t.maxResource-1); }
       if(t.maxResource>0) t.resourceAmount = t.maxResource;
     }
   }
   foresterTick(dt);
-  for(const t of stoneTiles){ if(t.resourceAmount<=0 && worldTime>=t.regrowAt){ t.resourceAmount = t.maxResource; } }
-  for(const t of waterTiles){ if(t.resourceAmount<=0 && worldTime>=t.regrowAt){ t.resourceAmount = t.maxResource; } }
-  for(const t of wildsTiles){ if(t.resourceAmount<=0 && worldTime>=t.regrowAt){ t.resourceAmount = t.maxResource; } }
+  for(const t of G.stoneTiles){ if(t.resourceAmount<=0 && worldTime>=t.regrowAt){ t.resourceAmount = t.maxResource; } }
+  for(const t of G.waterTiles){ if(t.resourceAmount<=0 && worldTime>=t.regrowAt){ t.resourceAmount = t.maxResource; } }
+  for(const t of G.wildsTiles){ if(t.resourceAmount<=0 && worldTime>=t.regrowAt){ t.resourceAmount = t.maxResource; } }
 
   for(const v of villagers.slice()) updateVillager(v, dt); // copy: villagers may leave mid-update
   processStewardOrders(dt);
@@ -3772,10 +3629,10 @@ function visibleTileRange(){
     minGY=Math.min(minGY,g.gy); maxGY=Math.max(maxGY,g.gy);
   }
   return {
-    x0: clamp(Math.floor(minGX-margin),0,MAP_SIZE-1),
-    x1: clamp(Math.ceil(maxGX+margin),0,MAP_SIZE-1),
-    y0: clamp(Math.floor(minGY-margin),0,MAP_SIZE-1),
-    y1: clamp(Math.ceil(maxGY+margin),0,MAP_SIZE-1),
+    x0: clamp(Math.floor(minGX-margin),0,G.MAP_SIZE-1),
+    x1: clamp(Math.ceil(maxGX+margin),0,G.MAP_SIZE-1),
+    y0: clamp(Math.floor(minGY-margin),0,G.MAP_SIZE-1),
+    y1: clamp(Math.ceil(maxGY+margin),0,G.MAP_SIZE-1),
   };
 }
 
@@ -3976,7 +3833,7 @@ function updateGroundCover(dt){
 function drawTerrain(range){
   for(let gy=range.y0; gy<=range.y1; gy++){
     for(let gx=range.x0; gx<=range.x1; gx++){
-      const t = grid[gy] && grid[gy][gx];
+      const t = G.grid[gy] && G.grid[gy][gx];
       if(!t) continue;
       const p = project(gx,gy);
       const h2 = hash2(gx,gy);
@@ -4064,8 +3921,8 @@ function drawTerrain(range){
       // Earthen bank faces: where land meets water (or the map edge), draw the
       // tile's south-west / south-east side walls dropping to the lower level.
       if(!isWater && !stamp){
-        const nS = grid[gy+1] && grid[gy+1][gx];   // screen lower-left neighbour
-        const nE = grid[gy] && grid[gy][gx+1];     // screen lower-right neighbour
+        const nS = G.grid[gy+1] && G.grid[gy+1][gx];   // screen lower-left neighbour
+        const nE = G.grid[gy] && G.grid[gy][gx+1];     // screen lower-right neighbour
         const edgeS = !nS || nS.type==='water';
         const edgeE = !nE || nE.type==='water';
         const drop = (!nS || !nE) ? EDGE_DROP : WATER_DROP;
@@ -4129,8 +3986,8 @@ function drawTerrain(range){
         }
         if(h2>0.7){ ctx.fillStyle='rgba(200,230,240,0.12)'; ctx.beginPath(); ctx.arc(p.x+(h2-0.85)*18,wy+(hash2(gx*2,gy)-0.5)*6,3,0,Math.PI*2); ctx.fill(); }
         // Foam lapping against adjacent land (animated)
-        const nN = grid[gy-1] && grid[gy-1][gx];
-        const nW = grid[gy] && grid[gy][gx-1];
+        const nN = G.grid[gy-1] && G.grid[gy-1][gx];
+        const nW = G.grid[gy] && G.grid[gy][gx-1];
         const foamA = 0.28 + Math.sin(worldTime*2.4 + gx + gy)*0.12;
         ctx.strokeStyle = 'rgba(210,230,238,'+foamA+')'; ctx.lineWidth = 1.6;
         if(nN && nN.type!=='water'){ ctx.beginPath(); ctx.moveTo(p.x, wy - TILE_H/2 + 1.5); ctx.lineTo(p.x + TILE_W/2 - 3, wy - 0.5); ctx.stroke(); }
@@ -4183,8 +4040,8 @@ function drawTerrain(range){
           // Reeds only where the ground actually meets the water.
           let pool = SCENERY_FOR[t.wilds ? 'wilds' : t.type];
           if((t.type==='grass' || t.type==='dirt')){
-            const n1 = grid[gy+1] && grid[gy+1][gx], n2 = grid[gy-1] && grid[gy-1][gx];
-            const n3 = grid[gy] && grid[gy][gx+1], n4 = grid[gy] && grid[gy][gx-1];
+            const n1 = G.grid[gy+1] && G.grid[gy+1][gx], n2 = G.grid[gy-1] && G.grid[gy-1][gx];
+            const n3 = G.grid[gy] && G.grid[gy][gx+1], n4 = G.grid[gy] && G.grid[gy][gx-1];
             if([n1,n2,n3,n4].some(n=>n && n.type==='water')) pool = ['cattails'];
           }
           if(pool && pool.length){
@@ -5379,23 +5236,23 @@ function drawRoad(gx,gy){
 ========================================================================= */
 const minimapCanvas = document.getElementById('minimap');
 const mmCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
-// minimap tile size is computed dynamically in drawMinimap() based on MAP_SIZE
+// minimap tile size is computed dynamically in drawMinimap() based on G.MAP_SIZE
 
 // Projection the minimap last drew with, so pointer input can invert it.
 let mmLayout = { S:128, scale:1, offY:0 };
 function drawMinimap(){
-  if(!mmCtx || !grid.length) return;
+  if(!mmCtx || !G.grid.length) return;
   const S = 128;                       // backing resolution; CSS scales it to fit
   minimapCanvas.width = S; minimapCanvas.height = S;
   minimapCanvas.style.width = '100%'; minimapCanvas.style.height = '100%';
 
   // Draw in the SAME isometric projection as the world. The old minimap laid the
-  // grid out as a square while the game shows a diamond, so nothing on it lined
+  // G.grid out as a square while the game shows a diamond, so nothing on it lined
   // up with what you were looking at — which is what made it feel pointless.
   // Matching the projection means north here is north there, and the visible
   // region becomes a plain rectangle instead of a skewed quad.
-  const scale = S / (MAP_SIZE * TILE_W);
-  const offY  = (S - MAP_SIZE * TILE_H * scale) / 2;
+  const scale = S / (G.MAP_SIZE * TILE_W);
+  const offY  = (S - G.MAP_SIZE * TILE_H * scale) / 2;
   const mmX = (wx)=> wx*scale + S/2;
   const mmY = (wy)=> wy*scale + offY;
   const tw = TILE_W*scale, th = TILE_H*scale;
@@ -5407,8 +5264,8 @@ function drawMinimap(){
 
   // Terrain, batched one path per colour — ~6 fills instead of 1300.
   const byColour = new Map();
-  for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<MAP_SIZE;x++){
-    const t = grid[y] && grid[y][x];
+  for(let y=0;y<G.MAP_SIZE;y++) for(let x=0;x<G.MAP_SIZE;x++){
+    const t = G.grid[y] && G.grid[y][x];
     if(!t) continue;
     const col = t.wilds ? '#3a4e22' : (MM_COLORS[t.type]||'#2a3a22');
     let path = byColour.get(col);
@@ -5593,7 +5450,7 @@ function voidBackdrop(){
    diamonds: deep water fading outward to the backdrop, and a bright rim of
    shallows hugging the shore. No gradients, nine fills. */
 function drawSea(){
-  const c = [ project(0,0), project(MAP_SIZE,0), project(MAP_SIZE,MAP_SIZE), project(0,MAP_SIZE) ];
+  const c = [ project(0,0), project(G.MAP_SIZE,0), project(G.MAP_SIZE,G.MAP_SIZE), project(0,G.MAP_SIZE) ];
   const cx = (c[0].x + c[2].x)/2, cy = (c[0].y + c[2].y)/2;
   const dia = (grow)=>{
     ctx.beginPath();
@@ -5619,7 +5476,7 @@ function drawSea(){
    the dark outward from that line settles the hold into the distance instead of
    cutting it out. Flat translucent fills, no per-frame gradient. */
 function drawIslandSkirt(){
-  const c = [ project(0,0), project(MAP_SIZE,0), project(MAP_SIZE,MAP_SIZE), project(0,MAP_SIZE) ];
+  const c = [ project(0,0), project(G.MAP_SIZE,0), project(G.MAP_SIZE,G.MAP_SIZE), project(0,G.MAP_SIZE) ];
   const cx = (c[0].x + c[2].x)/2, cy = (c[0].y + c[2].y)/2;
   ctx.save();
   for(let i=6;i>=1;i--){
@@ -5646,7 +5503,7 @@ function render(){
   ctx.fillRect(0, 0, cssW, cssH);
   setKitTime(worldTime);   // one clock push per frame, not one per sprite
 
-  if(!grid.length) return; // map not yet generated
+  if(!G.grid.length) return; // map not yet generated
 
   ctx.save();
   ctx.translate(cssW/2+camera.panX, cssH/2+camera.panY);
@@ -5675,7 +5532,7 @@ function render(){
   const list = [];
   for(let gy=range.y0; gy<=range.y1; gy++){
     for(let gx=range.x0; gx<=range.x1; gx++){
-      const t = grid[gy] && grid[gy][gx];
+      const t = G.grid[gy] && G.grid[gy][gx];
       if(!t) continue;
       if(t.type==='forest' && t.resourceAmount>0){ list.push({depth:gx+gy+0.1, draw:()=>{ try{drawTree(gx,gy);}catch(e){} }}); }
       else if(t.type==='stone' && t.resourceAmount>0){ list.push({depth:gx+gy+0.1, draw:()=>{ try{drawRock(gx,gy);}catch(e){} }}); }
@@ -5704,7 +5561,7 @@ function render(){
   }
   // Visiting merchant: their cart stands by the Town Center while the event runs
   if(activeEvent && activeEvent.type==='merchant'){
-    const mgx = TC_X-1.6, mgy = TC_Y+2.6;
+    const mgx = G.TC_X-1.6, mgy = G.TC_Y+2.6;
     list.push({depth:mgx+mgy+0.2, draw:()=>{ try{ drawMerchantCart(mgx,mgy); }catch(e){} }});
   }
   list.sort((a,b)=>a.depth-b.depth);
@@ -5738,16 +5595,16 @@ function renderClouds(){
   if(!cloudState){
     cloudState = [];
     for(let i=0;i<7;i++){
-      cloudState.push({ wx:(Math.random()*2-1)*MAP_SIZE*TILE_W/2, wy:Math.random()*MAP_SIZE*TILE_H,
+      cloudState.push({ wx:(Math.random()*2-1)*G.MAP_SIZE*TILE_W/2, wy:Math.random()*G.MAP_SIZE*TILE_H,
                         v:5+Math.random()*6, sc:1.1+Math.random()*1.6, ci:i%3 });
     }
   }
   ctx.save();
   ctx.setTransform(canvasDPR,0,0,canvasDPR,0,0);
-  const halfW = MAP_SIZE*TILE_W/2;
+  const halfW = G.MAP_SIZE*TILE_W/2;
   for(const c of cloudState){
     c.wx += c.v * (1/60);
-    if(c.wx > halfW + 200){ c.wx = -halfW - 200; c.wy = Math.random()*MAP_SIZE*TILE_H; }
+    if(c.wx > halfW + 200){ c.wx = -halfW - 200; c.wy = Math.random()*G.MAP_SIZE*TILE_H; }
     const img = decorImg('clouds', c.ci);
     if(!img) continue;
     // world → screen with a slight parallax lift (clouds pan a bit slower)
@@ -6409,7 +6266,7 @@ function renderJournalSheet(){
     <div class="sheet-sub">📖 <b>Hold Journal</b> — Peak settlers: ${journal.peakPopulation} · Days: ${journal.daysSurvived} · Winters: ${journal.wintersEndured} · Buildings raised: ${journal.buildingsRaised} · Settlers welcomed: ${journal.settlersWelcomed} · Wolf raids survived: ${journal.wolvesSurvived}${journal.passed?' · Passed on: '+journal.passed:''}</div>
     ${(()=>{ const g=Object.keys(GUILD_DEFS).filter(r=>guilds[r]); return g.length?`<div class="sheet-sub" style="margin-top:6px;"><b>⚜️ Guilds</b> — ${g.map(r=>GUILD_DEFS[r].ic+' '+GUILD_DEFS[r].name).join(' · ')} <span style="opacity:.7">(+${Math.round(guildBonusVal()*100)}% each)</span></div>`:''; })()}
     <div class="sheet-sub" style="margin:8px 0 2px;"><b>🏅 Deeds</b> — ${Object.keys(deeds).length} of ${DEED_DEFS.length} earned</div>
-    <div class="deed-grid">
+    <div class="deed-G.grid">
       ${DEED_DEFS.map(d=>{
         const got = !!deeds[d.id];
         const rt = rewardText(d.reward);
@@ -6806,7 +6663,7 @@ function demolishBuilding(b){
     if(v.targetBuilding===b){ releaseClaims(v); v.state='idle'; }
   }
   gainResource('wood', Math.floor((BUILD_DEFS[b.type]?BUILD_DEFS[b.type].cost.wood:0) * 0.5));
-  for(let yy=b.gy; yy<b.gy+b.h; yy++) for(let xx=b.gx; xx<b.gx+b.w; xx++){ if(grid[yy] && grid[yy][xx]) grid[yy][xx].building=null; }
+  for(let yy=b.gy; yy<b.gy+b.h; yy++) for(let xx=b.gx; xx<b.gx+b.w; xx++){ if(G.grid[yy] && G.grid[yy][xx]) G.grid[yy][xx].building=null; }
   buildings = buildings.filter(x=>x!==b);
   toast('Building demolished.');
   deselectAll();
@@ -6865,7 +6722,7 @@ function renderBuildPalette(){
       };
       return ['home','food','industry','trade','defense','road'].map(cat=>{
         const inCat = keys.filter(k=>(CATOF[k]||'trade')===cat);
-        return inCat.length ? `<div class="build-cat">${CAT[cat]}</div><div class="build-grid">${inCat.map(card).join('')}</div>` : '';
+        return inCat.length ? `<div class="build-cat">${CAT[cat]}</div><div class="build-G.grid">${inCat.map(card).join('')}</div>` : '';
       }).join('');
     })()}
   `;
@@ -6924,9 +6781,9 @@ function confirmPlacement(){
   if(reason){ toast(reason, true); return; }
   if(buildMode.movingBuilding){
     const b = buildMode.movingBuilding;
-    for(let yy=b.gy; yy<b.gy+b.h; yy++) for(let xx=b.gx; xx<b.gx+b.w; xx++){ if(grid[yy] && grid[yy][xx]) grid[yy][xx].building=null; }
+    for(let yy=b.gy; yy<b.gy+b.h; yy++) for(let xx=b.gx; xx<b.gx+b.w; xx++){ if(G.grid[yy] && G.grid[yy][xx]) G.grid[yy][xx].building=null; }
     b.gx = gx; b.gy = gy;
-    grid[gy][gx].building = b;
+    G.grid[gy][gx].building = b;
     toast(BUILD_DEFS[b.type].name+' relocated.');
     exitBuildMode();
     deselectAll();
@@ -7241,8 +7098,8 @@ function serializeState(){
     v:2, savedAt: Date.now(),
     worldTime, dayCount, stockpile, totals, questsCompleted, wolfEvents,
     idleSlotCounter, usedNames, journal, researched, activeResearch, coins, dailyBounties, dailyProgress, bannerIdx, gameModeId,
-    landId, scenarioId, scenarioWon, tcX: TC_X, tcY: TC_Y,
-    grid: grid.map(row=>row.map(t=>({type:t.type,wilds:t.wilds,ford:t.ford||undefined,resourceAmount:t.resourceAmount,maxResource:t.maxResource,baseMax:t.baseMax,regrowAt:t.regrowAt}))),
+    landId, scenarioId, scenarioWon, tcX: G.TC_X, tcY: G.TC_Y,
+    grid: G.grid.map(row=>row.map(t=>({type:t.type,wilds:t.wilds,ford:t.ford||undefined,resourceAmount:t.resourceAmount,maxResource:t.maxResource,baseMax:t.baseMax,regrowAt:t.regrowAt}))),
     buildings: buildings.map(b=>({type:b.type,gx:b.gx,gy:b.gy,condition:Math.round(b.condition===undefined?100:b.condition),herd:b.herd})),
     villagers: villagers.map(v=>({name:v.name, role:v.role, gx:v.gx, gy:v.gy, hunger:v.hunger, fatigue:v.fatigue, trait:v.trait, sick:v.sick, morale:v.morale||65, partner:v.partner||null, parents:v.parents||null, relations:v.relations||[], memories:v.memories||[], age:v.age, stage:v.stage, lifespan:v.lifespan, skills:v.skills||{}})),
     memorials: memorials, chronicle: chronicle, deeds: deeds, statHistory: statHistory,
@@ -7465,27 +7322,27 @@ function restoreState(data){
   gameMode = GAME_MODES[gameModeId] || GAME_MODES.settler;
   if(data.ui && data.ui.mmBig) document.getElementById('minimap-wrap').classList.add('mm-big');
   // Restore the map at ITS OWN saved size — the save may be from a Small (26)
-  // or Large (46) map while the module default is 36. Deriving MAP_SIZE from
-  // the saved grid prevents out-of-bounds reads / truncated restores.
+  // or Large (46) map while the module default is 36. Deriving G.MAP_SIZE from
+  // the saved G.grid prevents out-of-bounds reads / truncated restores.
   if(data.grid && data.grid.length){
-    MAP_SIZE = data.grid.length;
-    TC_X = (data.tcX !== undefined) ? data.tcX : Math.floor(MAP_SIZE/2)-1;
-    TC_Y = (data.tcY !== undefined) ? data.tcY : Math.floor(MAP_SIZE/2)-1;
-    TC_CX = TC_X+0.5; TC_CY = TC_Y+0.5;
+    G.MAP_SIZE = data.grid.length;
+    G.TC_X = (data.tcX !== undefined) ? data.tcX : Math.floor(G.MAP_SIZE/2)-1;
+    G.TC_Y = (data.tcY !== undefined) ? data.tcY : Math.floor(G.MAP_SIZE/2)-1;
+    G.TC_CX = G.TC_X+0.5; G.TC_CY = G.TC_Y+0.5;
   }
-  grid=[]; forestTiles=[]; stoneTiles=[]; waterTiles=[]; wildsTiles=[];
-  for(let y=0;y<MAP_SIZE;y++){
+  G.grid=[]; G.forestTiles=[]; G.stoneTiles=[]; G.waterTiles=[]; G.wildsTiles=[];
+  for(let y=0;y<G.MAP_SIZE;y++){
     const row=[];
-    for(let x=0;x<MAP_SIZE;x++){
+    for(let x=0;x<G.MAP_SIZE;x++){
       const s = data.grid[y][x];
       const t = {gx:x,gy:y,type:s.type,resourceAmount:s.resourceAmount,maxResource:s.maxResource,baseMax:(s.baseMax!==undefined?s.baseMax:(s.type==='forest'?(s.maxResource||6):s.maxResource)),workers:0,regrowAt:s.regrowAt,building:null,wilds:s.wilds,ford:s.ford||false};
       row.push(t);
-      if(t.type==='forest') forestTiles.push(t);
-      else if(t.type==='stone') stoneTiles.push(t);
-      else if(t.type==='water') waterTiles.push(t);
-      if(t.wilds) wildsTiles.push(t);
+      if(t.type==='forest') G.forestTiles.push(t);
+      else if(t.type==='stone') G.stoneTiles.push(t);
+      else if(t.type==='water') G.waterTiles.push(t);
+      if(t.wilds) G.wildsTiles.push(t);
     }
-    grid.push(row);
+    G.grid.push(row);
   }
   buildings=[];
   for(const bd of data.buildings){ const nb = addBuilding(bd.type,bd.gx,bd.gy); if(nb){ nb.condition = bd.condition!==undefined ? bd.condition : 100; if(bd.herd!==undefined) nb.herd = bd.herd; } }
@@ -7608,8 +7465,8 @@ function paintAt(gx, gy){
   gx = Math.round(gx); gy = Math.round(gy);
   if(editBrush==='tc'){
     // The hold needs a 2x2 of clear ground, and room to breathe around it.
-    const x = clamp(gx, 1, MAP_SIZE-3), y = clamp(gy, 1, MAP_SIZE-3);
-    TC_X = x; TC_Y = y; TC_CX = x+0.5; TC_CY = y+0.5;
+    const x = clamp(gx, 1, G.MAP_SIZE-3), y = clamp(gy, 1, G.MAP_SIZE-3);
+    G.TC_X = x; G.TC_Y = y; G.TC_CX = x+0.5; G.TC_CY = y+0.5;
     for(let yy=y-1; yy<=y+2; yy++) for(let xx=x-1; xx<=x+2; xx++){
       const t = tileAt(xx,yy); if(t){ applyBrushTo(t, (yy>=y&&yy<y+2&&xx>=x&&xx<x+2) ? 'dirt' : 'grass'); }
     }
@@ -7628,13 +7485,13 @@ function encodeLand(){
   const runs = [];
   let prev = -1, run = 0;
   const flush = ()=>{ while(run>0){ const n = Math.min(run,255); runs.push(prev, n); run -= n; } };
-  for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<MAP_SIZE;x++){
-    const t = grid[y][x];
+  for(let y=0;y<G.MAP_SIZE;y++) for(let x=0;x<G.MAP_SIZE;x++){
+    const t = G.grid[y][x];
     const c = t.wilds ? 5 : (TCODE[t.type] !== undefined ? TCODE[t.type] : 0);
     if(c===prev) run++; else { flush(); prev = c; run = 1; }
   }
   flush();
-  const bytes = [MAP_SIZE, TC_X, TC_Y].concat(runs);
+  const bytes = [G.MAP_SIZE, G.TC_X, G.TC_Y].concat(runs);
   let bin = '';
   for(const b of bytes) bin += String.fromCharCode(b & 255);
   return 'OAK1' + btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -7648,18 +7505,18 @@ function decodeLand(code){
     const bytes = []; for(let i=0;i<bin.length;i++) bytes.push(bin.charCodeAt(i));
     const size = bytes[0], tx = bytes[1], ty = bytes[2];
     if(!size || size<12 || size>80) return false;
-    MAP_SIZE = size; TC_X = tx; TC_Y = ty; TC_CX = tx+0.5; TC_CY = ty+0.5;
-    grid = []; forestTiles=[]; stoneTiles=[]; waterTiles=[]; wildsTiles=[];
-    for(let y=0;y<MAP_SIZE;y++){
+    G.MAP_SIZE = size; G.TC_X = tx; G.TC_Y = ty; G.TC_CX = tx+0.5; G.TC_CY = ty+0.5;
+    G.grid = []; G.forestTiles=[]; G.stoneTiles=[]; G.waterTiles=[]; G.wildsTiles=[];
+    for(let y=0;y<G.MAP_SIZE;y++){
       const row = [];
-      for(let x=0;x<MAP_SIZE;x++) row.push({ gx:x, gy:y, type:'grass', resourceAmount:0, maxResource:0, workers:0, regrowAt:0, building:null, wilds:false });
-      grid.push(row);
+      for(let x=0;x<G.MAP_SIZE;x++) row.push({ gx:x, gy:y, type:'grass', resourceAmount:0, maxResource:0, workers:0, regrowAt:0, building:null, wilds:false });
+      G.grid.push(row);
     }
     let i = 3, idx = 0;
-    while(i+1 < bytes.length && idx < MAP_SIZE*MAP_SIZE){
+    while(i+1 < bytes.length && idx < G.MAP_SIZE*G.MAP_SIZE){
       const code2 = bytes[i], n = bytes[i+1]; i += 2;
-      for(let k=0;k<n && idx<MAP_SIZE*MAP_SIZE;k++,idx++){
-        const t = grid[(idx/MAP_SIZE)|0][idx%MAP_SIZE];
+      for(let k=0;k<n && idx<G.MAP_SIZE*G.MAP_SIZE;k++,idx++){
+        const t = G.grid[(idx/G.MAP_SIZE)|0][idx%G.MAP_SIZE];
         applyBrushTo(t, code2===5 ? 'wilds' : (TCODE_R[code2]||'grass'));
       }
     }
@@ -7667,28 +7524,18 @@ function decodeLand(code){
   }catch(e){ return false; }
 }
 /* Rebuild the lookup lists the simulation walks every tick. */
-function reindexTiles(){
-  forestTiles=[]; stoneTiles=[]; waterTiles=[]; wildsTiles=[];
-  for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<MAP_SIZE;x++){
-    const t = grid[y][x];
-    if(t.type==='forest') forestTiles.push(t);
-    else if(t.type==='stone') stoneTiles.push(t);
-    else if(t.type==='water') waterTiles.push(t);
-    if(t.wilds) wildsTiles.push(t);
-  }
-}
 
 /* ── UNDO ── A stroke's worth of ground, kept as one byte per tile. Cheap
    enough (a large map is 2.1KB) to snapshot before every stroke. */
 let undoStack = [];
 function landSnapshot(){
-  const a = new Uint8Array(MAP_SIZE*MAP_SIZE);
+  const a = new Uint8Array(G.MAP_SIZE*G.MAP_SIZE);
   let i = 0;
-  for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<MAP_SIZE;x++){
-    const t = grid[y][x];
+  for(let y=0;y<G.MAP_SIZE;y++) for(let x=0;x<G.MAP_SIZE;x++){
+    const t = G.grid[y][x];
     a[i++] = t.wilds ? 5 : (TCODE[t.type] !== undefined ? TCODE[t.type] : 0);
   }
-  return { size:MAP_SIZE, tx:TC_X, ty:TC_Y, a };
+  return { size:G.MAP_SIZE, tx:G.TC_X, ty:G.TC_Y, a };
 }
 function pushUndo(){
   if(!editorOn) return;
@@ -7699,12 +7546,12 @@ function pushUndo(){
 function undoEdit(){
   const s = undoStack.pop();
   if(!s) return;
-  if(s.size !== MAP_SIZE){ MAP_SIZE = s.size; blankLand(); }
-  TC_X = s.tx; TC_Y = s.ty; TC_CX = s.tx+0.5; TC_CY = s.ty+0.5;
+  if(s.size !== G.MAP_SIZE){ G.MAP_SIZE = s.size; blankLand(); }
+  G.TC_X = s.tx; G.TC_Y = s.ty; G.TC_CX = s.tx+0.5; G.TC_CY = s.ty+0.5;
   let i = 0;
-  for(let y=0;y<MAP_SIZE;y++) for(let x=0;x<MAP_SIZE;x++){
+  for(let y=0;y<G.MAP_SIZE;y++) for(let x=0;x<G.MAP_SIZE;x++){
     const c = s.a[i++];
-    applyBrushTo(grid[y][x], c===5 ? 'wilds' : (TCODE_R[c]||'grass'));
+    applyBrushTo(G.grid[y][x], c===5 ? 'wilds' : (TCODE_R[c]||'grass'));
   }
   reindexTiles(); editorTitle(); refreshUndoBtn();
 }
@@ -7715,29 +7562,29 @@ function refreshUndoBtn(){
 
 /* ── EDITOR LIFECYCLE ── */
 function blankLand(){
-  grid = [];
-  for(let y=0;y<MAP_SIZE;y++){
+  G.grid = [];
+  for(let y=0;y<G.MAP_SIZE;y++){
     const row = [];
-    for(let x=0;x<MAP_SIZE;x++) row.push({ gx:x, gy:y, type:'grass', resourceAmount:0, maxResource:0, workers:0, regrowAt:0, building:null, wilds:false });
-    grid.push(row);
+    for(let x=0;x<G.MAP_SIZE;x++) row.push({ gx:x, gy:y, type:'grass', resourceAmount:0, maxResource:0, workers:0, regrowAt:0, building:null, wilds:false });
+    G.grid.push(row);
   }
-  const c = Math.floor(MAP_SIZE/2)-1;
-  TC_X = c; TC_Y = c; TC_CX = c+0.5; TC_CY = c+0.5;
+  const c = Math.floor(G.MAP_SIZE/2)-1;
+  G.TC_X = c; G.TC_Y = c; G.TC_CX = c+0.5; G.TC_CY = c+0.5;
   reindexTiles();
 }
 function editorTitle(){
   const el = document.getElementById('editor-title');
-  if(el) el.textContent = `Land Editor · ${MAP_SIZE}² · hold ${TC_X},${TC_Y}`;
+  if(el) el.textContent = `Land Editor · ${G.MAP_SIZE}² · hold ${G.TC_X},${G.TC_Y}`;
 }
 function centreOnHold(){
-  const c = project(TC_CX, TC_CY);
+  const c = project(G.TC_CX, G.TC_CY);
   camera.panX = -c.x*camera.scale;
   camera.panY = -c.y*camera.scale + 40;
   clampCamera();
 }
 function enterEditor(){
   resizeCanvas();
-  resetHoldState();      // clears state and reads MAP_SIZE from the size picker
+  resetHoldState();      // clears state and reads G.MAP_SIZE from the size picker
   blankLand();
   undoStack = []; refreshUndoBtn();
   editorOn = true;
@@ -7761,7 +7608,7 @@ function exitEditor(){
 }
 function playLand(){
   reindexTiles();
-  if(!tileAt(TC_X, TC_Y)){ toast('Place the hold somewhere on the land first.', true); return; }
+  if(!tileAt(G.TC_X, G.TC_Y)){ toast('Place the hold somewhere on the land first.', true); return; }
   editorOn = false;
   document.body.classList.remove('editing');
   document.getElementById('editor-ui').classList.add('hidden');
@@ -7771,7 +7618,7 @@ function playLand(){
   // A land you drew yourself is a sandbox — a goal you set the terrain for
   // isn't a goal. Build it however you like, for as long as you like.
   scenarioId = 'endless'; scenarioWon = false;
-  addBuilding('townCenter', TC_X, TC_Y);
+  addBuilding('townCenter', G.TC_X, G.TC_Y);
   for(let i=0;i<3;i++) spawnVillager();
   chron('founding');
   finishBoot();
@@ -7833,7 +7680,7 @@ function finishBoot(){
   initCameraZoom();
   try { updateHudReserve(); } catch(e){}
   try { spawnWildlife(); } catch(e){}
-  const c = project(TC_CX, TC_CY);
+  const c = project(G.TC_CX, G.TC_CY);
   camera.panX = -c.x*camera.scale;
   camera.panY = -c.y*camera.scale + 40;
   clampCamera();
@@ -7855,7 +7702,7 @@ function resetHoldState(){
   const crestSel = document.querySelector('#crest-picker .sel');
   crestChoice = crestSel ? (parseInt(crestSel.dataset.crest,10)||0) : 0;
   // Full state reset
-  grid=[]; forestTiles=[]; stoneTiles=[]; waterTiles=[]; wildsTiles=[];
+  G.grid=[]; G.forestTiles=[]; G.stoneTiles=[]; G.waterTiles=[]; G.wildsTiles=[];
   buildings=[]; villagers=[]; memorials=[]; chronicle=[]; deeds={}; statHistory=[]; festivalBoon=null; lastFestivalYear=0; tradeRoutes=[]; routeOffers=[]; climate=null; plague=null; raiders=[];
   worldTime=30; dayCount=1; wolfTimer=60; wolfEvents=0;
   spawnTimer=18; idleSlotCounter=0; usedNames=[];
@@ -7877,7 +7724,7 @@ function startNewGame(){
   resetHoldState();
   claimSlotName();
   genMap(landId);
-  addBuilding('townCenter', TC_X, TC_Y);
+  addBuilding('townCenter', G.TC_X, G.TC_Y);
   for(let i=0;i<3;i++) spawnVillager();
   chron('founding');
   finishBoot();
