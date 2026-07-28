@@ -21,6 +21,7 @@ import {
 import { installStorage, isNative } from './storage';
 import { G } from './state';
 import { tileAt, genMap, reindexTiles } from './mapgen';
+import { TCODE, TCODE_R, applyBrushTo, encodeLand, decodeLand } from './landcode';
 import { sfx, buzz, startMusic, stopMusic, isSfxOn, setSfxOn, isMusicOn, setMusicOn } from './audio';
 
 import { SPRITE_URLS, VANIM_B64, DECOR_B64, TERRAIN_B64 } from './assets';   // audio tables now belong to src/audio.ts
@@ -7436,31 +7437,9 @@ const EDIT_BRUSHES = [
   { id:'dirt',   ic:'🟫', label:'Dirt' },
   { id:'tc',     ic:'🏛️', label:'Hold' },
 ];
-const TCODE   = { grass:0, dirt:1, forest:2, stone:3, water:4 };
-const TCODE_R = ['grass','dirt','forest','stone','water'];
 
 /* Give a painted tile the resource values the simulation expects, so a hand-made
    land plays exactly like a generated one. */
-function applyBrushTo(t, brush){
-  if(!t || t.building) return;
-  t.wilds = false; t.ford = false;
-  t.maxResource = 0; t.resourceAmount = 0; t.regrowAt = 0; t.workers = 0;
-  if(brush==='wilds'){
-    t.type = 'grass'; t.wilds = true;
-    t.maxResource = 3+Math.floor(Math.random()*3); t.resourceAmount = t.maxResource;
-  } else if(brush==='forest'){
-    t.type = 'forest';
-    t.maxResource = 4+Math.floor(Math.random()*4); t.resourceAmount = t.maxResource; t.baseMax = t.maxResource;
-  } else if(brush==='stone'){
-    t.type = 'stone';
-    t.maxResource = 5+Math.floor(Math.random()*5); t.resourceAmount = t.maxResource;
-  } else if(brush==='water'){
-    t.type = 'water';
-    t.maxResource = 4+Math.floor(Math.random()*4); t.resourceAmount = t.maxResource;
-  } else {
-    t.type = brush;   // grass | dirt
-  }
-}
 function paintAt(gx, gy){
   gx = Math.round(gx); gy = Math.round(gy);
   if(editBrush==='tc'){
@@ -7481,48 +7460,6 @@ function paintAt(gx, gy){
 
 /* ── SHARE CODES ── RLE over tile codes, then base64url. Built with a loop, not
    String.fromCharCode(...bytes) — spreading a big array blows the stack. */
-function encodeLand(){
-  const runs = [];
-  let prev = -1, run = 0;
-  const flush = ()=>{ while(run>0){ const n = Math.min(run,255); runs.push(prev, n); run -= n; } };
-  for(let y=0;y<G.MAP_SIZE;y++) for(let x=0;x<G.MAP_SIZE;x++){
-    const t = G.grid[y][x];
-    const c = t.wilds ? 5 : (TCODE[t.type] !== undefined ? TCODE[t.type] : 0);
-    if(c===prev) run++; else { flush(); prev = c; run = 1; }
-  }
-  flush();
-  const bytes = [G.MAP_SIZE, G.TC_X, G.TC_Y].concat(runs);
-  let bin = '';
-  for(const b of bytes) bin += String.fromCharCode(b & 255);
-  return 'OAK1' + btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
-}
-function decodeLand(code){
-  try{
-    const raw = String(code||'').trim();
-    if(!raw.startsWith('OAK1')) return false;
-    const b64 = raw.slice(4).replace(/-/g,'+').replace(/_/g,'/');
-    const bin = atob(b64);
-    const bytes = []; for(let i=0;i<bin.length;i++) bytes.push(bin.charCodeAt(i));
-    const size = bytes[0], tx = bytes[1], ty = bytes[2];
-    if(!size || size<12 || size>80) return false;
-    G.MAP_SIZE = size; G.TC_X = tx; G.TC_Y = ty; G.TC_CX = tx+0.5; G.TC_CY = ty+0.5;
-    G.grid = []; G.forestTiles=[]; G.stoneTiles=[]; G.waterTiles=[]; G.wildsTiles=[];
-    for(let y=0;y<G.MAP_SIZE;y++){
-      const row = [];
-      for(let x=0;x<G.MAP_SIZE;x++) row.push({ gx:x, gy:y, type:'grass', resourceAmount:0, maxResource:0, workers:0, regrowAt:0, building:null, wilds:false });
-      G.grid.push(row);
-    }
-    let i = 3, idx = 0;
-    while(i+1 < bytes.length && idx < G.MAP_SIZE*G.MAP_SIZE){
-      const code2 = bytes[i], n = bytes[i+1]; i += 2;
-      for(let k=0;k<n && idx<G.MAP_SIZE*G.MAP_SIZE;k++,idx++){
-        const t = G.grid[(idx/G.MAP_SIZE)|0][idx%G.MAP_SIZE];
-        applyBrushTo(t, code2===5 ? 'wilds' : (TCODE_R[code2]||'grass'));
-      }
-    }
-    return true;
-  }catch(e){ return false; }
-}
 /* Rebuild the lookup lists the simulation walks every tick. */
 
 /* ── UNDO ── A stroke's worth of ground, kept as one byte per tile. Cheap
