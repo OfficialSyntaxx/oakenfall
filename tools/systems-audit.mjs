@@ -51,14 +51,33 @@ await page.fill('#redeem-input', 'Joy904'); await page.click('#redeem-go');
 await page.waitForTimeout(400);
 
 const snap = () => page.evaluate(() => window.__oakDebug());
+/* Reach an admin control and actually press it.
+ *
+ * The old version checked whether the button EXISTED and, if so, clicked it
+ * blind, swallowing any failure. Both halves were wrong. A decision dialog can
+ * cover a button that is present in the DOM, so the existence check skips the
+ * dismissal and the click is then intercepted; and swallowing the failure meant
+ * the run continued as if the admin action had happened, failing several steps
+ * later with something unrelated ("0 raiders") and no hint why. That produced
+ * three separate mystery flakes before anyone looked at this helper.
+ *
+ * So: always clear anything blocking, open the panel if the control is not
+ * clickable, then click for real and let a genuine failure say so. */
 async function admin(kind) {
-  if (!(await page.locator(`[data-admin="${kind}"]`).count())) {
-    for (const sel of ['#decision-done', '#v-continue', '#sheet-close', '#more-btn', '#redeem-btn', '#admin-open']) {
-      await page.click(sel, { timeout: 800 }).catch(() => {});
+  const target = page.locator(`[data-admin="${kind}"]`);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (!(await target.isVisible().catch(() => false))) {
+      for (const sel of ['#decision-done', '#v-continue', '#sheet-close', '#more-btn', '#redeem-btn', '#admin-open']) {
+        await page.click(sel, { timeout: 800 }).catch(() => {});
+      }
     }
+    try {
+      await target.click({ timeout: 2000 });
+      await page.waitForTimeout(200);
+      return;
+    } catch (e) { /* covered or not open yet — clear and retry once */ }
   }
-  await page.click(`[data-admin="${kind}"]`, { timeout: 1500 }).catch(() => {});
-  await page.waitForTimeout(200);
+  throw new Error(`admin control "${kind}" could not be pressed — the run cannot mean anything after this`);
 }
 async function order(text) {
   for (const sel of ['#decision-done', '#v-continue', '#sheet-close']) await page.click(sel, { timeout: 600 }).catch(() => {});

@@ -27,7 +27,7 @@ import { DAY_LEN, NIGHT_LEN, CYCLE_LEN, SEASON_LEN, setForceWinter, seasonIndex,
 function updateSunShadows(){ setSunShadow(...sunShadow()); }
 import { tileAt, genMap, reindexTiles } from './mapgen';
 import { tileWalkable, nearestWalkable, pathFind } from './pathfind';
-import { initLives, hasTrait, relTo, remember, bumpRel, relationsTick, releaseClaims,
+import { initLives, familyTick, hasTrait, relTo, remember, bumpRel, relationsTick, releaseClaims,
   memorialSpot, agingTick, passVillager, seedRelMoments,
   AGE_YEAR, ADULT_AGE, ELDER_BEFORE, LIFESPAN_BASE } from './lives';
 import { initSkills, SKILL_TIERS, skillTier, skillMul, gainSkill, hasNearbyMentor,
@@ -1469,47 +1469,6 @@ function ambientIdle(v){
   v.ambientEmote = night ? '✨' : (Math.random()<0.3 ? '🎵' : null);
 }
 
-function familyTick(dt){
-  G.courtshipTimer -= dt;
-  if(G.courtshipTimer<=0){
-    G.courtshipTimer = 80 + Math.random()*60;
-    const single = G.villagers.filter(v=>!v.partner && v.morale>50 && v.state!=='spawning');
-    if(single.length>=2){
-      const a = single[Math.floor(Math.random()*single.length)];
-      // Prefer to wed a close friend, if one is also single; else a random match.
-      const friendMatch = (a.relations||[]).filter(r=>r.type==='friend'&&r.s>50)
-        .map(r=>single.find(o=>o.name===r.name)).filter(Boolean)[0];
-      let b2 = friendMatch || single[Math.floor(Math.random()*single.length)];
-      if(a!==b2){
-        a.partner=b2.name; b2.partner=a.name;
-        remember(a,'wed '+b2.name); remember(b2,'wed '+a.name);
-        a.morale=clamp(a.morale+15,0,100); b2.morale=clamp(b2.morale+15,0,100);
-        toast('💞 '+a.name+' and '+b2.name+' have wed beneath the pines!');
-        chron('wed', a.name, b2.name);
-        G.journal.weddings=(G.journal.weddings||0)+1;
-      }
-    }
-  }
-  G.birthTimer -= dt;
-  if(G.birthTimer<=0){
-    G.birthTimer = 120 + Math.random()*80;
-    if(G.villagers.length < popCapacity() && G.stockpile.food > 30){
-      const couples = G.villagers.filter(v=>v.partner && v.morale>55 && G.villagers.some(o=>o.name===v.partner));
-      if(couples.length){
-        const parent = couples[Math.floor(Math.random()*couples.length)];
-        const other = G.villagers.find(o=>o.name===parent.partner);
-        const inheritedTrait = Math.random()<0.5 ? parent.trait : (other?other.trait:parent.trait);
-        const child = spawnVillager(null, inheritedTrait);
-        child.gx = parent.gx; child.gy = parent.gy;
-        child.parents = [parent.name, parent.partner];
-        child.age = 0; child.stage = 'child';
-        toast('👶 A child is born to '+parent.name+' and '+parent.partner+' — welcome, '+child.name+'!');
-        chron('born', child.name, parent.name+' and '+parent.partner);
-        G.journal.childrenBorn=(G.journal.childrenBorn||0)+1;
-      }
-    }
-  }
-}
 const DECAY_RATE = 100/(10*245); // full decay over ~10 day cycles
 
 /* ── RESEARCH & POLICIES ── one active project at a time, run from the Town Center */
@@ -3222,7 +3181,8 @@ initWeather({ toast, chron, sfx, forceWinter: ()=>!!gameMode.forceWinter });
 initSkills({ toast, chron });
 /* Lives needs one thing back: when a settler passes, whatever the UI was
    holding them open for has to let go. */
-initLives({ toast, chron, onPassed: (v)=>{ if(selection && selection.ref===v) deselectAll(); } });
+initLives({ toast, chron, popCapacity, spawnVillager,
+  onPassed: (v)=>{ if(selection && selection.ref===v) deselectAll(); } });
 
 const TILE_COLORS = {
   grass: ['#2f4528','#33492c','#2a3f25','#304826'],

@@ -1,8 +1,9 @@
-/* Lives: friendships, rivalries, growing up, and passing on.
+/* Lives: friendship, marriage, birth, growing up, and passing on.
  *
  * The part of the simulation the player remembers. Settlers who work near each
- * other become friends or grate on each other, children come of age, elders
- * slow, and the dead are laid out in a memorial grove by the town centre.
+ * other become friends or grate on each other, the fond ones wed, children are
+ * born and come of age, elders slow, and the dead are laid out in a memorial
+ * grove by the town centre. One cycle, so it lives in one module.
  *
  * Reports through initLives() rather than reaching for main.ts's toast and
  * chronicle. It also needs one thing back from main: when a settler passes,
@@ -18,8 +19,13 @@ type Deps = {
   chron: (type: string, a?: any, b?: any, n?: any) => void;
   /** Called after a settler is removed, so the sheet showing them can close. */
   onPassed: (v: any) => void;
+  /** How many settlers the hold's housing can hold. */
+  popCapacity: () => number;
+  /** Raise a new settler. Returns the villager, so a newborn can be placed
+   *  beside its parents and set to the 'child' stage. */
+  spawnVillager: (nameOverride?: any, traitOverride?: any) => any;
 };
-let d: Deps = { toast: () => {}, chron: () => {}, onPassed: () => {} };
+let d: Deps = { toast: () => {}, chron: () => {}, onPassed: () => {}, popCapacity: () => 0, spawnVillager: () => null };
 export function initLives(deps: Deps): void { d = deps; }
 
 export function hasTrait(v: any, id: string): boolean { return v.trait && v.trait.id === id; }
@@ -164,4 +170,55 @@ export function passVillager(v: any): void {
     d.toast('🕊️ ' + v.name + ' passed peacefully at ' + seasons + ' seasons — laid to rest in the grove.');
   }
   d.chron('passed', v.name, null, seasons);
+}
+
+/* ── FAMILIES ── settlers pair off and raise children. Both are on their own
+   slow clocks rather than the frame: a hold should grow at the pace of a story,
+   not of a spreadsheet. */
+
+export function familyTick(dt: number): void {
+  G.courtshipTimer -= dt;
+  if (G.courtshipTimer <= 0) {
+    G.courtshipTimer = 80 + Math.random() * 60;
+    const single = G.villagers.filter((v: any) => !v.partner && v.morale > 50 && v.state !== 'spawning');
+    if (single.length >= 2) {
+      const a = single[Math.floor(Math.random() * single.length)];
+      // A close friend is the likelier match; failing that, anyone unattached.
+      const friendMatch = (a.relations || [])
+        .filter((r: any) => r.type === 'friend' && r.s > 50)
+        .map((r: any) => single.find((o: any) => o.name === r.name))
+        .filter(Boolean)[0];
+      const b = friendMatch || single[Math.floor(Math.random() * single.length)];
+      if (a !== b) {
+        a.partner = b.name; b.partner = a.name;
+        remember(a, 'wed ' + b.name); remember(b, 'wed ' + a.name);
+        a.morale = clamp(a.morale + 15, 0, 100);
+        b.morale = clamp(b.morale + 15, 0, 100);
+        d.toast('💞 ' + a.name + ' and ' + b.name + ' have wed beneath the pines!');
+        d.chron('wed', a.name, b.name);
+        G.journal.weddings++;
+      }
+    }
+  }
+
+  G.birthTimer -= dt;
+  if (G.birthTimer <= 0) {
+    G.birthTimer = 120 + Math.random() * 80;
+    // No room and no food is no time to have a child.
+    if (G.villagers.length >= d.popCapacity() || G.stockpile.food <= 30) return;
+    const couples = G.villagers.filter((v: any) =>
+      v.partner && v.morale > 55 && G.villagers.some((o: any) => o.name === v.partner));
+    if (!couples.length) return;
+    const parent = couples[Math.floor(Math.random() * couples.length)];
+    const other = G.villagers.find((o: any) => o.name === parent.partner);
+    const inherited = Math.random() < 0.5 ? parent.trait : (other ? other.trait : parent.trait);
+    const child = d.spawnVillager(null, inherited);
+    child.gx = parent.gx; child.gy = parent.gy;
+    child.parents = [parent.name, parent.partner];
+    child.age = 0;
+    child.stage = 'child';
+    d.toast('👶 A child is born to ' + parent.name + ' and ' + parent.partner + ' — welcome, ' + child.name + '!');
+    d.chron('born', child.name, parent.name + ' and ' + parent.partner);
+    G.journal.childrenBorn++;
+  }
 }
