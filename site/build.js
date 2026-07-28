@@ -113,18 +113,14 @@ if (fs.existsSync(IMG_SRC)) {
   }
 }
 
-// Living-world sim (Canvas2D port) served at /living/ — a testbed for the
-// "living-sim becomes core" direction. Additive; does not affect / or /play/.
-const livingSrc = path.join(ROOT, 'game', 'oakenfall-living-canvas.html');
-if (fs.existsSync(livingSrc)) {
-  fs.mkdirSync(path.join(OUT, 'living'), { recursive: true });
-  fs.copyFileSync(livingSrc, path.join(OUT, 'living', 'index.html'));
-}
-
-/* The 3D prototype is deliberately NOT published. The owner abandoned that
-   direction — the game is staying 2.5D — and it was reachable at /3d/, linked
-   from nowhere, pulling three.js off a CDN. The source stays in game/ as a
-   record; it just isn't deployed. */
+/* Two prototypes are deliberately NOT published.
+   - The living-world testbed was at /living/: linked from nowhere, no title
+     heading, unlabelled controls, and long since overtaken by the real game,
+     which absorbed the ideas it was written to try. Removed at the owner's
+     call; git history keeps it.
+   - The 3D prototype was at /3d/. The owner abandoned that direction — the
+     game is staying 2.5D — and it pulled three.js off a CDN besides. The
+     source stays in game/ as a record; it just isn't deployed. */
 
 // Cinematic scroll landing page = the homepage (/), also at /valley/.
 // Standalone HTML (its own <head>/scripts); copied raw, not through layout.
