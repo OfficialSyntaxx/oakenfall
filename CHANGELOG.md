@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.81.0
+Oakenfall now asks nothing of anyone else. The opening valley was borrowing its
+scenery code and its lettering from two other companies' servers — the last
+corner of the project that still did. Both now ship from Oakenfall's own, so
+the page draws the same whether or not the rest of the internet is having a
+good day, and nobody is handed a record of your visit for the privilege.
+
+The crest colours, difficulty choices and stores chevron on the title screen
+were all smaller than a thumb. They are not any more.
+
+The steward's "start a fire" test could pick a building made of stone and then
+report a blaze that never lit. It now picks something that burns.
+
 ## 1.80.0
 The front door, tidied. Sharing a link to Oakenfall anywhere — a message, a
 post, a chat — now shows a real dusk shot of a working hold instead of a blurry

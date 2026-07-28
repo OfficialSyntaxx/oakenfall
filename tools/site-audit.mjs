@@ -72,9 +72,13 @@ for (const route of pages) {
     // prose and cannot be 44px without breaking the paragraph. Standalone
     // controls have no such excuse.
     const inProse = (el) => !!el.closest('p, li, td, .prose, .district-body');
+    // data-hitslop="N" marks a control that keeps small chrome on purpose (no
+    // room in the HUD) but extends its touch area by N px on every side via a
+    // pseudo-element. The rect can't show that, so the markup declares it.
+    const slop = (el) => 2 * (parseFloat(el.dataset.hitslop) || 0);
     const smallTargets = [...document.querySelectorAll('a, button')].filter((el) => {
       const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height < 44 && !inProse(el);
+      return r.width > 0 && r.height + slop(el) < 44 && !inProse(el);
     }).map((el) => (el.textContent || el.getAttribute('aria-label') || '?').trim().slice(0, 24));
     return {
       title: document.title,
@@ -95,15 +99,27 @@ for (const route of pages) {
 console.log('\nPAGE                 KB     TITLE');
 for (const r of rows) console.log(`${r.route.padEnd(20)} ${String(r.kb).padStart(5)}  ${(r.title || '(none)').slice(0, 54)}`);
 
-const say = (label, list) => { if (list.length) { problems.push(label); console.log(`\n${label}`); for (const l of list) console.log('  · ' + l); } };
+/* Two tiers. Most findings are judgement calls a person should look at; a few
+   are the project's own rules and fail the run. Requests to a third party are
+   the sharpest of those — "everything ships from our origin, offline always
+   works" is the constraint the whole asset pipeline exists to keep. */
+const fatal = [];
+const say = (label, list, hard) => {
+  if (!list.length) return;
+  problems.push(label);
+  if (hard) fatal.push(label);
+  console.log(`\n${hard ? 'FAIL  ' : ''}${label}`);
+  for (const l of list) console.log('  · ' + l);
+};
 
 say('Pages with no meta description:', rows.filter((r) => !r.desc).map((r) => r.route));
 say('Pages with no og:image (bad link previews):', rows.filter((r) => !r.og).map((r) => r.route));
 say('Pages with no <html lang>:', rows.filter((r) => !r.lang).map((r) => r.route));
 say('Pages without exactly one <h1>:', rows.filter((r) => r.h1 !== 1).map((r) => `${r.route} (${r.h1})`));
-say('Third-party requests:', rows.filter((r) => r.external.length).map((r) => `${r.route} → ${r.external.join(', ')}`));
-say('Failed requests:', rows.filter((r) => r.failed.length).map((r) => `${r.route} → ${r.failed.join(', ')}`));
-say('JavaScript errors:', rows.filter((r) => r.errs.length).map((r) => `${r.route} → ${r.errs[0]}`));
+say('Third-party requests (nothing may leave our origin):',
+  rows.filter((r) => r.external.length).map((r) => `${r.route} → ${r.external.join(', ')}`), true);
+say('Failed requests:', rows.filter((r) => r.failed.length).map((r) => `${r.route} → ${r.failed.join(', ')}`), true);
+say('JavaScript errors:', rows.filter((r) => r.errs.length).map((r) => `${r.route} → ${r.errs[0]}`), true);
 say('Images without alt text:', rows.filter((r) => r.imgsNoAlt).map((r) => `${r.route} (${r.imgsNoAlt})`));
 say('Buttons with no accessible name:', rows.filter((r) => r.btnsNoName).map((r) => `${r.route} (${r.btnsNoName})`));
 say('Tap targets under 44px on a phone (prose links exempt):',
@@ -119,7 +135,7 @@ for (const r of rows) {
     if (!fs.existsSync(f) && !fs.existsSync(f + '/index.html')) dead.push(`${r.route} → ${l}`);
   }
 }
-say('Dead internal links:', [...new Set(dead)]);
+say('Dead internal links:', [...new Set(dead)], true);
 
 // Pages nothing links to.
 const linked = new Set(['/']);
@@ -131,3 +147,7 @@ say('Orphan pages (published, linked from nowhere):',
 await browser.close();
 server.close();
 console.log(problems.length ? `\n${problems.length} categories of finding — see above.` : '\nNo findings.');
+if (fatal.length) {
+  console.log(`${fatal.length} of them break a rule the site is meant to keep:\n  ${fatal.join('\n  ')}`);
+  process.exit(1);
+}

@@ -65,6 +65,10 @@ fs.mkdirSync(OUT, { recursive: true });
 
 copyDir(path.join(SITE, 'css'), path.join(OUT, 'css'));
 copyDir(path.join(SITE, 'js'), path.join(OUT, 'js'));
+// Webfonts and the vendored copies of PixiJS/GSAP live here so the site asks
+// nothing of a third-party CDN at runtime. Both are populated by
+// tools/vendor-sync.mjs from the versions pinned in package.json.
+copyDir(path.join(SITE, 'fonts'), path.join(OUT, 'fonts'));
 
 // The game at /game/. Built by Vite into dist/ (run `vite build` first — the
 // npm "build" script chains them). dist/ already contains the bundled code,

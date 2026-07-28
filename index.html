@@ -6,6 +6,15 @@
 <title>Oakenfall</title>
 <!-- No external requests at runtime: fonts fall back to the system serif
      stack ('Cinzel'/'EB Garamond' resolve to Georgia & friends). -->
+<meta name="description" content="Raise a hold in the valley of Oakenfall: settle the land, work the trades, and keep your people fed through the winter.">
+<!-- The game is normally reached through /play/, but the URL gets shared
+     directly often enough to deserve its own card. -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Oakenfall — Raise a hold in the valley">
+<meta property="og:description" content="Settle the land, work the trades, and keep your people fed through the winter.">
+<meta property="og:image" content="/img/og-oakenfall.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="/img/og-oakenfall.png">
 <meta name="theme-color" content="#14120e">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -67,7 +76,7 @@
      expand. Ordinary flex item — never floats over a pill. */
   #hud-top:not(.expanded) .pill.secondary{ display:none; }
   #hud-more{
-    flex:0 0 auto; pointer-events:auto; align-self:center;
+    flex:0 0 auto; pointer-events:auto; align-self:center; position:relative;
     width:30px; height:30px; min-width:30px; border-radius:8px; cursor:pointer;
     background:linear-gradient(180deg,var(--panel-top),var(--panel-bot));
     border:1px solid var(--panel-edge); color:var(--parchment-text);
@@ -75,6 +84,10 @@
     box-shadow:inset 0 1px 0 rgba(255,255,255,0.10), 0 2px 4px rgba(0,0,0,0.45);
     transition:transform .18s;
   }
+  /* The HUD bar has no room for a 44px chevron without squeezing the resource
+     counters, so the button keeps its 30px chrome and grows only its hit area.
+     data-hitslop tells tools/site-audit.mjs this is deliberate. */
+  #hud-more::before{ content:''; position:absolute; inset:-7px; }
   #hud-top.expanded #hud-more{ transform:rotate(180deg); }
   /* Narrow phones: tighten the resource pills so more of the hold's stores fit
      on screen before the row needs scrolling. */
@@ -439,14 +452,15 @@
   .diff-label{font-size:12px;color:var(--parchment-dim);display:block;margin-bottom:3px;font-family:'Cinzel',serif;}
   .diff-opts{display:flex;gap:6px;}
   .diff-opts button{
-    flex:1;padding:7px 4px;font-size:12.5px;border-radius:7px;
+    /* 44px is the floor for anything a thumb has to hit. These sat at ~32. */
+    flex:1;padding:7px 4px;min-height:44px;font-size:12.5px;border-radius:7px;
     background:linear-gradient(180deg,#3a2c1d,#1d1610);border:1px solid var(--panel-edge);
     color:var(--parchment-dim);font-family:'EB Garamond',serif;
   }
   .diff-opts button.sel{background:linear-gradient(180deg,#7a5220,#3a2710);color:#fff3d8;border-color:var(--amber-dim);}
   .hold-name-input{width:100%;box-sizing:border-box;padding:9px 11px;min-height:42px;border-radius:7px;background:#15100a;border:1px solid var(--panel-edge,#3a3223);color:var(--parchment,#d8c9a3);font-size:15px;font-family:'Cinzel',serif;letter-spacing:0.02em;}
   .hold-name-input:focus{outline:none;border-color:var(--amber-dim);box-shadow:0 0 0 2px rgba(232,161,60,0.22);}
-  .crest-swatch{width:34px;height:34px;min-width:34px;border-radius:50%;border:2px solid #241c12;cursor:pointer;padding:0;}
+  .crest-swatch{width:44px;height:44px;min-width:44px;border-radius:50%;border:2px solid #241c12;cursor:pointer;padding:0;}
   .crest-swatch.sel{border-color:#fff3d8;box-shadow:0 0 0 2px var(--amber-dim,#7a5220);}
 
   /* ── Landscape layout ── the game is fully playable rotated; UI re-flows */
@@ -503,7 +517,7 @@
   <div class="pill secondary"><span class="icon">🍞</span><b id="res-bread">0</b><span class="cap" id="cap-bread"></span></div>
   <div class="pill" id="shop-pill" style="cursor:pointer;"><span class="icon">💰</span><b id="res-coins">0</b></div>
   <div class="pill"><span class="icon">👥</span><b id="res-pop">0</b><span class="cap" id="res-cap">/0</span></div>
-  <button id="hud-more" aria-label="Show all stores" aria-expanded="false" title="Show all stores">▾</button>
+  <button id="hud-more" data-hitslop="7" aria-label="Show all stores" aria-expanded="false" title="Show all stores">▾</button>
 </div>
 <!-- Fixed button cluster: OUTSIDE #hud-top so its mask/overflow can't clip
      the ⚙ dropdown. -->

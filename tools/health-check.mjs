@@ -99,8 +99,13 @@ check('the hold grew', last.villagers >= history[0].villagers,
   `${history[0].villagers} → ${last.villagers}`);
 check('settlers are not all idle', (last.roles.idle || 0) < last.villagers,
   JSON.stringify(last.roles));
-check('more than one trade is worked', Object.keys(last.roles).filter((r) => r !== 'idle').length > 1,
-  JSON.stringify(last.roles));
+/* Asked of the whole run, not the last frame. A five-settler hold with two
+   spare hands may genuinely have only farmers standing at the moment the run
+   ends — that is the AI weighing needs, not a hold stuck in one trade. Judging
+   it on the final snapshot alone failed about one run in four for no reason. */
+const tradesEverWorked = new Set(history.flatMap((s) => Object.keys(s.roles)).filter((r) => r !== 'idle'));
+check('more than one trade is worked', tradesEverWorked.size > 1,
+  `over ${DAYS} days: ${[...tradesEverWorked].join(', ')} — now ${JSON.stringify(last.roles)}`);
 check('buildings still standing', last.buildings.length > 1, `${last.buildings.length}`);
 check('wildlife still alive', last.critters > 0, `${last.critters} critters`);
 

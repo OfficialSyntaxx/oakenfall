@@ -542,7 +542,13 @@ function adminGrant(kind){
     }
     // ── Hazards (test the drama) ──
     case 'raid':   launchRaid(4, true, raidEntryPoint(buildings.filter(b=>b.type==='bridge'))); toast('🛠️ Raiders incoming!'); sfx&&sfx('raid'); break;
-    case 'fire':   { const cand = buildings.filter(b=>b.type!=='road'&&b.type!=='well'); if(cand.length){ igniteBuilding(cand[Math.floor(Math.random()*cand.length)], true); toast('🛠️ A fire breaks out!'); } break; }
+    /* Pick only from what can actually burn. Excluding roads and wells by name
+       was not the same test — igniteBuilding silently refuses anything outside
+       FLAMMABLE, so landing on a mining post meant the button did nothing and
+       said it had. */
+    case 'fire':   { const cand = buildings.filter(b=>FLAMMABLE.has(b.type) && (b.condition===undefined||b.condition>0) && !b._fire);
+                     if(cand.length){ igniteBuilding(cand[Math.floor(Math.random()*cand.length)], true); toast('🛠️ A fire breaks out!'); }
+                     else toast('🛠️ Nothing standing here can burn.'); break; }
     case 'douse':  buildings.forEach(b=>{ b._fire = 0; }); toast('🛠️ All fires doused.'); break;
     case 'decay':  { let n=0; buildings.forEach(b=>{ if(b.condition!==undefined && b.condition>40){ b.condition=40; n++; } }); toast('🛠️ '+n+' building'+(n!==1?'s':'')+' worn down to 40%.'); break; }
     // ── Toggles ──
@@ -1223,7 +1229,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.80.0';
+const GAME_VERSION = '1.81.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
