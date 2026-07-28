@@ -27,7 +27,19 @@ modules, (3) Capacitor wrap + native storage.
   helpers; takes the canvas via `initIsoKit(ctx)` and its clock via
   `setKitTime(worldTime)` once per frame), `src/audio.ts` (typed — samples +
   synth fallback + music, owns its own on/off state), `src/storage.ts` (typed —
-  host KV / Capacitor Preferences / localStorage).
+  host KV / Capacitor Preferences / localStorage), `src/time.ts` (typed — the
+  day/night cycle and the seasons, pure over `G.worldTime`; told about Endless
+  Winter via `setForceWinter` because it cannot import a mutable), and
+  `src/critters.ts` (the wilds — first drawing code out, taking its canvas and
+  sprite tables through `initCritters({ctx, sprites, spriteScale, waterDrop,
+  tileWalkable})`).
+
+  **The pattern for anything that draws:** a module cannot import `ctx` and
+  write to it, so push the dependencies in through one `init*` call and keep a
+  module-local reference. `initIsoKit`, `initCritters` and `setForceWinter` are
+  all the same move. Site the call AFTER any `const` it reads — `initCritters`
+  needs WATER_DROP, and calling it up beside `initIsoKit` hits that const's
+  temporal dead zone, which throws into a frame loop that swallows it.
 
   **State lives in `src/state.ts` as one live object `G`.** A module cannot
   assign to an imported binding — `import { grid }` is a read-only view, so
