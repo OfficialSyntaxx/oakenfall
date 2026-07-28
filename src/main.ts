@@ -27,6 +27,9 @@ import { DAY_LEN, NIGHT_LEN, CYCLE_LEN, SEASON_LEN, setForceWinter, seasonIndex,
 function updateSunShadows(){ setSunShadow(...sunShadow()); }
 import { tileAt, genMap, reindexTiles } from './mapgen';
 import { tileWalkable, nearestWalkable, pathFind } from './pathfind';
+import { initLives, hasTrait, relTo, remember, bumpRel, relationsTick, releaseClaims,
+  memorialSpot, agingTick, passVillager, seedRelMoments,
+  AGE_YEAR, ADULT_AGE, ELDER_BEFORE, LIFESPAN_BASE } from './lives';
 import { initSkills, SKILL_TIERS, skillTier, skillMul, gainSkill, hasNearbyMentor,
   GUILD_DEFS, guildBonusVal, recomputeGuilds, guildMulRes, guildFarmMul } from './skills';
 import { initWeather, getWeather, setWeather, rollWeather, rollClimate, rollPlague, plagueTick,
@@ -1228,11 +1231,6 @@ function checkBounties(){
 /* ── RELATIONSHIPS ── citizens form friendships & rivalries by proximity over
    time (ported from the living-world AI, adapted to the hold's traits & names,
    which persist across save/load — ids don't). */
-function hasTrait(v,id){ return v.trait && v.trait.id===id; }
-function relTo(v,o){ return (v.relations||(v.relations=[])).find(r=>r.name===o.name); }
-const _relMoments = new Set();
-function remember(v,text){ if(!v.memories)v.memories=[]; if(v.memories[0]===text)return; v.memories.unshift(text); if(v.memories.length>4)v.memories.pop(); }
-// The Chronicle — a curated, dated story of the hold's significant moments.
 function chronicleAdd(text){
   G.chronicle.unshift({ day:(typeof G.dayCount!=='undefined'?G.dayCount:1), season:(typeof seasonName==='function'?seasonName():''), text });
   if(G.chronicle.length>80) G.chronicle.pop();
@@ -1306,94 +1304,6 @@ function chron(type, a, b, n){
   };
   chronicleAdd(pickOne(T[type] || [a||'']));
 }
-function bumpRel(v,o,amount){
-  if(v===o) return;
-  if(!v.relations) v.relations=[];
-  let r=relTo(v,o);
-  if(!r){
-    if(v.relations.length>=5) return;
-    const rivalry=(hasTrait(v,'diligent')&&hasTrait(o,'glutton'))||(hasTrait(v,'glutton')&&hasTrait(o,'diligent'));
-    r={name:o.name, type:rivalry?'rival':'friend', s:0};
-    v.relations.push(r);
-  }
-  const mult = r.type==='rival' ? -0.6 : (hasTrait(v,'lucky')?1.2:1);
-  r.s = clamp(r.s + amount*mult, -100, 100);
-  const key=[v.name,o.name].sort().join('|');
-  if(r.type==='friend' && r.s>40 && !_relMoments.has('fr'+key)){
-    _relMoments.add('fr'+key);
-    toast('🤝 '+v.name+' and '+o.name+' became fast friends.');
-    chron('friends', v.name, o.name);
-    remember(v,'became friends with '+o.name); remember(o,'became friends with '+v.name);
-  } else if(r.type==='rival' && r.s<-25 && !_relMoments.has('rv'+key)){
-    _relMoments.add('rv'+key);
-    toast('😤 '+v.name+' and '+o.name+' can\'t abide each other\'s pace of work.', true);
-    chron('rivals', v.name, o.name);
-  }
-}
-let _relAcc=0;
-function relationsTick(dt){
-  _relAcc+=dt; if(_relAcc<10) return; _relAcc=0;
-  for(let i=0;i<G.villagers.length;i++) for(let j=i+1;j<G.villagers.length;j++){
-    const a=G.villagers[i], b=G.villagers[j];
-    if(a.state==='spawning'||b.state==='spawning') continue;
-    if(Math.hypot(a.gx-b.gx,a.gy-b.gy)<2.4){ bumpRel(a,b,6); bumpRel(b,a,6); }
-  }
-}
-
-/* ── AGING & GENERATIONS ── citizens grow up, grow old, and pass on, leaving
-   a memorial grove. Paced on its own clock so lives are observable in a
-   session but gentle on the workforce (births keep pace). */
-const AGE_YEAR=720, ADULT_AGE=1.5, ELDER_BEFORE=1.2, LIFESPAN_BASE=5.5;
-function memorialSpot(){
-  // Position by the monotonic count of the departed, wrapping over the grove's
-  // 40 plots so that when an old grave is reclaimed a new one takes its place
-  // (rather than every grave stacking once the cap is reached).
-  const n=(G.journal.passed||0)%40;
-  return { gx: G.TC_X - 4 + (n%4)*0.85, gy: G.TC_Y + 3 + Math.floor(n/4)*0.85 };
-}
-function agingTick(dt){
-  const dy = dt/AGE_YEAR;
-  for(const v of [...G.villagers]){
-    if(v.age===undefined){ v.age=2; v.stage='adult'; v.lifespan=LIFESPAN_BASE; }
-    if(v.state==='spawning') continue;
-    v.age += dy;
-    if(v.stage==='child' && v.age>=ADULT_AGE){
-      v.stage='adult';
-      toast('🌿 '+v.name+' has come of age and joins the work.');
-      chron('ofage', v.name);
-      remember(v,'came of age');
-    } else if(v.stage==='adult' && v.age>=v.lifespan-ELDER_BEFORE){
-      v.stage='elder';
-    } else if(v.stage!=='child' && v.age>=v.lifespan){
-      passVillager(v);
-    }
-  }
-}
-function passVillager(v){
-  G.villagers = G.villagers.filter(x=>x!==v);
-  releaseClaims(v);
-  G.villagers.forEach(o=>{
-    if(o.relations) o.relations = o.relations.filter(r=>r.name!==v.name);
-    if(o.partner===v.name){ o.partner=null; o.morale=clamp((o.morale||65)-12,0,100); remember(o,'lost '+v.name); }
-    if(o.parents && o.parents.includes(v.name)){ o.morale=clamp((o.morale||65)-6,0,100); }
-  });
-  if(selection && selection.ref===v) deselectAll();
-  const spot = memorialSpot();
-  G.memorials.push({name:v.name, gx:spot.gx, gy:spot.gy});
-  // The grove is finite — the oldest graves are quietly reclaimed by the forest
-  // (keeps the render list and save bounded over very long games).
-  if(G.memorials.length > 40) G.memorials.shift();
-  G.journal.passed = (G.journal.passed||0)+1;
-  const tier = skillTier(v, v.role);
-  if(tier.label==='Master'){
-    toast('🕊️ '+v.name+', a Master '+roleLabel(v.role)+', has passed at '+Math.floor((v.age||2)*4)+' seasons — a grievous loss to the hold.');
-    G.villagers.forEach(o=>{ if(o.morale!==undefined) o.morale=clamp(o.morale-3,0,100); }); // the whole hold mourns a master
-  } else {
-    toast('🕊️ '+v.name+' passed peacefully at '+Math.floor((v.age||2)*4)+' seasons — laid to rest in the grove.');
-  }
-  chron('passed', v.name, null, Math.floor((v.age||2)*4));
-}
-
 /* ── AMBIENT LIFE ── idle & young citizens don't just stand there: they gather
    at the hearth after dark, seek warmth in winter, drift toward friends, and
    the children play. Only steers idle wander targets + a mood bubble — never
@@ -2038,11 +1948,6 @@ function spawnVillager(nameOverride, traitOverride){
   return v;
 }
 
-function releaseClaims(v){
-  if(v.targetTile){ v.targetTile.workers = Math.max(0,v.targetTile.workers-1); v.targetTile=null; }
-  if(v.targetBuilding){ v.targetBuilding.workers = Math.max(0,v.targetBuilding.workers-1); v.targetBuilding=null; }
-  v.path=[]; v.pathTarget=null; v.carrying=null;
-}
 function reassignRole(v, role){
   if(v.stage==='child'){ toast(v.name+' is too young for such work.', true); return; }
   const haulingStates = ['walkingToDropoff','seekingFood','eating','seekingSleep','sleeping'];
@@ -3315,6 +3220,9 @@ initCritters({ ctx, sprites: SPRITES, spriteScale: SPRITE_SCALE, waterDrop: WATE
    reasoned about without a DOM. */
 initWeather({ toast, chron, sfx, forceWinter: ()=>!!gameMode.forceWinter });
 initSkills({ toast, chron });
+/* Lives needs one thing back: when a settler passes, whatever the UI was
+   holding them open for has to let go. */
+initLives({ toast, chron, onPassed: (v)=>{ if(selection && selection.ref===v) deselectAll(); } });
 
 const TILE_COLORS = {
   grass: ['#2f4528','#33492c','#2a3f25','#304826'],
@@ -6862,12 +6770,7 @@ function restoreState(data){
   G.villagers=[];
   for(const vd of data.villagers) restoreVillager(vd);
   // Seed friendship/rivalry moments so restored relationships don't re-toast on load
-  _relMoments.clear();
-  G.villagers.forEach(v=>(v.relations||[]).forEach(r=>{
-    const key=[v.name,r.name].sort().join('|');
-    if(r.type==='friend'&&r.s>40)_relMoments.add('fr'+key);
-    if(r.type==='rival'&&r.s<-25)_relMoments.add('rv'+key);
-  }));
+  seedRelMoments();
 }
 
 /* =========================================================================

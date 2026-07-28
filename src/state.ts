@@ -114,7 +114,11 @@ export const G = {
    *  ends the objective, not the hold. */
   scenarioWon: false,
   questsCompleted: {} as Record<string, boolean>,
-  journal: { peakPopulation: 0, daysSurvived: 0, wolvesSurvived: 0, buildingsRaised: 0, settlersWelcomed: 0, wintersEndured: 0 },
+  /** Bests and tallies kept for the life of the hold. passed, weddings and
+   *  childrenBorn were written and read for months without ever being declared
+   *  here — harmless in JS, invisible to a typed module. */
+  journal: { peakPopulation: 0, daysSurvived: 0, wolvesSurvived: 0, buildingsRaised: 0,
+    settlersWelcomed: 0, wintersEndured: 0, passed: 0, weddings: 0, childrenBorn: 0 },
   /** One row per day: {day, pop, food, wood, stone}. Drives the graphs. */
   statHistory: [] as any[],
   /** The written record — births, deaths, first winters, raids weathered. */
@@ -198,7 +202,8 @@ export const LOAD_DEFAULTS: Record<string, any> = {
   usedNames: [], memorials: [], idleSlotCounter: 0,
   stockpile: { wood: 0, stone: 0, food: 0, planks: 0, flour: 0, bread: 0 },
   totals: { wood: 0, stone: 0, food: 0, planks: 0, flour: 0, bread: 0 },
-  journal: { peakPopulation: 0, daysSurvived: 0, wolvesSurvived: 0, buildingsRaised: 0, settlersWelcomed: 0, wintersEndured: 0 },
+  journal: { peakPopulation: 0, daysSurvived: 0, wolvesSurvived: 0, buildingsRaised: 0,
+    settlersWelcomed: 0, wintersEndured: 0, passed: 0, weddings: 0, childrenBorn: 0 },
   dailyProgress: { wood: 0, stone: 0, food: 0, bread: 0, planks: 0, flour: 0, built: 0 },
   decrees: { curfew: false, tithe: false, openGates: false, rationing: false },
   ledger: { in: { bounties: 0, deeds: 0, routes: 0, quests: 0, tithe: 0 }, out: { shop: 0 } },
