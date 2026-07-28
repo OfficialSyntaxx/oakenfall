@@ -103,13 +103,18 @@ export const TERRAIN_B64 = {
   stone_102: 'assets/terrain/stone_102.png',
 }
 
-export const AUDIO_B64 = {
-  tap: 'assets/audio/tap.ogg',
-  warn: 'assets/audio/warn.ogg',
-  open: 'assets/audio/open.ogg',
-  close: 'assets/audio/close.ogg',
-  mine: 'assets/audio/mine.ogg',
-  chop: 'assets/audio/chop.ogg',
+/* Sound-effect samples, an upgrade layer over the procedural synth.
+ *
+ * EMPTY ON PURPOSE. The six Kenney .ogg files that used to live here were
+ * corrupt — every one failed to decode with MEDIA_ERR_SRC_NOT_SUPPORTED, and
+ * the inline base64 they were extracted from in v1.11.0 is byte-identical, so
+ * they never played a single note in any version that shipped. The synth in
+ * src/audio.ts covered every sound the whole time, which is exactly why nobody
+ * noticed: fallbacks are not decoration.
+ *
+ * Add working samples here — keyed by the same names sfx() uses — and they take
+ * over automatically. */
+export const AUDIO_B64: Record<string, string> = {
 }
 
 export const MUSIC_URLS = { elvendawn: 'assets/music/elvendawn.ogg', windsofvalor: 'assets/music/windsofvalor.ogg' };

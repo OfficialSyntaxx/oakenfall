@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.79.0
+An honest accounting of the sound. The six sound-effect files the game has
+shipped since the audio update were corrupt and never once played — every sound
+you have ever heard came from the synth built as their fallback. The dead files
+are gone rather than left to fail quietly on every load, and the synth is now
+plainly what makes the noise until working samples replace it.
+
+The steward is better read on scholarship too: ask to study something it does
+not recognise and it now tells you which studies the hold could actually begin,
+instead of shrugging.
+
 ## 1.78.0
 Your settlers were dropping everything they gathered. A fault buried since the
 codebase was reorganised meant that whenever a hauler had no matching workplace

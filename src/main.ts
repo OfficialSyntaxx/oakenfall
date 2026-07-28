@@ -465,6 +465,9 @@ window.__oakDebug = function(){
     buildings: buildings.filter(b=>b.type!=='road').map(b=>b.type),
     placements: buildings.filter(b=>b.type!=='road').map(b=>({t:b.type, gx:b.gx, gy:b.gy})),
     worn: buildings.filter(b=>b.condition!==undefined && b.condition<70).length,
+    onFire: buildings.filter(b=>b._fire>0).length,
+    activeResearch: activeResearch ? activeResearch.id : null,
+    researchedCount: Object.keys(researched).filter(k=>researched[k]).length,
     orders: stewardOrders.map(o=>o.kind),
     stockpile: Object.assign({}, stockpile),
     coins, tier: currentTierIdx,
@@ -505,6 +508,7 @@ function adminGrant(kind){
     case 'res': ['wood','stone','food','planks','flour','bread'].forEach(k=>bump(k,500)); toast('🛠️ +500 of every resource.'); break;
     case 'coins': coins += 1000; toast('🛠️ +1000 coins.'); break;
     case 'coinsBig': coins += 10000; toast('🛠️ +10,000 coins.'); break;
+    case 'craftClear': ['planks','flour','bread'].forEach(k=>{ stockpile[k]=0; }); toast('🛠️ Crafted stores emptied.'); break;
     case 'maxout': ['wood','stone','food','planks','flour','bread'].forEach(k=>{ stockpile[k] = capFor ? capFor(k) : 999; }); toast('🛠️ Stores filled to capacity.'); break;
     // ── Progress / unlocks ──
     case 'tech': TECH_TREE.forEach(t=>{ researched[t.id] = true; }); activeResearch = null; toast('🛠️ All research unlocked.'); break;
@@ -556,7 +560,7 @@ function renderAdminSheet(){
   const onoff = (b)=> b ? ' ✓' : '';
   sheetContent.innerHTML = `
     <div class="sheet-sub">Developer tools. Changes apply to your hold immediately. Use freely — this is your sandbox.</div>
-    ${sect('💰 Economy', [['res','📦 +500 of every resource'],['maxout','🏺 Fill all stores to cap'],['coins','💰 +1,000 coins'],['coinsBig','💰 +10,000 coins']])}
+    ${sect('💰 Economy', [['res','📦 +500 of every resource'],['maxout','🏺 Fill all stores to cap'],['craftClear','🧹 Empty crafted stores'],['coins','💰 +1,000 coins'],['coinsBig','💰 +10,000 coins']])}
     ${sect('🌤️ Weather', [['wClear','☀️ Clear'],['wRain','🌧️ Rain'],['wStorm','⛈️ Storm + lightning'],['wSnow','🌨️ Snowfall']])}
     ${sect('🕰️ Time', [['tDawn','🌅 Jump to dawn'],['tNight','🌙 Jump to night'],['tDay','📅 Advance one day'],['tSeason','🍂 Advance one season']])}
     ${sect('👥 Population', [['settler1','🚶 Summon 1 settler'],['settlers','👥 Summon 5 settlers'],['morale','😊 All morale to 100'],['heal','❤️ Heal, feed & rest all']])}
@@ -1219,7 +1223,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.78.0';
+const GAME_VERSION = '1.79.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -2720,6 +2724,12 @@ function stewardClause(s, out){
   if(wantsResearch){
     const t = TECH_TREE.find(x=> s.includes(' '+x.name.toLowerCase()+' ') || s.includes(' '+x.id.toLowerCase()+' '));
     if(t){ out.push({ kind:'research', id:t.id, name:t.name }); return 'we will study '+t.name; }
+    // The verb landed but the subject didn't. Naming what CAN be studied beats
+    // a shrug — the player knows what they meant, they just used our word for it
+    // rather than theirs.
+    const open = TECH_TREE.filter(x=>!researched[x.id] && (!x.req || researched[x.req])).slice(0,4).map(x=>x.name);
+    if(open.length) out.push({ kind:'answer', msg:'🔬 I do not know that study. We could begin: '+open.join(', ')+'.' });
+    else out.push({ kind:'answer', msg:'🔬 There is nothing left to study.' });
     return null;
   }
   if(bkey && wantsBuild){
@@ -2763,6 +2773,11 @@ function stewardCommand(text){
   for(const part of parts){
     const r = stewardClause(part, queued);
     if(r) said.push(r);
+  }
+  const spoken = queued.filter(o=>o.kind==='answer');
+  if(spoken.length){
+    for(let i=queued.length-1;i>=0;i--) if(queued[i].kind==='answer') queued.splice(i,1);
+    if(!queued.length) return { ok:true, msg:spoken[0].msg, answered:true };
   }
   if(!queued.length){
     return { ok:false, msg:'🤔 I did not catch that. Try "build 3 houses", "we need more wood", or "put 2 to mining" — or say "help".' };
