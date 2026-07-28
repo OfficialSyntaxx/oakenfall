@@ -850,20 +850,53 @@ function drawFox(c){
   ctx.beginPath(); ctx.moveTo(cx+3.6,cy-6.4); ctx.lineTo(cx+4.2,cy-8.2); ctx.lineTo(cx+5,cy-6.4); ctx.closePath(); ctx.fill();
   ctx.restore();
 }
+/* A duck sits IN the water, not on it. Three things make that read:
+   the water surface is recessed by WATER_DROP, so drawing at land height left
+   the bird hovering; the body below the waterline has to be clipped away; and
+   a wake plus a faint reflection tell the eye the surface is liquid. */
 function drawDuck(c){
   const p = project(c.gx, c.gy);
-  const cy = p.y - 1 + Math.sin(c.phase)*0.6;   // riding the ripples
+  const surf = p.y + WATER_DROP;                       // the recessed water top
+  const y = surf + Math.sin(c.phase) * 0.7;            // riding the ripples
+  const w = SPRITE_SCALE.duck || 20;
+
+  // Wake: a tight ring under the bird and a wider one trailing behind it.
+  ctx.strokeStyle = 'rgba(200,228,244,0.30)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.ellipse(p.x, y + 1.5, w*0.34, 2.2, 0, 0, 7); ctx.stroke();
+  ctx.strokeStyle = 'rgba(200,228,244,0.13)';
+  ctx.beginPath(); ctx.ellipse(p.x - c.face*5, y + 2.2, w*0.55, 3.4, 0, 0, 7); ctx.stroke();
+
+  const img = SPRITES.duck;
+  if(img && img.complete && img.naturalWidth > 0){
+    const h = w * (img.naturalHeight / img.naturalWidth);
+    const sink = h * 0.34;                             // how deep it floats
+    const top = y - h + sink;
+    // Reflection, below the waterline: same bird, flipped and squashed.
+    ctx.save();
+    ctx.beginPath(); ctx.rect(p.x - w, y, w*2, h*0.6); ctx.clip();
+    ctx.globalAlpha = 0.14;
+    ctx.translate(0, y*2); ctx.scale(1, -0.55);
+    if(c.face > 0){ ctx.translate(p.x*2, 0); ctx.scale(-1, 1); }
+    try{ ctx.drawImage(img, p.x - w/2, top, w, h); }catch(e){}
+    ctx.restore();
+    // The bird itself, cut off at the waterline.
+    ctx.save();
+    ctx.beginPath(); ctx.rect(p.x - w, top - 4, w*2, (y - top) + 4); ctx.clip();
+    if(c.face > 0){ ctx.translate(p.x*2, 0); ctx.scale(-1, 1); }
+    try{ ctx.drawImage(img, p.x - w/2, top, w, h); }catch(e){}
+    ctx.restore();
+    return;
+  }
+
+  // Hand-drawn floor, half-submerged the same way.
   ctx.save();
-  ctx.strokeStyle='rgba(200,225,240,0.35)'; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.ellipse(p.x, p.y+2, 6, 2, 0, 0, 7); ctx.stroke();       // wake
-  ctx.restore();
-  if(blitCritter('duck', { gx:c.gx, gy:c.gy, face:c.face, phase:c.phase, moving:false })) return;
-  ctx.save(); if(c.face>0){ ctx.translate(p.x*2,0); ctx.scale(-1,1); }
-  ctx.fillStyle='#6b5a3e';
-  ctx.beginPath(); ctx.ellipse(p.x, cy-2, 4, 2.2, 0, 0, 7); ctx.fill();        // body
-  ctx.fillStyle='#2f4a35';
-  ctx.beginPath(); ctx.ellipse(p.x-3.4, cy-5, 1.5, 1.7, 0, 0, 7); ctx.fill();  // head
-  ctx.fillRect(p.x-3.9, cy-4.2, 1.2, 2.2);                                     // neck
+  ctx.beginPath(); ctx.rect(p.x - 12, y - 16, 24, 16); ctx.clip();
+  if(c.face > 0){ ctx.translate(p.x*2, 0); ctx.scale(-1, 1); }
+  ctx.fillStyle = '#6b5a3e';
+  ctx.beginPath(); ctx.ellipse(p.x, y - 1.4, 4, 2.6, 0, 0, 7); ctx.fill();     // body
+  ctx.fillStyle = '#2f4a35';
+  ctx.fillRect(p.x - 3.9, y - 5.6, 1.2, 3);                                    // neck
+  ctx.beginPath(); ctx.ellipse(p.x - 3.4, y - 6.2, 1.5, 1.7, 0, 0, 7); ctx.fill(); // head
   ctx.restore();
 }
 function drawFlit(c){
@@ -1167,7 +1200,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.77.0';
+const GAME_VERSION = '1.77.1';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue

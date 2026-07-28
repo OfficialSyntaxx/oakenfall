@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.77.1
+The ducks float properly. They were standing on the surface rather than sitting
+in it — now they ride at the waterline with their bellies below it, pushing a
+wake ahead of them and casting a soft reflection on the water.
+
 ## 1.77.0
 The hold fills in. Eight buildings that were drawn by hand now have proper art:
 the forestry camp, mining post, palisade, well, lamp post, pasture, forester's
