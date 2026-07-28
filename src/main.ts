@@ -20,6 +20,11 @@ import {
 } from './isokit';
 import { installStorage, isNative } from './storage';
 import { G, saveFields, loadSavedFields, assertSaveCoverage } from './state';
+import { DAY_LEN, NIGHT_LEN, CYCLE_LEN, SEASON_LEN, setForceWinter, seasonIndex, seasonName,
+  seasonYieldMul, seasonFatigueMul, riverFrozen, dayPhaseFrac, isNight, darknessFactor, sunShadow } from './time';
+
+/** The iso kit cannot import a mutable, so the sun is pushed into it. */
+function updateSunShadows(){ setSunShadow(...sunShadow()); }
 import { tileAt, genMap, reindexTiles } from './mapgen';
 import { TCODE, TCODE_R, applyBrushTo, encodeLand, decodeLand } from './landcode';
 import { sfx, buzz, startMusic, stopMusic, isSfxOn, setSfxOn, isMusicOn, setMusicOn } from './audio';
@@ -156,6 +161,7 @@ let wolfRiskMul = 1;
 function applyDifficulty(cfg){
   gameModeId = cfg.modeId || 'settler';
   gameMode = GAME_MODES[gameModeId] || GAME_MODES.settler;
+  setForceWinter(!!gameMode.forceWinter);
   if(gameModeId==='merchant'){ cfg.startRes.food = (cfg.startRes.food||0)+10; }
   G.MAP_SIZE = cfg.mapSize;
   G.TC_X = Math.floor(G.MAP_SIZE/2)-1; G.TC_Y = Math.floor(G.MAP_SIZE/2)-1;
@@ -169,7 +175,6 @@ function applyDifficulty(cfg){
 
 const HUNGER_RATE = 100/340;   // per second — ~5.7 min to starve at 1× speed
 const FATIGUE_RATE = 100/400;  // per second (base, day) — ~6.7 min to exhaust
-const DAY_LEN = 260, NIGHT_LEN = 160, CYCLE_LEN = DAY_LEN + NIGHT_LEN;
 
 
 
@@ -257,12 +262,6 @@ function gainResource(type, amount){
 window.__capWarned = {wood:false,stone:false,food:false,planks:false,flour:false,bread:false};
 
 
-const SEASON_LEN = CYCLE_LEN * 3; // 3 day/night cycles per season
-function seasonIndex(){
-  if(typeof gameMode!=='undefined' && gameMode.forceWinter) return 3; return Math.floor(G.worldTime / SEASON_LEN) % 4; }
-function seasonName(){ return SEASON_NAMES[seasonIndex()]; }
-function seasonYieldMul(){ return seasonIndex()===3 ? 0.6 : (seasonIndex()===1 ? 1.15 : 1); } // winter slow, summer bountiful
-function seasonFatigueMul(){ return seasonIndex()===3 ? 1.25 : 1; }
 
 let speedMode = 1; // 1, 2, 0(paused)
 let spawnTimer = 18;
@@ -1195,9 +1194,6 @@ function climateHungerMul(){ return G.climate ? CLIMATE_DEFS[G.climate.type].hun
 function climateFatigueMul(){ return G.climate ? CLIMATE_DEFS[G.climate.type].fatigue : 1; }
 function weatherMoveMul(){ return weather.type==='storm' ? 0.8 : (weather.type==='rain' ? 0.9 : 1); }
 function weatherFarmMul(){ return (weather.type==='rain' ? 1.25 : 1) * climateFarmMul(); }
-// Deep winter freezes the river solid: anyone can cross (including raiders —
-// the moat is gone) and the fish sleep under the ice.
-function riverFrozen(){ return seasonIndex()===3; }
 function weatherFatigueMul(){ return weather.type==='storm' ? 1.2 : 1; }
 
 let eventTimer = 140; // world-seconds until the next random event roll
@@ -2757,35 +2753,6 @@ function stewardCommand(text){
   return { ok:true, msg: head + said.join(', then ') + '.' };
 }
 
-// 0 = full day … 1 = deepest night; smooth ramps through dawn/dusk
-function darknessFactor(){
-  const f = dayPhaseFrac();
-  const dayFrac = DAY_LEN/CYCLE_LEN;
-  if(f < dayFrac){
-    const df = f/dayFrac;
-    if(df < 0.10) return 0.55*(1 - df/0.10);      // dawn fading out
-    if(df > 0.82) return 0.65*((df-0.82)/0.18);   // dusk fading in
-    return 0;
-  }
-  return 0.72; // night
-}
-// Sun-driven shadow shear: long shadows leaning at dawn/dusk, tight at noon
-function updateSunShadows(){
-  const f = dayPhaseFrac(), dayFrac = DAY_LEN/CYCLE_LEN;
-  if(f < dayFrac){
-    const df = f/dayFrac;                 // 0..1 across the day
-    const sun = (df-0.5)*2;               // -1 sunrise … +1 sunset
-    setSunShadow(-sun * 1.6, 1 + Math.abs(sun)*1.3); // lean away, long at dawn/dusk
-  } else { setSunShadow(0, 1); }
-}
-function isNight(){
-  const t = G.worldTime % CYCLE_LEN;
-  return t >= DAY_LEN;
-}
-function dayPhaseFrac(){
-  // 0 = dawn start, 1 = full cycle
-  return (G.worldTime % CYCLE_LEN) / CYCLE_LEN;
-}
 
 // A tile a settler may stand on / walk through. Water is impassable unless
 // bridged, forded, or frozen over; occupied tiles are blocked except for the
@@ -7340,6 +7307,7 @@ function restoreState(data){
   loadSavedFields(data);
   gameModeId = data.gameModeId||'settler';
   gameMode = GAME_MODES[gameModeId] || GAME_MODES.settler;
+  setForceWinter(!!gameMode.forceWinter);
   applyPatronBanners();
   if(data.ui && data.ui.mmBig) document.getElementById('minimap-wrap').classList.add('mm-big');
   // Restore the map at ITS OWN saved size — the save may be from a Small (26)

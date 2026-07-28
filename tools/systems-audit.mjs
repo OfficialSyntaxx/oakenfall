@@ -161,6 +161,38 @@ check('no uncaught errors', errors.length === 0, errors.slice(0, 2).join(' | '))
 check('no missing files requested', missing.length === 0, [...new Set(missing)].join(', '));
 
 await ctx.close();
+
+/* ---- game modes ----
+ * A mode is chosen on the title screen and never changes, so it needs its own
+ * run. Iron Winter is the one with teeth: it pins the season, which means the
+ * season code has to consult the mode. Nothing else in the suite covers any
+ * mode but the default, and the day the season logic moved into its own module
+ * that gap was the only thing standing between a refactor and a silently
+ * thawed Iron Winter. */
+const wctx = await browser.newContext({ viewport: { width: 1100, height: 850 } });
+const wp = await wctx.newPage();
+await wp.goto(`http://127.0.0.1:${PORT}/game/`, { waitUntil: 'load' });
+await wp.waitForSelector('#begin-btn');
+await wp.click('[data-group="mode"] [data-val="ironwinter"]');
+await wp.click('#begin-btn');
+await wp.waitForTimeout(1800);
+await wp.click('#onboard-x').catch(() => {});
+await wp.click('#more-btn'); await wp.click('#redeem-btn');
+await wp.fill('#redeem-input', 'Joy904'); await wp.click('#redeem-go');
+await wp.waitForTimeout(400);
+const seen = new Set();
+for (let i = 0; i < 5; i++) {
+  seen.add((await wp.evaluate(() => window.__oakDebug())).season);
+  if (!(await wp.locator('[data-admin="tSeason"]').count())) {
+    for (const s of ['#decision-done', '#sheet-close', '#more-btn', '#redeem-btn', '#admin-open']) {
+      await wp.click(s, { timeout: 700 }).catch(() => {});
+    }
+  }
+  await wp.click('[data-admin="tSeason"]', { timeout: 1500 }).catch(() => {});
+  await wp.waitForTimeout(400);
+}
+check('Iron Winter never thaws', seen.size === 1 && seen.has('Winter'), [...seen].join(', '));
+await wctx.close();
 await browser.close();
 server.close();
 const failed = checks.filter((c) => !c.ok);
