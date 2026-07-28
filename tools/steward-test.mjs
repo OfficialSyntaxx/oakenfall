@@ -94,7 +94,8 @@ const near = await page.evaluate(() => {
   let trees = 0;
   for (let y = -2; y <= 2; y++) for (let x = -2; x <= 2; x++) {
     const row = g[camp.gy + y];
-    if (row && row[camp.gx + x] === 'f') trees++;
+    // 'f' plain forest, 'F' forest in the wilds — both are trees to fell.
+    if (row && (row[camp.gx + x] === 'f' || row[camp.gx + x] === 'F')) trees++;
   }
   return { trees, camp };
 });

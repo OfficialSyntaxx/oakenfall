@@ -193,6 +193,61 @@ for (let i = 0; i < 5; i++) {
 }
 check('Iron Winter never thaws', seen.size === 1 && seen.has('Winter'), [...seen].join(', '));
 await wctx.close();
+
+/* ---- crossing water ----
+ * Bridges, fords and winter ice are the rules a refactor breaks quietly: a
+ * settler who cannot reach the far bank simply looks busy on this one, and
+ * every other check still passes. Asked here directly of the pathfinder. */
+const pctx = await browser.newContext({ viewport: { width: 1100, height: 850 } });
+const pp = await pctx.newPage();
+await pp.goto(`http://127.0.0.1:${PORT}/game/`, { waitUntil: 'load' });
+await pp.waitForSelector('#begin-btn');
+await pp.click('#begin-btn');
+await pp.waitForTimeout(1800);
+await pp.click('#onboard-x').catch(() => {});
+const cross = await pp.evaluate(() => {
+  const grid = window.__oakGrid();          // lowercase = plain, uppercase = wilds
+  for (let y = 1; y < grid.length - 1; y++) {
+    for (let x = 1; x < grid[y].length - 1; x++) {
+      if (grid[y][x].toLowerCase() !== 'w') continue;
+      const blocked = !window.__oakWalkable(x, y);
+      window.__oakSetTileFlag(x, y, 'ford', true);
+      const fordable = window.__oakWalkable(x, y);
+      window.__oakSetTileFlag(x, y, 'ford', false);
+      return { x, y, blocked, fordable, blockedAgain: !window.__oakWalkable(x, y) };
+    }
+  }
+  return null;
+});
+check('open water blocks a settler', !!cross && cross.blocked && cross.blockedAgain,
+  cross ? `tile ${cross.x},${cross.y}` : 'no water on this map');
+check('a ford makes water crossable', !!cross && cross.fordable, cross ? String(cross.fordable) : 'n/a');
+await pctx.close();
+
+/* Winter freezes the river solid, which is the same walkability rule reached
+ * through the season code rather than a tile flag — the one place where
+ * pathfind and time have to agree. Asked of the Iron Winter run, which is
+ * permanently in season for it. */
+const ictx = await browser.newContext({ viewport: { width: 1100, height: 850 } });
+const ip = await ictx.newPage();
+await ip.goto(`http://127.0.0.1:${PORT}/game/`, { waitUntil: 'load' });
+await ip.waitForSelector('#begin-btn');
+await ip.click('[data-group="mode"] [data-val="ironwinter"]');
+await ip.click('#begin-btn');
+await ip.waitForTimeout(1800);
+await ip.click('#onboard-x').catch(() => {});
+const frozen = await ip.evaluate(() => {
+  const grid = window.__oakGrid();
+  for (let y = 1; y < grid.length - 1; y++) {
+    for (let x = 1; x < grid[y].length - 1; x++) {
+      if (grid[y][x].toLowerCase() === 'w') return { x, y, walkable: window.__oakWalkable(x, y) };
+    }
+  }
+  return null;
+});
+check('a frozen river can be walked across', !!frozen && frozen.walkable,
+  frozen ? `tile ${frozen.x},${frozen.y} walkable=${frozen.walkable}` : 'no water on this map');
+await ictx.close();
 await browser.close();
 server.close();
 const failed = checks.filter((c) => !c.ok);

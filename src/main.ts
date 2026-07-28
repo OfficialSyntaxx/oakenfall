@@ -26,6 +26,7 @@ import { DAY_LEN, NIGHT_LEN, CYCLE_LEN, SEASON_LEN, setForceWinter, seasonIndex,
 /** The iso kit cannot import a mutable, so the sun is pushed into it. */
 function updateSunShadows(){ setSunShadow(...sunShadow()); }
 import { tileAt, genMap, reindexTiles } from './mapgen';
+import { tileWalkable, nearestWalkable, pathFind } from './pathfind';
 import { initWeather, getWeather, setWeather, rollWeather, rollClimate, rollPlague, plagueTick,
   climateFarmMul, climateFireMul, climateHungerMul, climateFatigueMul,
   weatherMoveMul, weatherFarmMul, weatherFatigueMul, WEATHER_DEFS, CLIMATE_DEFS } from './weather';
@@ -483,8 +484,26 @@ window.__oakProbe = function(){
     eff:+effMultiplier(v).toFixed(2), stage:v.stage,
   }));
 };
+/* One letter per tile: the terrain's initial, uppercased where the tile is
+   wilds. It used to return 'w' for wilds AND for water, which made the two
+   indistinguishable — a wilds forest read as 'w' rather than forest, and a
+   test looking for open water found meadow. */
 window.__oakGrid = function(){
-  return G.grid.map(row=>row.map(t=> t.wilds ? 'w' : t.type.charAt(0)));
+  return G.grid.map(row=>row.map(t=> t.wilds ? t.type.charAt(0).toUpperCase() : t.type.charAt(0)));
+};
+/* Pathing across water is the rule most easily broken by a refactor and least
+   likely to show up in play — a settler who cannot reach the far bank just
+   looks busy elsewhere. Exposed so the systems audit can ask directly whether
+   a river blocks, a ford lets you wade, and a bridge lets you cross. */
+window.__oakPath = function(fx, fy, tx, ty){ return pathFind(fx, fy, tx, ty); };
+window.__oakWalkable = function(gx, gy){ return tileWalkable(gx, gy); };
+/** Set a tile flag from a test — the only way to stage a ford without playing
+ *  out the research and the build order first. */
+window.__oakSetTileFlag = function(gx, gy, key, value){
+  const t = G.grid[gy] && G.grid[gy][gx];
+  if(!t) return false;
+  t[key] = value;
+  return true;
 };
 function adminGrant(kind){
   const bump = (k,n)=>{ G.stockpile[k] = (G.stockpile[k]||0) + n; };
@@ -2387,89 +2406,6 @@ function stewardCommand(text){
 }
 
 
-// A tile a settler may stand on / walk through. Water is impassable unless
-// bridged, forded, or frozen over; occupied tiles are blocked except for the
-// walk-through structures (farm plots, roads, bridges).
-function tileWalkable(gx,gy){
-  if(gx<0||gy<0||gx>=G.MAP_SIZE||gy>=G.MAP_SIZE) return false;
-  const t = G.grid[gy] && G.grid[gy][gx];
-  if(!t) return false;
-  if(t.type==='water'){
-    const crossable = (t.building && t.building.type==='bridge') || t.ford || riverFrozen();
-    if(!crossable) return false;
-  }
-  if(t.building && t.building.type!=='farm' && t.building.type!=='road' && t.building.type!=='bridge') return false;
-  return true;
-}
-// Nearest walkable tile to (gx,gy), searched in expanding rings. Used to keep
-// wander/work targets off the water — a fisher ends up on the shore, never
-// standing in the river.
-function nearestWalkable(gx,gy,maxR){
-  gx=Math.round(gx); gy=Math.round(gy); maxR=maxR||5;
-  if(tileWalkable(gx,gy)) return {gx,gy};
-  for(let r=1;r<=maxR;r++){
-    for(let dx=-r;dx<=r;dx++) for(let dy=-r;dy<=r;dy++){
-      if(Math.max(Math.abs(dx),Math.abs(dy))!==r) continue;
-      if(tileWalkable(gx+dx,gy+dy)) return {gx:gx+dx, gy:gy+dy};
-    }
-  }
-  return null;
-}
-
-function pathFind(fromGX, fromGY, toGX, toGY){
-  const startGX=Math.round(fromGX), startGY=Math.round(fromGY);
-  const goalGX=Math.round(toGX), goalGY=Math.round(toGY);
-  if(startGX===goalGX && startGY===goalGY) return [];
-  const inBounds=(x,y)=>x>=0&&y>=0&&x<G.MAP_SIZE&&y<G.MAP_SIZE;
-  if(!inBounds(startGX,startGY)||!inBounds(goalGX,goalGY)) return [];
-  const key=(x,y)=>x*1000+y;
-  const open=[{x:startGX,y:startGY,g:0,h:Math.abs(startGX-goalGX)+Math.abs(startGY-goalGY),parent:null}];
-  open[0].f=open[0].h;
-  const closed=new Set(); const bestG={};
-  bestG[key(startGX,startGY)]=0;
-  const DIRS=[[-1,0],[1,0],[0,-1],[0,1],[-1,-1],[1,-1],[-1,1],[1,1]];
-  let iters=0;
-  // Cap scales a little with map size so long, obstructed routes resolve instead
-  // of the settler giving up and standing still on bigger holds.
-  const ITER_CAP = Math.min(600, Math.max(240, G.MAP_SIZE*G.MAP_SIZE/2));
-  while(open.length>0 && iters++<ITER_CAP){
-    // find min-f node (small array, no heap needed)
-    let bi=0;
-    for(let i=1;i<open.length;i++) if(open[i].f<open[bi].f) bi=i;
-    const cur=open.splice(bi,1)[0];
-    if(cur.x===goalGX && cur.y===goalGY){
-      const path=[]; let n=cur;
-      while(n.parent){ path.unshift({gx:n.x,gy:n.y}); n=n.parent; }
-      return path;
-    }
-    const k=key(cur.x,cur.y);
-    if(closed.has(k)) continue;
-    closed.add(k);
-    for(const [dx,dy] of DIRS){
-      const nx=cur.x+dx, ny=cur.y+dy;
-      if(!inBounds(nx,ny)) continue;
-      const nk=key(nx,ny);
-      if(closed.has(nk)) continue;
-      const t=G.grid[ny]&&G.grid[ny][nx];
-      if(!t) continue;
-      // Water is impassable — except over a bridge, wading a ford (slow),
-      // or across winter ice when the river freezes.
-      const waterCrossable = (t.building && t.building.type==='bridge') || t.ford || riverFrozen();
-      if(t.type==='water' && !waterCrossable) continue;
-      const isGoal=nx===goalGX&&ny===goalGY;
-      const walkable=isGoal||!(t.building&&t.building.type!=='farm'&&t.building.type!=='road'&&t.building.type!=='bridge');
-      if(!walkable) continue;
-      const wadePenalty = (t.type==='water' && !(t.building&&t.building.type==='bridge')) ? 1.4 : 0;
-      const g=cur.g+(dx!==0&&dy!==0?1.41:1)+wadePenalty;
-      if(bestG[nk]!==undefined&&bestG[nk]<=g) continue;
-      bestG[nk]=g;
-      const h=Math.abs(nx-goalGX)+Math.abs(ny-goalGY);
-      open.push({x:nx,y:ny,g,h,f:g+h,parent:cur});
-    }
-  }
-  return []; // direct fallback
-}
-
 function moveToward(v, tgx, tgy, dt, speedMul){
   const gtx=Math.round(tgx), gty=Math.round(tgy);
   if(!v.pathTarget || v.pathTarget.gx!==gtx || v.pathTarget.gy!==gty){
@@ -3429,7 +3365,7 @@ const EDGE_DROP = 14;  // map-edge cliff height
    kit does. Sited here rather than beside initIsoKit because WATER_DROP is a
    const declared below that point — calling earlier would hit its temporal
    dead zone, which is a runtime throw the frame loop would then swallow. */
-initCritters({ ctx, sprites: SPRITES, spriteScale: SPRITE_SCALE, waterDrop: WATER_DROP, tileWalkable });
+initCritters({ ctx, sprites: SPRITES, spriteScale: SPRITE_SCALE, waterDrop: WATER_DROP });
 
 /* Weather reports what it did rather than reaching for main.ts's toast and
    chronicle directly — the module stays pure simulation that way, and can be

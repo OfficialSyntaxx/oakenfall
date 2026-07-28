@@ -8,8 +8,8 @@
  * First drawing code to leave main.ts. Canvas code cannot import `ctx` and
  * expect to write to it — ES module bindings are read-only to importers — so
  * the canvas and the sprite tables are pushed in by initCritters(), exactly as
- * the iso kit takes its context. tileWalkable comes in the same way rather
- * than dragging the whole pathfinding surface across with it.
+ * the iso kit takes its context. Pathfinding is an ordinary import — it moved
+ * to src/pathfind.ts and needs nothing pushed in.
  *
  * Every critter has a hand-drawn fallback and always will: blitCritter tries
  * the sprite and returns false if it has not decoded, and the procedural
@@ -19,6 +19,7 @@ import { G } from './state';
 import { clamp, dist2, project } from './math';
 import { drawShadow } from './isokit';
 import { tileAt } from './mapgen';
+import { tileWalkable } from './pathfind';
 import { seasonIndex, riverFrozen } from './time';
 
 /** Per-species behaviour: how close a settler may come before it bolts, how
@@ -34,19 +35,16 @@ let ctx: any = null;
 let SPRITES: any = {};
 let SPRITE_SCALE: any = {};
 let WATER_DROP = 6;
-let tileWalkable: (gx: number, gy: number) => boolean = () => true;
 
 /** Hand the module the canvas and the few tables it draws from. Called once,
  *  from main.ts, after the context and sprite tables exist. */
 export function initCritters(deps: {
   ctx: any; sprites: any; spriteScale: any; waterDrop: number;
-  tileWalkable: (gx: number, gy: number) => boolean;
 }): void {
   ctx = deps.ctx;
   SPRITES = deps.sprites;
   SPRITE_SCALE = deps.spriteScale;
   WATER_DROP = deps.waterDrop;
-  tileWalkable = deps.tileWalkable;
 }
 
 export function spawnWildlife(){
@@ -133,7 +131,7 @@ export function updateWildlife(dt){
         if(c.rest <= 0){ c.rest = 2+Math.random()*4;
           const nx = clamp(c.gx+(Math.random()-0.5)*spec.wander, 1, G.MAP_SIZE-2);
           const ny = clamp(c.gy+(Math.random()-0.5)*spec.wander, 1, G.MAP_SIZE-2);
-          if(typeof tileWalkable==='function' && tileWalkable(Math.round(nx), Math.round(ny))){ c.tx=nx; c.ty=ny; }
+          if(tileWalkable(Math.round(nx), Math.round(ny))){ c.tx=nx; c.ty=ny; }
         }
       }
       const dx=c.tx-c.gx, dy=c.ty-c.gy, d=Math.hypot(dx,dy);
