@@ -161,7 +161,7 @@ function applyDifficulty(cfg){
   G.TC_X = Math.floor(G.MAP_SIZE/2)-1; G.TC_Y = Math.floor(G.MAP_SIZE/2)-1;
   G.TC_CX = G.TC_X+0.5; G.TC_CY = G.TC_Y+0.5;
   wolfRiskMul = cfg.wolfMul * gameMode.wolfMul;
-  stockpile = Object.assign({}, cfg.startRes);
+  G.stockpile = Object.assign({}, cfg.startRes);
   landId = cfg.landId || 'valley';
   scenarioId = cfg.goalId || 'endless';
   scenarioWon = false;
@@ -200,20 +200,17 @@ function rollName(){
 /* =========================================================================
    STATE
 ========================================================================= */
-let buildings = [];
 // Safe Town Centre lookup — always returns a building or null, never throws
 /* The town hall: every hauler's fallback drop-off, and the anchor a dozen other
    systems measure from. This called ITSELF — infinite recursion, throwing on
    every invocation since the Vite migration. Because the frame loop catches and
    throttles exceptions, it never surfaced as a crash: settlers simply walked to
    the trees, filled their arms, dropped nothing, and went back for more. */
-function findTC(){ return buildings.find(b=>b.type==='townCenter') || null; }
-let stockpile = { wood:60, stone:25, food:40 };
-let totals = { wood:0, stone:0, food:0 }; // lifetime gathered, drives quests
+function findTC(){ return G.buildings.find(b=>b.type==='townCenter') || null; }
 const BASE_CAP = { wood:200, stone:160, food:180, planks:80, flour:60, bread:60 };
 function capFor(type){
   let cap = BASE_CAP[type];
-  for(const b of buildings) if(b.type==='granary' && (b.condition===undefined||b.condition>=35)) cap += 90;
+  for(const b of G.buildings) if(b.type==='granary' && (b.condition===undefined||b.condition>=35)) cap += 90;
   if(typeof researched!=='undefined' && researched.cellars) cap += 60; // Deep Cellars
   return cap;
 }
@@ -221,7 +218,7 @@ function capFor(type){
 // Granary and the Deep Cellars research. Food above this slowly spoils.
 function foodSafeCap(){
   let safe = 45;
-  for(const b of buildings) if(b.type==='granary' && (b.condition===undefined||b.condition>=35)) safe += 70;
+  for(const b of G.buildings) if(b.type==='granary' && (b.condition===undefined||b.condition>=35)) safe += 70;
   if(typeof researched!=='undefined' && researched.cellars) safe += 50;
   return safe;
 }
@@ -229,10 +226,10 @@ let _spoilAcc = 0, _spoilDay = 0;
 function foodSpoilTick(dt){
   const mul = (gameMode && gameMode.decayMul!==undefined) ? gameMode.decayMul : 1;
   if(mul<=0) return; // Peaceful: nothing spoils
-  const excess = (stockpile.food||0) - foodSafeCap();
+  const excess = (G.stockpile.food||0) - foodSafeCap();
   if(excess <= 0) return;
   const lost = excess * (0.14/CYCLE_LEN) * mul * dt * (researched.coldstore?0.5:1); // ~14%/day of the excess
-  stockpile.food = Math.max(0, stockpile.food - lost);
+  G.stockpile.food = Math.max(0, G.stockpile.food - lost);
   _spoilAcc += lost;
   // Nudge the player about once a day if spoilage is adding up.
   if(dayCount!==_spoilDay && _spoilAcc >= 5){
@@ -243,14 +240,14 @@ function foodSpoilTick(dt){
 }
 function gainResource(type, amount){
   const cap = capFor(type);
-  const before = stockpile[type];
-  stockpile[type] = clamp(stockpile[type]+amount, 0, cap);
-  const actuallyGained = stockpile[type]-before;
+  const before = G.stockpile[type];
+  G.stockpile[type] = clamp(G.stockpile[type]+amount, 0, cap);
+  const actuallyGained = G.stockpile[type]-before;
   if(actuallyGained>0){
-    totals[type] = (totals[type]||0) + actuallyGained;   // planks/flour/bread were NaN before
+    G.totals[type] = (G.totals[type]||0) + actuallyGained;   // planks/flour/bread were NaN before
     if(typeof dailyProgress==='object' && dailyProgress[type]!==undefined) dailyProgress[type] += actuallyGained;
   }
-  if(stockpile[type]>=cap && amount>0){
+  if(G.stockpile[type]>=cap && amount>0){
     if(!window.__capWarned[type]){ window.__capWarned[type]=true; toast((type[0].toUpperCase()+type.slice(1))+' storage is full! Build a Granary.', true); }
   } else if(window.__capWarned){
     window.__capWarned[type]=false;
@@ -289,7 +286,7 @@ const SCENARIOS = {
   town:     { name:'Rise to a Town', ic:'🏰', desc:'Grow the hold from outpost to town.',
               done:()=>currentTierIdx>=3, progress:()=>HOLD_TIERS[currentTierIdx].name+' → Town' },
   timber:   { name:'Timber Trade',   ic:'🪚', desc:'Saw 300 planks — a hold that exports is a hold that lasts.',
-              done:()=>(totals.planks||0)>=300, progress:()=>Math.floor(totals.planks||0)+'/300 planks' },
+              done:()=>(G.totals.planks||0)>=300, progress:()=>Math.floor(G.totals.planks||0)+'/300 planks' },
   bulwark:  { name:'Bulwark',        ic:'🛡️', desc:'Drive off eight raids without losing the hold.',
               done:()=>(journal.raidsRepelled||0)>=8, progress:()=>(journal.raidsRepelled||0)+'/8 raids repelled' },
 };
@@ -337,7 +334,7 @@ function showVictory(sc){
 let statHistory = []; // {day, pop, food, wood, stone}
 function captureStatSnapshot(){
   statHistory.push({ day:dayCount, pop:G.villagers.length,
-    food:Math.round(stockpile.food||0), wood:Math.round(stockpile.wood||0), stone:Math.round(stockpile.stone||0) });
+    food:Math.round(G.stockpile.food||0), wood:Math.round(G.stockpile.wood||0), stone:Math.round(G.stockpile.stone||0) });
   if(statHistory.length>60) statHistory.shift();
 }
 /* ── SEASONAL FESTIVAL ── once a year the hold chooses a lasting boon */
@@ -460,18 +457,18 @@ window.__oakDebug = function(){
        findTC. Anything in here is a real error the game swallowed. */
     errors: errorLog.map(e=>e.kind+': '+e.msg.slice(0,90)),
     claimants: G.villagers.filter(v=>v.targetTile).length,
-    buildings: buildings.filter(b=>b.type!=='road').map(b=>b.type),
-    placements: buildings.filter(b=>b.type!=='road').map(b=>({t:b.type, gx:b.gx, gy:b.gy})),
-    worn: buildings.filter(b=>b.condition!==undefined && b.condition<70).length,
-    onFire: buildings.filter(b=>b._fire>0).length,
+    buildings: G.buildings.filter(b=>b.type!=='road').map(b=>b.type),
+    placements: G.buildings.filter(b=>b.type!=='road').map(b=>({t:b.type, gx:b.gx, gy:b.gy})),
+    worn: G.buildings.filter(b=>b.condition!==undefined && b.condition<70).length,
+    onFire: G.buildings.filter(b=>b._fire>0).length,
     activeResearch: activeResearch ? activeResearch.id : null,
     researchedCount: Object.keys(researched).filter(k=>researched[k]).length,
     orders: stewardOrders.map(o=>o.kind),
-    stockpile: Object.assign({}, stockpile),
+    stockpile: Object.assign({}, G.stockpile),
     coins, tier: currentTierIdx,
     needs: (typeof roleNeedScores==='function') ? roleNeedScores().slice(0,3) : [],
-    critters: (typeof critters!=='undefined') ? critters.length : 0,
-    raiders: raiders.length,
+    critters: (typeof G.critters!=='undefined') ? G.critters.length : 0,
+    raiders: G.raiders.length,
     land: landId,
     scenario: scenarioId,
     scenarioWon,
@@ -498,7 +495,7 @@ window.__oakGrid = function(){
   return G.grid.map(row=>row.map(t=> t.wilds ? 'w' : t.type.charAt(0)));
 };
 function adminGrant(kind){
-  const bump = (k,n)=>{ stockpile[k] = (stockpile[k]||0) + n; };
+  const bump = (k,n)=>{ G.stockpile[k] = (G.stockpile[k]||0) + n; };
   const toDawn = ()=>{ worldTime = Math.floor(worldTime/CYCLE_LEN)*CYCLE_LEN + 30; };
   const toNight = ()=>{ worldTime = Math.floor(worldTime/CYCLE_LEN)*CYCLE_LEN + DAY_LEN + 20; };
   switch(kind){
@@ -506,8 +503,8 @@ function adminGrant(kind){
     case 'res': ['wood','stone','food','planks','flour','bread'].forEach(k=>bump(k,500)); toast('🛠️ +500 of every resource.'); break;
     case 'coins': coins += 1000; toast('🛠️ +1000 coins.'); break;
     case 'coinsBig': coins += 10000; toast('🛠️ +10,000 coins.'); break;
-    case 'craftClear': ['planks','flour','bread'].forEach(k=>{ stockpile[k]=0; }); toast('🛠️ Crafted stores emptied.'); break;
-    case 'maxout': ['wood','stone','food','planks','flour','bread'].forEach(k=>{ stockpile[k] = capFor ? capFor(k) : 999; }); toast('🛠️ Stores filled to capacity.'); break;
+    case 'craftClear': ['planks','flour','bread'].forEach(k=>{ G.stockpile[k]=0; }); toast('🛠️ Crafted stores emptied.'); break;
+    case 'maxout': ['wood','stone','food','planks','flour','bread'].forEach(k=>{ G.stockpile[k] = capFor ? capFor(k) : 999; }); toast('🛠️ Stores filled to capacity.'); break;
     // ── Progress / unlocks ──
     case 'tech': TECH_TREE.forEach(t=>{ researched[t.id] = true; }); activeResearch = null; toast('🛠️ All research unlocked.'); break;
     case 'cosmetics': Object.keys(UNLOCK_SKUS).forEach(s=>{ unlocks[s]=true; }); applyPatronBanners && applyPatronBanners(); saveUnlocks(); toast('🛠️ All cosmetic packs unlocked.'); break;
@@ -539,16 +536,16 @@ function adminGrant(kind){
       toast('🛠️ Advanced one season.'); break;
     }
     // ── Hazards (test the drama) ──
-    case 'raid':   launchRaid(4, true, raidEntryPoint(buildings.filter(b=>b.type==='bridge'))); toast('🛠️ Raiders incoming!'); sfx&&sfx('raid'); break;
+    case 'raid':   launchRaid(4, true, raidEntryPoint(G.buildings.filter(b=>b.type==='bridge'))); toast('🛠️ Raiders incoming!'); sfx&&sfx('raid'); break;
     /* Pick only from what can actually burn. Excluding roads and wells by name
        was not the same test — igniteBuilding silently refuses anything outside
        FLAMMABLE, so landing on a mining post meant the button did nothing and
        said it had. */
-    case 'fire':   { const cand = buildings.filter(b=>FLAMMABLE.has(b.type) && (b.condition===undefined||b.condition>0) && !b._fire);
+    case 'fire':   { const cand = G.buildings.filter(b=>FLAMMABLE.has(b.type) && (b.condition===undefined||b.condition>0) && !b._fire);
                      if(cand.length){ igniteBuilding(cand[Math.floor(Math.random()*cand.length)], true); toast('🛠️ A fire breaks out!'); }
                      else toast('🛠️ Nothing standing here can burn.'); break; }
-    case 'douse':  buildings.forEach(b=>{ b._fire = 0; }); toast('🛠️ All fires doused.'); break;
-    case 'decay':  { let n=0; buildings.forEach(b=>{ if(b.condition!==undefined && b.condition>40){ b.condition=40; n++; } }); toast('🛠️ '+n+' building'+(n!==1?'s':'')+' worn down to 40%.'); break; }
+    case 'douse':  G.buildings.forEach(b=>{ b._fire = 0; }); toast('🛠️ All fires doused.'); break;
+    case 'decay':  { let n=0; G.buildings.forEach(b=>{ if(b.condition!==undefined && b.condition>40){ b.condition=40; n++; } }); toast('🛠️ '+n+' building'+(n!==1?'s':'')+' worn down to 40%.'); break; }
     // ── Toggles ──
     case 'freeze': ADMIN.freezeNeeds = !ADMIN.freezeNeeds; toast('🛠️ Freeze needs: '+(ADMIN.freezeNeeds?'ON':'OFF')); break;
     case 'noraid': ADMIN.noRaids = !ADMIN.noRaids; toast('🛠️ Block raids: '+(ADMIN.noRaids?'ON':'OFF')); break;
@@ -582,7 +579,6 @@ let onboardDone = false;
 /* ── VISIBLE RAIDS ── the raid's outcome is decided by the defense math, but
    the raiders now march in and are met, so you SEE the hold hold or break.
    Purely a dramatization layer over the already-computed result. */
-let raiders = [];
 function raidEntryPoint(openBridges){
   if(openBridges && openBridges.length){ const b=openBridges[Math.floor(Math.random()*openBridges.length)]; return {gx:b.gx, gy:b.gy}; }
   // else nearest map edge to a random side
@@ -596,19 +592,19 @@ function raidEntryPoint(openBridges){
 
 function launchRaid(n, didSteal, entry){
   for(let i=0;i<n;i++){
-    raiders.push({ gx:clamp(entry.gx+(Math.random()-0.5)*2,0,G.MAP_SIZE-1), gy:clamp(entry.gy+(Math.random()-0.5)*2,0,G.MAP_SIZE-1),
+    G.raiders.push({ gx:clamp(entry.gx+(Math.random()-0.5)*2,0,G.MAP_SIZE-1), gy:clamp(entry.gy+(Math.random()-0.5)*2,0,G.MAP_SIZE-1),
       state:'advance', didSteal, phase:Math.random()*6, spd:1.5+Math.random()*0.6, facing:1, life:34, _flee:null,
       variant: RAIDER_VARIANTS[Math.floor(Math.random()*RAIDER_VARIANTS.length)] });
   }
 }
 function raiderTick(dt){
-  if(!raiders.length) return;
+  if(!G.raiders.length) return;
   const tc = { gx:G.TC_CX, gy:G.TC_CY+1 };
-  for(const r of raiders.slice()){
+  for(const r of G.raiders.slice()){
     r.phase += dt*7; r.life -= dt;
-    if(r.life<=0){ raiders.splice(raiders.indexOf(r),1); continue; }
+    if(r.life<=0){ G.raiders.splice(G.raiders.indexOf(r),1); continue; }
     const tgt = r.state==='advance' ? tc : r._flee;
-    if(!tgt){ raiders.splice(raiders.indexOf(r),1); continue; }
+    if(!tgt){ G.raiders.splice(G.raiders.indexOf(r),1); continue; }
     const dx=tgt.gx-r.gx, dy=tgt.gy-r.gy, d=Math.hypot(dx,dy)||0.001;
     if(r.state==='advance'){
       const guard = G.villagers.find(v=>v.role==='guard' && !v.sick && v.stage!=='child' && dist2(v.gx,v.gy,r.gx,r.gy)<4.5);
@@ -619,7 +615,7 @@ function raiderTick(dt){
         r._flee = { gx: r.gx + (r.gx<G.MAP_SIZE/2?-7:7), gy: r.gy + (r.gy<G.MAP_SIZE/2?-7:7) };
         continue;
       }
-    } else if(d < 0.6){ raiders.splice(raiders.indexOf(r),1); continue; }
+    } else if(d < 0.6){ G.raiders.splice(G.raiders.indexOf(r),1); continue; }
     r.gx += (dx/d)*r.spd*dt; r.gy += (dy/d)*r.spd*dt;
     r.facing = dx<0?-1:1;
   }
@@ -655,7 +651,6 @@ function drawRaider(r){
 }
 /* ── AMBIENT WILDLIFE ── deer roam the wilds and bolt from folk; birds drift
    the sky. Purely atmospheric — not saved, respawned each session. */
-let critters = [];
 /* Each kind keeps its own temperament: how far it lets you approach, how hard it
    bolts, and how restless it is when left alone. Boar stand their ground far
    longer than deer; rabbits spook at almost anything. */
@@ -666,12 +661,12 @@ const CRITTER_KINDS = {
   fox:    { flee:11,   speed:2.8, graze:0.5,  wander:5.0 },
 };
 function spawnWildlife(){
-  critters = [];
+  G.critters = [];
   const wild = (typeof G.wildsTiles!=='undefined' && G.wildsTiles.length) ? G.wildsTiles : [];
   const winter = seasonIndex()===3;
   const pickWild = ()=> wild.length ? wild[(Math.random()*wild.length)|0]
                                     : { gx:G.TC_CX+(Math.random()-0.5)*12, gy:G.TC_CY+(Math.random()-0.5)*12 };
-  const beast = (kind, t)=> critters.push({ kind, gx:t.gx, gy:t.gy, tx:t.gx, ty:t.gy,
+  const beast = (kind, t)=> G.critters.push({ kind, gx:t.gx, gy:t.gy, tx:t.gx, ty:t.gy,
     phase:Math.random()*6, face:1, rest:Math.random()*4, moving:false });
 
   // Game thins out in winter — the wilds feel emptier when the snow is down.
@@ -690,20 +685,20 @@ function spawnWildlife(){
   for(let i=0;i<rabbitN && grass.length;i++) beast('rabbit', grass[(Math.random()*grass.length)|0]);
 
   for(let i=0;i<4;i++){
-    critters.push({ kind:'bird', gx:Math.random()*G.MAP_SIZE, gy:Math.random()*G.MAP_SIZE,
+    G.critters.push({ kind:'bird', gx:Math.random()*G.MAP_SIZE, gy:Math.random()*G.MAP_SIZE,
       dir:Math.random()*6.28, phase:Math.random()*6, spd:0.5+Math.random()*0.5 });
   }
   // Fish break the surface of open water — none once the river freezes over.
   if(typeof G.waterTiles!=='undefined' && G.waterTiles.length && !riverFrozen()){
     for(let i=0;i<4;i++){
       const t = G.waterTiles[(Math.random()*G.waterTiles.length)|0];
-      critters.push({ kind:'fish', gx:t.gx, gy:t.gy, phase:Math.random()*6, next:Math.random()*6 });
+      G.critters.push({ kind:'fish', gx:t.gx, gy:t.gy, phase:Math.random()*6, next:Math.random()*6 });
     }
     // Ducks paddle in circles near where they settled rather than wandering the
     // map — a duck that walks onto a field is worse than no duck at all.
     for(let i=0;i<3;i++){
       const t = G.waterTiles[(Math.random()*G.waterTiles.length)|0];
-      critters.push({ kind:'duck', gx:t.gx, gy:t.gy, homeX:t.gx, homeY:t.gy,
+      G.critters.push({ kind:'duck', gx:t.gx, gy:t.gy, homeX:t.gx, homeY:t.gy,
         phase:Math.random()*6, dir:Math.random()*6.28, face:1, moving:true });
     }
   }
@@ -711,14 +706,14 @@ function spawnWildlife(){
   if(seasonIndex()===0 || seasonIndex()===1){
     for(let i=0;i<6 && grass.length;i++){
       const t = grass[(Math.random()*grass.length)|0];
-      critters.push({ kind:'flit', gx:t.gx, gy:t.gy, phase:Math.random()*6, dir:Math.random()*6.28,
+      G.critters.push({ kind:'flit', gx:t.gx, gy:t.gy, phase:Math.random()*6, dir:Math.random()*6.28,
         hue: Math.random()<0.5 ? '#e8d27a' : '#d9a0c8' });
     }
   }
 }
 function updateWildlife(dt){
-  if(!critters.length) return;
-  for(const c of critters){
+  if(!G.critters.length) return;
+  for(const c of G.critters){
     if(c.kind==='duck'){
       c.phase += dt*2;
       c.dir += (Math.random()-0.5)*dt*2.2;
@@ -950,7 +945,7 @@ function foresterTick(dt){
   _foresterTimer -= dt;
   if(_foresterTimer > 0) return;
   _foresterTimer = 8;
-  const groves = buildings.filter(b=>b.type==='forester' && (b.condition===undefined||b.condition>=35));
+  const groves = G.buildings.filter(b=>b.type==='forester' && (b.condition===undefined||b.condition>=35));
   if(!groves.length) return;
   for(const g of groves){
     for(const t of G.forestTiles){
@@ -972,8 +967,8 @@ const DECISIONS = [
   { id:'refugees', ic:'🚪', title:'Strangers at the Gate',
     text:'A ragged family stands at the palisade — three souls, footsore and hungry, asking to join the hold.',
     choices:[
-      {label:'Take them in', outcome:'The family joins the hold, grateful.', run:()=>{ let n=0; const room=popCapacity()-G.villagers.length; for(let i=0;i<Math.min(2,Math.max(0,room));i++){ spawnVillager(); n++; } stockpile.food=Math.max(0,(stockpile.food||0)-10); toast(n>0?('👪 '+n+' newcomer'+(n>1?'s':'')+' join the hold.'):'👪 No room — but you shared what you could.'); changeMorale(4); }},
-      {label:'Share food, send them on', outcome:'You give them provisions for the road.', run:()=>{ stockpile.food=Math.max(0,(stockpile.food||0)-8); changeMorale(2); }},
+      {label:'Take them in', outcome:'The family joins the hold, grateful.', run:()=>{ let n=0; const room=popCapacity()-G.villagers.length; for(let i=0;i<Math.min(2,Math.max(0,room));i++){ spawnVillager(); n++; } G.stockpile.food=Math.max(0,(G.stockpile.food||0)-10); toast(n>0?('👪 '+n+' newcomer'+(n>1?'s':'')+' join the hold.'):'👪 No room — but you shared what you could.'); changeMorale(4); }},
+      {label:'Share food, send them on', outcome:'You give them provisions for the road.', run:()=>{ G.stockpile.food=Math.max(0,(G.stockpile.food||0)-8); changeMorale(2); }},
       {label:'Turn them away', outcome:'The gate stays shut. The folk mutter.', run:()=>{ changeMorale(-5); }},
     ]},
   { id:'peddler', ic:'🎁', title:'The Peddler\'s Crate',
@@ -985,23 +980,23 @@ const DECISIONS = [
     ]},
   { id:'tribute', ic:'🏴', title:'A Bandit Ultimatum',
     text:'A rider bears a crude banner: pay 25 food in tribute, or the bandits will come for far more.',
-    cond:()=>currentTierIdx>=1 && (stockpile.food||0)>=25 && (gameMode.banditsEnabled!==false),
+    cond:()=>currentTierIdx>=1 && (G.stockpile.food||0)>=25 && (gameMode.banditsEnabled!==false),
     choices:[
-      {label:'Pay the tribute', outcome:'They take the food and melt back into the trees.', run:()=>{ stockpile.food-=25; changeMorale(-2); }},
+      {label:'Pay the tribute', outcome:'They take the food and melt back into the trees.', run:()=>{ G.stockpile.food-=25; changeMorale(-2); }},
       {label:'Refuse them', outcome:'You bar the gate. The folk stand a little taller — but a raid may come.', run:()=>{ changeMorale(3); banditTimer=Math.min(banditTimer,25); }},
     ]},
   { id:'scholar', ic:'📚', title:'A Wandering Scholar',
     text:'A scholar seeks shelter and offers, in thanks, to share what they know — if the hold can spare a meal.',
-    cond:()=>!!activeResearch && (stockpile.food||0)>=12,
+    cond:()=>!!activeResearch && (G.stockpile.food||0)>=12,
     choices:[
-      {label:'Host them (12 food)', outcome:'By lamplight they hasten your studies.', run:()=>{ stockpile.food-=12; if(activeResearch) activeResearch.remaining=Math.max(0,activeResearch.remaining-25); toast('📚 Research hastened.'); changeMorale(2); }},
+      {label:'Host them (12 food)', outcome:'By lamplight they hasten your studies.', run:()=>{ G.stockpile.food-=12; if(activeResearch) activeResearch.remaining=Math.max(0,activeResearch.remaining-25); toast('📚 Research hastened.'); changeMorale(2); }},
       {label:'No food to spare', outcome:'They understand, and move on.', run:()=>{}},
     ]},
   { id:'feast', ic:'🍲', title:'The Folk Ask for a Feast',
     text:'The hold has worked hard, and the elders propose a feast to lift every heart — if you can spare the stores.',
-    cond:()=>(stockpile.food||0)>=20,
+    cond:()=>(G.stockpile.food||0)>=20,
     choices:[
-      {label:'Hold the feast (20 food)', outcome:'Song and firelight late into the night.', run:()=>{ stockpile.food-=20; changeMorale(10); }},
+      {label:'Hold the feast (20 food)', outcome:'Song and firelight late into the night.', run:()=>{ G.stockpile.food-=20; changeMorale(10); }},
       {label:'Not this time', outcome:'The stores stay full; the mood dips a little.', run:()=>{ changeMorale(-3); }},
     ]},
   { id:'ruins', ic:'🗿', title:'Old Stones in the Wood',
@@ -1050,11 +1045,11 @@ function decreeHungerMul(){ return decrees.rationing ? 0.8 : 1; }
 function decreeWorkMul(){ return decrees.rationing ? 0.94 : 1; }
 const ONBOARD_STEPS = [
   {hint:'👋 Welcome, steward. Tap 🔨 and raise a House to make room for more settlers.',
-   done:()=>buildings.some(b=>b.type==='house')},
+   done:()=>G.buildings.some(b=>b.type==='house')},
   {hint:'🪓 Build a Forestry Camp, then tap a settler and set them to Lumberjack — timber builds everything.',
-   done:()=>buildings.some(b=>b.type==='forestCamp') && G.villagers.some(v=>v.role==='lumberjack')},
+   done:()=>G.buildings.some(b=>b.type==='forestCamp') && G.villagers.some(v=>v.role==='lumberjack')},
   {hint:'🌾 Food is life. Build a Farm and assign a Farmer before the cold comes.',
-   done:()=>buildings.some(b=>b.type==='farm') && G.villagers.some(v=>v.role==='farmer')},
+   done:()=>G.buildings.some(b=>b.type==='farm') && G.villagers.some(v=>v.role==='farmer')},
   {hint:'❄️ Now stock food and firewood — and survive your first winter.',
    done:()=>(journal.wintersEndured||0)>=1},
 ];
@@ -1073,21 +1068,21 @@ function updateStatuses(){
   if(typeof climate!=='undefined' && climate){ const c=CLIMATE_DEFS[climate.type]; pills.push({t:climate.ic+' '+c.name, c: climate.type==='fair'?'good':'warn'}); }
   if(typeof festivalBoon!=='undefined' && festivalBoon){ const b=FESTIVAL_BOONS.find(x=>x.id===festivalBoon); if(b) pills.push({t:b.ic+' '+b.name, c:'good'}); }
   if(typeof tradeRoutes!=='undefined' && tradeRoutes.length) pills.push({t:'🐫 '+tradeRoutes.length+' route'+(tradeRoutes.length>1?'s':''), c:''});
-  if(buildings.some(b=>b._fire)) pills.push({t:'🔥 Fire!', c:'warn'});
+  if(G.buildings.some(b=>b._fire)) pills.push({t:'🔥 Fire!', c:'warn'});
   if(typeof plague!=='undefined' && plague) pills.push({t:'🤢 Blight', c:'warn'});
   el.innerHTML = pills.map(p=>`<span class="status-pill ${p.c}">${p.t}</span>`).join('');
 }
 /* ── DEEDS ── one-time achievements; earned map is id→day, persists in saves */
 let deeds = {};
 const DEED_DEFS = [
-  {id:'firstHome',     ic:'🏠', name:'A Roof Raised',   desc:'Build your first house.',              reward:{coins:5},              check:()=>buildings.some(b=>b.type==='house')},
+  {id:'firstHome',     ic:'🏠', name:'A Roof Raised',   desc:'Build your first house.',              reward:{coins:5},              check:()=>G.buildings.some(b=>b.type==='house')},
   {id:'hamlet',        ic:'🏘️', name:'Hamlet',          desc:'Grow the hold to 10 settlers.',        reward:{coins:10},             check:()=>G.villagers.length>=10},
   {id:'township',      ic:'🏰', name:'Township',        desc:'Grow the hold to 20 settlers.',        reward:{coins:20},             check:()=>G.villagers.length>=20},
   {id:'firstWinter',   ic:'❄️', name:'First Winter',    desc:'Survive your first winter.',           reward:{coins:12,food:20},     check:()=>journal.wintersEndured>=1},
   {id:'ironHeart',     ic:'🥶', name:'Iron Heart',      desc:'Endure three winters.',                reward:{coins:25},             check:()=>journal.wintersEndured>=3},
-  {id:'bridgeBuilder', ic:'🌉', name:'Bridge Builder',  desc:'Span the river with a bridge.',        reward:{coins:10,planks:6},    check:()=>buildings.some(b=>b.type==='bridge')},
-  {id:'fullGranary',   ic:'🌾', name:'Full Granary',    desc:'Stockpile 200 provisions.',            reward:{coins:15},             check:()=>(stockpile.food||0)>=200},
-  {id:'timberBaron',   ic:'🪵', name:'Timber Baron',    desc:'Hold 300 timber at once.',             reward:{coins:15},             check:()=>(stockpile.wood||0)>=300},
+  {id:'bridgeBuilder', ic:'🌉', name:'Bridge Builder',  desc:'Span the river with a bridge.',        reward:{coins:10,planks:6},    check:()=>G.buildings.some(b=>b.type==='bridge')},
+  {id:'fullGranary',   ic:'🌾', name:'Full Granary',    desc:'Stockpile 200 provisions.',            reward:{coins:15},             check:()=>(G.stockpile.food||0)>=200},
+  {id:'timberBaron',   ic:'🪵', name:'Timber Baron',    desc:'Hold 300 timber at once.',             reward:{coins:15},             check:()=>(G.stockpile.wood||0)>=300},
   {id:'firstWed',      ic:'💞', name:'A Match Made',     desc:'See your first wedding.',              reward:{coins:8},              check:()=>(journal.weddings||0)>=1},
   {id:'newLife',       ic:'👶', name:'New Life',        desc:'Welcome a child born in the hold.',    reward:{coins:8,food:15},      check:()=>(journal.childrenBorn||0)>=1},
   {id:'greyHairs',     ic:'🧓', name:'Grey Hairs',      desc:'A settler lives to become an elder.',  reward:{coins:12},             check:()=>G.villagers.some(v=>v.stage==='elder')},
@@ -1302,8 +1297,8 @@ function buildDiagnostics(){
   lines.push('## Oakenfall Report');
   lines.push('- Version: ' + GAME_VERSION + ' · Mode: ' + gameModeId + ' · Map: ' + G.MAP_SIZE);
   lines.push('- Day ' + dayCount + ' · ' + seasonName() + ' · ' + weather.label + ' · Tier: ' + HOLD_TIERS[currentTierIdx].name);
-  lines.push('- Pop: ' + G.villagers.length + '/' + popCapacity() + ' · Buildings: ' + buildings.length + ' · Coins: ' + coins);
-  lines.push('- Stock: ' + Object.entries(stockpile).map(([k,v])=>k+':'+Math.round(v)).join(' '));
+  lines.push('- Pop: ' + G.villagers.length + '/' + popCapacity() + ' · Buildings: ' + G.buildings.length + ' · Coins: ' + coins);
+  lines.push('- Stock: ' + Object.entries(G.stockpile).map(([k,v])=>k+':'+Math.round(v)).join(' '));
   lines.push('- Researched: ' + (Object.keys(researched).join(', ') || 'none') + (activeResearch ? ' (researching: '+activeResearch.id+')' : ''));
   lines.push('- Device: ' + (navigator.userAgent||'?').slice(0,110));
   lines.push('- Screen: ' + cssW + 'x' + cssH + ' @' + canvasDPR + 'x · ' + (window.matchMedia('(orientation: landscape)').matches ? 'landscape' : 'portrait'));
@@ -1471,8 +1466,8 @@ function processTradeRoutes(){
   for(const r of tradeRoutes.slice()){
     if(dayCount < r.nextDay) continue;
     const g = ROUTE_GOODS.find(x=>x.type===r.giveType);
-    if((stockpile[r.giveType]||0) >= r.giveAmt){
-      stockpile[r.giveType] -= r.giveAmt;
+    if((G.stockpile[r.giveType]||0) >= r.giveAmt){
+      G.stockpile[r.giveType] -= r.giveAmt;
       coins += r.coins; logCoinIn('routes', r.coins);
       r.missed = 0;
       toast(r.ic+' Caravan to '+r.name+' paid 💰'+r.coins+' for '+r.giveAmt+' '+g.label+'.');
@@ -1546,7 +1541,7 @@ function buyShopItem(id){
   if(id==='festival'){ if(activeEvent){ toast('An event is already underway.', true); return; } coins-=it.cost; activeEvent={type:'festival',endsAt:worldTime+55}; toast('🎉 A feast day begins!'); sfx('festival'); }
   else if(id==='merchant'){ if(activeEvent){ toast('An event is already underway.', true); return; } coins-=it.cost; activeEvent={type:'merchant',endsAt:worldTime+70}; toast('🧳 A merchant arrives at your call!'); }
   else if(id==='healer'){ const n=G.villagers.filter(v=>v.sick).length; if(!n){ toast('No one is sick.', true); return; } coins-=it.cost; G.villagers.forEach(v=>{v.sick=false;v.sickTimer=0;}); toast('🌿 The healer cures '+n+' settler'+(n>1?'s':'')+'.'); }
-  else if(id==='repairs'){ coins-=it.cost; let n=0; buildings.forEach(b=>{ if(b.condition!==undefined&&b.condition<100){b.condition=100;n++;} }); toast('🔧 '+n+' building'+(n!==1?'s':'')+' restored.'); }
+  else if(id==='repairs'){ coins-=it.cost; let n=0; G.buildings.forEach(b=>{ if(b.condition!==undefined&&b.condition<100){b.condition=100;n++;} }); toast('🔧 '+n+' building'+(n!==1?'s':'')+' restored.'); }
   else if(id==='rations'){ coins-=it.cost; const got=gainResource('food',25); toast('🥖 +'+got+' food delivered.'); }
   else if(id==='banner'){ coins-=it.cost; bannerIdx=(bannerIdx+1)%bannerPalette.length; toast('🚩 The hold flies new colours!'+(bannerPalette.length>BANNER_COLORS.length?'':'')); }
   if(_coinsBefore > coins) logCoinOut('shop', _coinsBefore - coins);
@@ -1779,7 +1774,7 @@ function roleNeedScores(){
   const pop = Math.max(1, G.villagers.length);
   const count = {};
   for(const v of G.villagers) count[v.role] = (count[v.role]||0) + 1;
-  const frac = (k)=> (stockpile[k]||0) / Math.max(1, capFor(k));
+  const frac = (k)=> (G.stockpile[k]||0) / Math.max(1, capFor(k));
   const out = [];
   const add = (role, workplace, score)=>{
     if(!hasActiveBuilding(workplace)) return;      // nowhere to do the work
@@ -1790,7 +1785,7 @@ function roleNeedScores(){
   };
   // Food is the survival pressure: weight it by how many mouths depend on it,
   // and sharply if the stores would not last long.
-  const hungry = (1 - frac('food'))*1.6 + ((stockpile.food||0) < pop*3 ? 1.4 : 0);
+  const hungry = (1 - frac('food'))*1.6 + ((G.stockpile.food||0) < pop*3 ? 1.4 : 0);
   add('farmer','farm', hungry);
   add('fisher','fishingHut', riverFrozen() ? 0 : hungry*0.95);
   add('hunter','huntingCabin', hungry*0.9);
@@ -1809,7 +1804,7 @@ function roleNeedScores(){
      cheapest workplace, so a fresh hold still waits for the player to build
      rather than wandering off to forage on turn one. */
   const cheapestWorkplace = (BUILD_DEFS.forestCamp && BUILD_DEFS.forestCamp.cost.wood) || 40;
-  if(!out.length && (stockpile.wood||0) < cheapestWorkplace){
+  if(!out.length && (G.stockpile.wood||0) < cheapestWorkplace){
     const byHand = (role, score)=> out.push({ role, score: score / (1 + (count[role]||0)), raw: score, workers: count[role]||0, byHand:true });
     byHand('lumberjack', (1 - frac('wood'))*0.55);
     byHand('hunter', hungry*0.5);
@@ -1822,7 +1817,7 @@ function roleNeedScores(){
    fire, when free hands are worth more than another woodcutter (idle adults are
    the bucket brigade). Returns true if they took work. */
 function seekWork(v){
-  if(buildings.some(b=>b._fire>0)) return false;
+  if(G.buildings.some(b=>b._fire>0)) return false;
   const best = roleNeedScores()[0];
   if(!best || best.score < 0.35) return false;
   reassignRole(v, best.role);
@@ -1840,7 +1835,7 @@ function maybeSwitchTrade(v){
   if(v._tradeCheck === undefined) v._tradeCheck = worldTime + 20 + Math.random()*30;
   if(worldTime < v._tradeCheck) return false;
   v._tradeCheck = worldTime + 30 + Math.random()*30;
-  if(buildings.some(b=>b._fire>0)) return false;
+  if(G.buildings.some(b=>b._fire>0)) return false;
   const scores = roleNeedScores();
   if(!scores.length) return false;
   // Compare pressure per head, not the published score. A fixed margin against
@@ -1873,7 +1868,7 @@ function ambientIdle(v){
   // Bucket brigade: idle adults rush to the nearest fire to help fight it.
   if(v.stage!=='child'){
     let fb=null, fbD=Infinity;
-    for(const b of buildings){ if(!b._fire) continue; const c=buildingCenter(b); const d=dist2(v.gx,v.gy,c.gx,c.gy); if(d<fbD){fbD=d;fb=c;} }
+    for(const b of G.buildings){ if(!b._fire) continue; const c=buildingCenter(b); const d=dist2(v.gx,v.gy,c.gx,c.gy); if(d<fbD){fbD=d;fb=c;} }
     if(fb && fbD < 100){ // within ~10 tiles — run over
       v.idleGX = clamp(fb.gx + (Math.random()-0.5)*2.2, 1, G.MAP_SIZE-2);
       v.idleGY = clamp(fb.gy + 1.0 + (Math.random()-0.5)*1.4, 1, G.MAP_SIZE-2);
@@ -1883,7 +1878,7 @@ function ambientIdle(v){
   }
   const night = (typeof isNight==='function') && isNight();
   const winter = (typeof seasonIndex==='function') && seasonIndex()===3;
-  const tav = buildings.find(b=>b.type==='tavern');
+  const tav = G.buildings.find(b=>b.type==='tavern');
   const hearth = tav ? {gx:tav.gx+0.5, gy:tav.gy+1.1} : {gx:G.TC_CX, gy:G.TC_CY+1.4};
   // Foul weather drives folk to shelter — a storm clears the yards fastest.
   const storm = weather.type==='storm', rain = weather.type==='rain' || weather.type==='snow';
@@ -1953,7 +1948,7 @@ function familyTick(dt){
   G.birthTimer -= dt;
   if(G.birthTimer<=0){
     G.birthTimer = 120 + Math.random()*80;
-    if(G.villagers.length < popCapacity() && stockpile.food > 30){
+    if(G.villagers.length < popCapacity() && G.stockpile.food > 30){
       const couples = G.villagers.filter(v=>v.partner && v.morale>55 && G.villagers.some(o=>o.name===v.partner));
       if(couples.length){
         const parent = couples[Math.floor(Math.random()*couples.length)];
@@ -1981,8 +1976,8 @@ function startResearch(id){
   if(activeResearch) { toast('Research is already underway.', true); return; }
   const t = TECH_TREE.find(x=>x.id===id);
   if(!t || researched[id]) return;
-  for(const [k,amt] of Object.entries(t.cost)){ if((stockpile[k]||0)<amt){ toast('Not enough '+k+' for '+t.name+'.', true); return; } }
-  for(const [k,amt] of Object.entries(t.cost)) stockpile[k]-=amt;
+  for(const [k,amt] of Object.entries(t.cost)){ if((G.stockpile[k]||0)<amt){ toast('Not enough '+k+' for '+t.name+'.', true); return; } }
+  for(const [k,amt] of Object.entries(t.cost)) G.stockpile[k]-=amt;
   activeResearch = { id, remaining:t.time, total:t.time };
   toast('🔬 Research begun: '+t.name);
 }
@@ -1994,7 +1989,7 @@ let activeEvent = null; // {type, endsAt, data}
 let currentTierIdx = 0;
 function computeTierIdx(){
   const pop = G.villagers.length;
-  const bld = buildings.filter(b=>b.type!=='road' && b.type!=='townCenter').length;
+  const bld = G.buildings.filter(b=>b.type!=='road' && b.type!=='townCenter').length;
   let idx = 0;
   for(let i=HOLD_TIERS.length-1; i>=0; i--){
     if(pop>=HOLD_TIERS[i].pop && bld>=HOLD_TIERS[i].bld){ idx=i; break; }
@@ -2025,8 +2020,8 @@ function rollRandomEvent(){
   } else if(roll < 0.50){
     // Wandering healer — cures all illness for food
     const sickCount = G.villagers.filter(v=>v.sick).length;
-    if(sickCount>0 && stockpile.food>=8){
-      stockpile.food -= 8;
+    if(sickCount>0 && G.stockpile.food>=8){
+      G.stockpile.food -= 8;
       G.villagers.forEach(v=>{ v.sick=false; v.sickTimer=0; });
       toast('🌿 A wandering healer cures '+sickCount+' sick villager'+(sickCount>1?'s':'')+' for 8 food.');
     } else if(sickCount>0){
@@ -2056,8 +2051,6 @@ function eventSpeedBonus(){ return activeEvent && activeEvent.type==='festival' 
 /* ── NAMED DISTRICTS ── clusters of 3+ buildings earn a name, shown on the map
    and announced to the Chronicle when they first form. Recomputed on a slow
    timer; names are deterministic (stable across recomputes and reloads). */
-let districts = [];
-let districtTimer = 8;
 const DISTRICT_DESC = {
   house:"Hearth", manor:"Hearth", farm:"Harvest", pasture:"Meadow", granary:"Harvest",
   windmill:"Mill", bakery:"Mill", forestCamp:"Timber", sawmill:"Timber", miningPost:"Stone",
@@ -2067,7 +2060,7 @@ const DISTRICT_DESC = {
 const DISTRICT_SUFFIX = ['Quarter','Row','End','Green','Rise','Reach','Cross','Gate','Hollow','Bank'];
 function _hashStr(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
 function computeDistricts(announce){
-  const pts = buildings.filter(b=>b.type!=='road'&&b.type!=='townCenter'&&b.type!=='bridge');
+  const pts = G.buildings.filter(b=>b.type!=='road'&&b.type!=='townCenter'&&b.type!=='bridge');
   const seen = new Set();
   const next = [];
   for(const b of pts){
@@ -2082,19 +2075,19 @@ function computeDistricts(announce){
     let dom='Old', best=0; for(const k in counts){ if(counts[k]>best){ best=counts[k]; dom=k; } }
     const cx=group.reduce((s,g)=>s+g.gx,0)/group.length, cy=group.reduce((s,g)=>s+g.gy,0)/group.length;
     const id = dom+':'+Math.round(cx/3)+','+Math.round(cy/3);
-    const prev = districts.find(d=>d.id===id);
+    const prev = G.districts.find(d=>d.id===id);
     const name = prev ? prev.name : (dom+' '+DISTRICT_SUFFIX[_hashStr(id)%DISTRICT_SUFFIX.length]);
     next.push({id, name, gx:cx, gy:cy, size:group.length});
     if(!prev && announce && typeof chron==='function') chron('district', name);
   }
-  districts = next;
+  G.districts = next;
 }
 function drawDistrictLabels(){
-  if(!districts.length || camera.scale < 0.62) return; // hide when zoomed far out
+  if(!G.districts.length || camera.scale < 0.62) return; // hide when zoomed far out
   ctx.save();
   ctx.font = "600 12px 'Cinzel', serif";
   ctx.textAlign='center'; ctx.textBaseline='middle';
-  for(const d of districts){
+  for(const d of G.districts){
     const p = project(d.gx, d.gy);
     const s = worldToScreen(p.x, p.y);
     if(s.x<-80||s.x>cssW+80||s.y<-40||s.y>cssH+40) continue;
@@ -2117,7 +2110,7 @@ function removeBuilding(b){
     if(v.targetBuilding===b){ v.targetBuilding=null; v.path=[]; v.pathTarget=null;
       if(/^walking/.test(v.state) || v.state==='working' || v.state==='farming') v.state='idle'; }
   });
-  const i = buildings.indexOf(b); if(i>=0) buildings.splice(i,1);
+  const i = G.buildings.indexOf(b); if(i>=0) G.buildings.splice(i,1);
   if(selection && selection.ref===b && typeof deselectAll==='function') deselectAll();
 }
 function fireDrynessMul(){
@@ -2133,7 +2126,7 @@ function fireDrynessMul(){
   return m;
 }
 function nearWell(gx, gy){
-  return buildings.some(w=>w.type==='well' && (w.condition===undefined||w.condition>=35) && dist2(gx,gy,w.gx,w.gy) < 12.25); // within ~3.5 tiles
+  return G.buildings.some(w=>w.type==='well' && (w.condition===undefined||w.condition>=35) && dist2(gx,gy,w.gx,w.gy) < 12.25); // within ~3.5 tiles
 }
 function igniteBuilding(b, announce){
   if(!b || b._fire || !FLAMMABLE.has(b.type)) return;
@@ -2148,9 +2141,9 @@ function fireTick(dt){
   fireTimer -= dt;
   if(fireTimer<=0){
     fireTimer = 320 + Math.random()*300;
-    const cand = buildings.filter(b=>FLAMMABLE.has(b.type) && (b.condition===undefined||b.condition>0));
+    const cand = G.buildings.filter(b=>FLAMMABLE.has(b.type) && (b.condition===undefined||b.condition>0));
     // Only once the hold is established, and never while one is already ablaze.
-    if(gameMode.banditsEnabled!==false && dayCount>2 && cand.length>=4 && !buildings.some(b=>b._fire)){
+    if(gameMode.banditsEnabled!==false && dayCount>2 && cand.length>=4 && !G.buildings.some(b=>b._fire)){
       const chance = Math.min(0.6, 0.28 * fireDrynessMul() * (gameMode.decayMul||1));
       if(Math.random() < chance){
         const pick = cand[Math.floor(Math.random()*cand.length)];
@@ -2160,7 +2153,7 @@ function fireTick(dt){
       }
     }
   }
-  const burning = buildings.filter(b=>b._fire);
+  const burning = G.buildings.filter(b=>b._fire);
   if(!burning.length) return;
   const ambientDouse = weather.type==='storm'?11:weather.type==='rain'?8:weather.type==='snow'?6:0;
   for(const b of burning){
@@ -2188,7 +2181,7 @@ function fireTick(dt){
     }
     // spread to a nearby timber building when the blaze is strong
     if(b._fire > 45){
-      for(const o of buildings){
+      for(const o of G.buildings){
         if(o===b || o._fire || !FLAMMABLE.has(o.type)) continue;
         const oc = buildingCenter(o);
         if(dist2(c.gx,c.gy,oc.gx,oc.gy) < 5.8 && Math.random() < 0.13*dt){
@@ -2290,7 +2283,7 @@ function addBuilding(type, gx, gy){
   const b = { id:'b'+Math.random().toString(36).slice(2,9), type, gx, gy, w:1, h:1, workers:0, condition:100 };
   if(type==='townCenter'){ b.w=2; b.h=2; }
   if(BUILD_DEFS[type] && BUILD_DEFS[type].proc) b.procTimer = BUILD_DEFS[type].proc.every;
-  buildings.push(b);
+  G.buildings.push(b);
   if(b.w===1){ if(G.grid[gy] && G.grid[gy][gx]) G.grid[gy][gx].building = b; }
   else {
     for(let yy=gy; yy<gy+b.h; yy++) for(let xx=gx; xx<gx+b.w; xx++) if(G.grid[yy] && G.grid[yy][xx]) G.grid[yy][xx].building = b;
@@ -2306,7 +2299,7 @@ function buildingCenter(b){
 let _logisticsTimer = 0;
 function recomputeLogistics(){
   const tc = findTC();
-  if(!tc){ buildings.forEach(b=>{ b._roadLinked=false; }); return; }
+  if(!tc){ G.buildings.forEach(b=>{ b._roadLinked=false; }); return; }
   const isRoadTile = (x,y)=>{ const t=tileAt(x,y); return t && t.building && (t.building.type==='road'||t.building.type==='bridge'); };
   const seen = new Set(), queue = [];
   // seed: road tiles touching the TC footprint (incl. diagonals)
@@ -2321,7 +2314,7 @@ function recomputeLogistics(){
       if(!seen.has(k) && isRoadTile(x+dx,y+dy)){ seen.add(k); queue.push([x+dx,y+dy]); }
     }
   }
-  for(const b of buildings){
+  for(const b of G.buildings){
     if(!BUILD_DEFS[b.type] || !BUILD_DEFS[b.type].proc){ b._roadLinked=false; continue; }
     let linked=false;
     for(let dy=-1;dy<=b.h&&!linked;dy++) for(let dx=-1;dx<=b.w;dx++){
@@ -2332,15 +2325,15 @@ function recomputeLogistics(){
 }
 function popCapacity(){
   let cap = 4;
-  for(const b of buildings) if(b.type==='house') cap += 3;
-  for(const b of buildings) if(b.type==='manor') cap += 6;
+  for(const b of G.buildings) if(b.type==='house') cap += 3;
+  for(const b of G.buildings) if(b.type==='manor') cap += 6;
   return cap;
 }
-function hasBuildingType(type){ return buildings.some(b=>b.type===type); }
-function hasActiveBuilding(type){ return buildings.some(b=>b.type===type && (b.condition===undefined||b.condition>=35)); }
+function hasBuildingType(type){ return G.buildings.some(b=>b.type===type); }
+function hasActiveBuilding(type){ return G.buildings.some(b=>b.type===type && (b.condition===undefined||b.condition>=35)); }
 function nearestBuildingOfTypes(types, fromGX, fromGY, requireSlot){
   let best=null, bestD=Infinity;
-  for(const b of buildings){
+  for(const b of G.buildings){
     if(!types.includes(b.type)) continue;
     if(requireSlot && b.workers>=3) continue;
     const c = buildingCenter(b);
@@ -2579,10 +2572,10 @@ function stewardBlockMsg(res, why){
   if(why==='noidle') return '📜 No hands free to gather '+res+' — free some or wait for settlers.';
   return '';
 }
-function stewardAfford(bkey){ const d=BUILD_DEFS[bkey]; return !!d && Object.entries(d.cost).every(([k,amt])=>!amt || (stockpile[k]||0)>=amt); }
+function stewardAfford(bkey){ const d=BUILD_DEFS[bkey]; return !!d && Object.entries(d.cost).every(([k,amt])=>!amt || (G.stockpile[k]||0)>=amt); }
 function stewardOrderLine(o){
   if(o.kind==='build')    return '🔨 Raise '+o.count+' '+o.label+' — '+o.placed+'/'+o.count;
-  if(o.kind==='gather')   return '🌾 Gather '+o.res+' — '+Math.floor(stockpile[o.res]||0)+'/'+o.target;
+  if(o.kind==='gather')   return '🌾 Gather '+o.res+' — '+Math.floor(G.stockpile[o.res]||0)+'/'+o.target;
   if(o.kind==='assign')   return '⚒️ '+o.count+' to '+(ROLE_DEFS[o.role]?ROLE_DEFS[o.role].label:o.role);
   if(o.kind==='demolish') return '⛏️ Tear down '+o.count+' '+o.label+' — '+o.done+'/'+o.count;
   if(o.kind==='repair')   return '🔧 Mend the hold — '+o.done+' mended';
@@ -2621,18 +2614,18 @@ function processStewardOrders(dt){
       const spot = stewardFindSpot(o.bkey);
       if(!spot){ toast('📜 There is no room to raise the '+o.label+' near the hold.', true); stewardOrders.shift(); return; }
       const d = BUILD_DEFS[o.bkey];
-      for(const [k,amt] of Object.entries(d.cost)){ if(amt>0) stockpile[k]-=amt; }
+      for(const [k,amt] of Object.entries(d.cost)){ if(amt>0) G.stockpile[k]-=amt; }
       addBuilding(o.bkey, spot.gx, spot.gy); if(typeof spawnDust==='function') spawnDust(spot.gx+0.5, spot.gy+0.5); if(typeof sfx==='function') sfx('build');
       o.placed++; o.stall = 0;
       if(o.placed>=o.count){ toast('📜 The '+o.count+' '+o.label+' '+(o.count>1?'stand':'stands')+' raised, as you ordered.'); stewardOrders.shift(); }
     } else {
       const d = BUILD_DEFS[o.bkey]; let blocked=null;
-      for(const [k,amt] of Object.entries(d.cost)){ if(amt>0 && (stockpile[k]||0) < amt){ const st=stewardAssignGatherers(k); if(st!=='ok') blocked={res:k,why:st}; } }
+      for(const [k,amt] of Object.entries(d.cost)){ if(amt>0 && (G.stockpile[k]||0) < amt){ const st=stewardAssignGatherers(k); if(st!=='ok') blocked={res:k,why:st}; } }
       if(blocked && !o._warned){ o._warned=true; toast(stewardBlockMsg(blocked.res, blocked.why), true); }
       stewardStall(o);
     }
   } else if(o.kind==='gather'){
-    if((stockpile[o.res]||0) >= o.target){ toast('📜 We have gathered the '+o.res+' you asked for.'); stewardOrders.shift(); return; }
+    if((G.stockpile[o.res]||0) >= o.target){ toast('📜 We have gathered the '+o.res+' you asked for.'); stewardOrders.shift(); return; }
     const st = stewardAssignGatherers(o.res);
     if(st!=='ok'){ if(!o._warned){ o._warned=true; toast(stewardBlockMsg(o.res, st), true); } stewardOrders.shift(); }
     else stewardStall(o);   // gathering takes time; rotate so other orders run too
@@ -2641,7 +2634,7 @@ function processStewardOrders(dt){
     toast(n ? ('📜 '+n+' settler'+(n!==1?'s':'')+' set to '+ROLE_DEFS[o.role].label+'.') : '📜 No one can be spared for that.', !n);
     stewardOrders.shift();
   } else if(o.kind==='demolish'){
-    const match = buildings.filter(b=>b.type===o.bkey);
+    const match = G.buildings.filter(b=>b.type===o.bkey);
     if(!match.length || o.done>=o.count){
       toast(o.done ? ('📜 '+o.done+' '+o.label+' torn down.') : ('📜 There is no '+o.label+' to tear down.'), !o.done);
       stewardOrders.shift(); return;
@@ -2651,22 +2644,22 @@ function processStewardOrders(dt){
     demolishBuilding(match[0]); o.done++;
     if(o.done>=o.count){ toast('📜 '+o.done+' '+o.label+' torn down.'); stewardOrders.shift(); }
   } else if(o.kind==='repair'){
-    const worn = buildings.filter(b=>b.condition!==undefined && b.condition<WORN_ENOUGH);
+    const worn = G.buildings.filter(b=>b.condition!==undefined && b.condition<WORN_ENOUGH);
     if(!worn.length){ toast(o.done ? ('🔧 '+o.done+' building'+(o.done!==1?'s':'')+' mended.') : '🔧 Nothing is in need of mending.'); stewardOrders.shift(); return; }
     worn.sort((a,b)=>a.condition-b.condition);
     const b = worn[0];
     const cost = Math.max(2, Math.ceil((100-b.condition)/10));
-    if((stockpile.wood||0) < cost){
+    if((G.stockpile.wood||0) < cost){
       if(!o._warned){ o._warned=true; toast('🔧 Not enough wood to mend the hold — '+cost+' needed.', true); }
       stewardStall(o); return;
     }
-    stockpile.wood -= cost; b.condition = 100; o.done++; o.stall = 0;
+    G.stockpile.wood -= cost; b.condition = 100; o.done++; o.stall = 0;
     if(typeof sfx==='function') sfx('repair');
   } else if(o.kind==='research'){
     if(researched[o.id]){ toast('🔬 '+o.name+' is already known.'); stewardOrders.shift(); return; }
     if(activeResearch){ stewardStall(o); return; }
     const t = TECH_TREE.find(x=>x.id===o.id);
-    const short = t && Object.entries(t.cost).find(([k,amt])=>(stockpile[k]||0) < amt);
+    const short = t && Object.entries(t.cost).find(([k,amt])=>(G.stockpile[k]||0) < amt);
     if(short){
       if(!o._warned){ o._warned=true; toast('🔬 We lack the '+short[0]+' to study '+o.name+'.', true); }
       stewardStall(o); return;
@@ -2685,7 +2678,7 @@ function stewardAnswer(s){
   }
   if(/\b(how much|how many|do we have|what do we have)\b/.test(s)){
     const res = stewardLookup(s, STEWARD_RES);
-    if(res) return '📜 We hold '+Math.floor(stockpile[res]||0)+' '+res+'.';
+    if(res) return '📜 We hold '+Math.floor(G.stockpile[res]||0)+' '+res+'.';
     if(/\b(settlers|people|folk|G.villagers|souls|population)\b/.test(s)){
       const idle = G.villagers.filter(v=>v.role==='idle').length;
       return '📜 '+G.villagers.length+' souls in the hold'+(idle?', '+idle+' of them idle.':', all at work.');
@@ -2744,7 +2737,7 @@ function stewardClause(s, out){
     return count+' will take up '+ROLE_DEFS[role].label;
   }
   if(res && wantsGather){
-    const cur = Math.floor(stockpile[res]||0);
+    const cur = Math.floor(G.stockpile[res]||0);
     const tgt = /\bmore\b/.test(s) ? cur + (num||50) : Math.max(num||50, cur+1);
     out.push({ kind:'gather', res, target:tgt });
     return 'the folk will gather '+res+' to about '+tgt;
@@ -3047,7 +3040,7 @@ function updateVillager(v, dt){
   // ── MORALE ── drifts toward a target set by living conditions
   if(v.morale===undefined) v.morale = 65;
   let mTarget = 60;
-  if((stockpile.bread||0) > 0) mTarget += 12;          // bread in the stores
+  if((G.stockpile.bread||0) > 0) mTarget += 12;          // bread in the stores
   if(hasBuildingType('tavern')) mTarget += 10;          // somewhere warm to drink
   if(G.villagers.length <= popCapacity()) mTarget += 8;   // a roof for everyone
   else mTarget -= 15;                                   // overcrowded
@@ -3102,7 +3095,7 @@ function updateVillager(v, dt){
     // Utility needs: eat sooner when there's food to spare (settlers no longer
     // work themselves to the brink of starvation), but hold out through a
     // famine so a lean hold doesn't drain its last stores. Rest a touch earlier.
-    const foodToSpare = (stockpile.food||0) > G.villagers.length;
+    const foodToSpare = (G.stockpile.food||0) > G.villagers.length;
     const hungerSeek = foodToSpare ? 86 : 96;
     if(v.fatigue>=92){ releaseClaims(v); v.state='seekingSleep'; }
     else if(v.hunger>=hungerSeek){ releaseClaims(v); v.state='seekingFood'; }
@@ -3115,7 +3108,7 @@ function updateVillager(v, dt){
     const adultHelper = v.stage!=='child' && v.role==='idle';
     if(!adultHelper){
       let nd=9, near=null;
-      for(const b of buildings){ if(!(b._fire>0)) continue; const c=buildingCenter(b); const d=dist2(v.gx,v.gy,c.gx,c.gy); if(d<nd){ nd=d; near=c; } }
+      for(const b of G.buildings){ if(!(b._fire>0)) continue; const c=buildingCenter(b); const d=dist2(v.gx,v.gy,c.gx,c.gy); if(d<nd){ nd=d; near=c; } }
       if(near && nd < 6.25){ // within ~2.5 tiles
         releaseClaims(v);
         const ang = Math.atan2(v.gy-near.gy, v.gx-near.gx) || 0;
@@ -3145,7 +3138,7 @@ function updateVillager(v, dt){
         } else if(v.role==='guard'){
           // Guards walk a beat around their post rather than standing on it —
           // a visible patrol, and it puts them between the hold and the treeline.
-          const posts = buildings.filter(b=>b.type==='guardPost');
+          const posts = G.buildings.filter(b=>b.type==='guardPost');
           if(posts.length){
             const post = posts[hashStr(v.id) % posts.length];
             v._beat = ((v._beat||0) + 1) % 4;
@@ -3253,7 +3246,7 @@ function updateVillager(v, dt){
     }
     case 'farming': {
       if(!v.targetBuilding || v.targetBuilding.type!=='farm'){ v.state='idle'; break; }
-      if(!buildings.includes(v.targetBuilding)){ v.targetBuilding=null; v.state='idle'; break; }
+      if(!G.buildings.includes(v.targetBuilding)){ v.targetBuilding=null; v.state='idle'; break; }
       v.workTimer -= dt;
       if(v.workTimer<=0){
         // Irrigation: farms touching the river yield +15%
@@ -3275,9 +3268,9 @@ function updateVillager(v, dt){
       const c = buildingCenter(tc);
       const arrived = moveToward(v, c.gx+0.3, c.gy+0.3, dt, 1.15);
       if(arrived){
-        if((stockpile.bread||0)>=1){
-          stockpile.bread-=1; v.hunger=0; v.fatigue=clamp(v.fatigue-10,0,100); v.morale=clamp((v.morale||65)+8,0,100); v.eatTimer=2.0; v.state='eating';
-        } else if(stockpile.food>=2){ stockpile.food-=2; v.hunger=0; v.eatTimer=2.2; v.state='eating'; }
+        if((G.stockpile.bread||0)>=1){
+          G.stockpile.bread-=1; v.hunger=0; v.fatigue=clamp(v.fatigue-10,0,100); v.morale=clamp((v.morale||65)+8,0,100); v.eatTimer=2.0; v.state='eating';
+        } else if(G.stockpile.food>=2){ G.stockpile.food-=2; v.hunger=0; v.eatTimer=2.2; v.state='eating'; }
         else { v.state='idle'; }
       }
       break;
@@ -3305,8 +3298,8 @@ function updateVillager(v, dt){
 }
 
 const QUESTS = [
-  {id:'q1', title:'First Timber', desc:'Gather 100 wood in total.', icon:'🪵', check:()=>totals.wood>=100, reward:{stone:25}},
-  {id:'q2', title:'Quarry Opened', desc:'Gather 60 stone in total.', icon:'🪨', check:()=>totals.stone>=60, reward:{wood:30}},
+  {id:'q1', title:'First Timber', desc:'Gather 100 wood in total.', icon:'🪵', check:()=>G.totals.wood>=100, reward:{stone:25}},
+  {id:'q2', title:'Quarry Opened', desc:'Gather 60 stone in total.', icon:'🪨', check:()=>G.totals.stone>=60, reward:{wood:30}},
   {id:'q3', title:'Founding the Hearth', desc:'Build a House.', icon:'🏚️', check:()=>hasBuildingType('house'), reward:{food:20}},
   {id:'q4', title:'Tend the Fields', desc:'Raise a Farm.', icon:'🌾', check:()=>hasBuildingType('farm'), reward:{wood:25}},
   {id:'q5', title:'Net the River', desc:'Raise a Fishing Hut.', icon:'🎣', check:()=>hasBuildingType('fishingHut'), reward:{food:20}},
@@ -3315,7 +3308,7 @@ const QUESTS = [
   {id:'q8', title:'The Storehouse', desc:'Build a Granary.', icon:'🏺', check:()=>hasBuildingType('granary'), reward:{stone:30}},
   {id:'q9', title:'Iron Will', desc:'Survive a wolf raid.', icon:'🐺', check:()=>wolfEvents>=1, reward:{wood:25}},
   {id:'q10', title:'Open Roads', desc:'Build a Trading Post.', icon:'⚖️', check:()=>hasBuildingType('tradingPost'), reward:{food:25}},
-  {id:'q11', title:'Paved Way', desc:'Build 3 road segments.', icon:'🛤️', check:()=>buildings.filter(b=>b.type==='road').length>=3, reward:{stone:20}},
+  {id:'q11', title:'Paved Way', desc:'Build 3 road segments.', icon:'🛤️', check:()=>G.buildings.filter(b=>b.type==='road').length>=3, reward:{stone:20}},
   {id:'q12', title:'Survived the Frost', desc:'Endure one full Winter season.', icon:'❄️', check:()=>dayCount>=SEASON_LEN/CYCLE_LEN*4+1, reward:{wood:50,food:30}},
 ];
 function checkQuests(){
@@ -3375,9 +3368,9 @@ function update(rawDt){
         toast('Wolves prowl the treeline — '+v.name+' flees home!', true);
         wolfEvents++;
       } else {
-        const loss = Math.min(stockpile.food, 4+Math.floor(Math.random()*8));
+        const loss = Math.min(G.stockpile.food, 4+Math.floor(Math.random()*8));
         if(loss>0){
-          stockpile.food -= loss;
+          G.stockpile.food -= loss;
           toast('A wolf pack raids the stores — '+loss+' food stolen!', true); sfx('raid');
           wolfEvents++;
         }
@@ -3393,13 +3386,13 @@ function update(rawDt){
     banditTimer = 160 + Math.random()*120;
     if(!ADMIN.noRaids && gameMode.banditsEnabled && currentTierIdx>=2 && Math.random()<0.5*decreeRaidMul()){
       const guards = G.villagers.filter(v=>v.role==='guard' && !v.sick).length;
-      const palisades = buildings.filter(b=>b.type==='palisade').length;
-      const towers = buildings.filter(b=>b.type==='watchtower' && (b.condition===undefined||b.condition>=35)).length;
+      const palisades = G.buildings.filter(b=>b.type==='palisade').length;
+      const towers = G.buildings.filter(b=>b.type==='watchtower' && (b.condition===undefined||b.condition>=35)).length;
       // The river is a natural moat — worth real defense while it stands
       // uncrossed. Every bridge is a door: each one erodes the bonus, UNLESS
       // a guard post stands within 3 tiles of it (a watched crossing).
-      const allBridges = buildings.filter(b=>b.type==='bridge');
-      const guardPosts = buildings.filter(b=>b.type==='guardPost' && (b.condition===undefined||b.condition>=35));
+      const allBridges = G.buildings.filter(b=>b.type==='bridge');
+      const guardPosts = G.buildings.filter(b=>b.type==='guardPost' && (b.condition===undefined||b.condition>=35));
       const openBridges = allBridges.filter(br=> !guardPosts.some(gp=> Math.max(Math.abs(gp.gx-br.gx), Math.abs(gp.gy-br.gy)) <= 3));
       const riverMoat = (G.waterTiles.length && !riverFrozen()) ? Math.max(0, 5 - openBridges.length*1.5) : 0;
       const defense = guards*(researched.militia?8:4) + palisades*0.8 + towers*2 + riverMoat;
@@ -3414,8 +3407,8 @@ function update(rawDt){
         const stealFrac = (1 - mitigation) * 0.35;
         const stolen = [];
         for(const k of ['food','wood','planks','bread']){
-          const amt = Math.floor((stockpile[k]||0) * stealFrac * (0.5+Math.random()*0.5));
-          if(amt>0){ stockpile[k]-=amt; stolen.push(amt+' '+k); }
+          const amt = Math.floor((G.stockpile[k]||0) * stealFrac * (0.5+Math.random()*0.5));
+          if(amt>0){ G.stockpile[k]-=amt; stolen.push(amt+' '+k); }
         }
         if(stolen.length){
           const tcB = findTC();
@@ -3457,10 +3450,10 @@ function update(rawDt){
   fireTick(dt);
   plagueTick(dt);
   raiderTick(dt);
-  districtTimer -= dt;
-  if(districtTimer<=0){ districtTimer = 8; computeDistricts(true); }
+  G.districtTimer -= dt;
+  if(G.districtTimer<=0){ G.districtTimer = 8; computeDistricts(true); }
   // Building decay — timber weathers; worn buildings (<35) stop giving their bonus
-  for(const b of buildings){
+  for(const b of G.buildings){
     if(b.type==='road'||b.type==='townCenter') continue;
     if(b.condition===undefined) b.condition=100;
     if(b.condition>0) b.condition = Math.max(0, b.condition - DECAY_RATE*gameMode.decayMul*dt);
@@ -3480,7 +3473,7 @@ function update(rawDt){
   if(_logisticsTimer<=0){ _logisticsTimer = 6; recomputeLogistics(); }
 
   // Production chains: each processor converts inputs → outputs on its own timer
-  for(const b of buildings){
+  for(const b of G.buildings){
     const def = BUILD_DEFS[b.type];
     if(!def || !def.proc) continue;
     if((b.condition!==undefined) && b.condition<35) continue; // worn — halted
@@ -3488,11 +3481,11 @@ function update(rawDt){
     b.procTimer -= dt * (b._roadLinked ? 1.12 : 1);
     if(b.procTimer<=0){
       b.procTimer = def.proc.every;
-      const canTake = Object.entries(def.proc.in).every(([k,amt])=>(stockpile[k]||0)>=amt);
+      const canTake = Object.entries(def.proc.in).every(([k,amt])=>(G.stockpile[k]||0)>=amt);
       const outKey = Object.keys(def.proc.out)[0];
-      const hasRoom = (stockpile[outKey]||0) < capFor(outKey);
+      const hasRoom = (G.stockpile[outKey]||0) < capFor(outKey);
       if(canTake && hasRoom){
-        for(const [k,amt] of Object.entries(def.proc.in)) stockpile[k]-=amt;
+        for(const [k,amt] of Object.entries(def.proc.in)) G.stockpile[k]-=amt;
         for(const [k,amt] of Object.entries(def.proc.out)) gainResource(k, amt);
         b.procFlash = 1; // brief visual pulse
       }
@@ -3503,7 +3496,7 @@ function update(rawDt){
   // Pastures: a passive food trickle whose herd grows on its own, but must be
   // foddered through winter or it dwindles.
   const winterNow = seasonIndex()===3;
-  for(const b of buildings){
+  for(const b of G.buildings){
     if(b.type!=='pasture') continue;
     if((b.condition!==undefined) && b.condition<35) continue; // neglected — halted
     if(b.herd===undefined) b.herd = 2;
@@ -3515,8 +3508,8 @@ function update(rawDt){
       b.herdTimer = 12;
       if(winterNow){
         const fodder = Math.ceil(b.herd*0.6);
-        if((stockpile.food||0) >= fodder){
-          stockpile.food -= fodder;
+        if((G.stockpile.food||0) >= fodder){
+          G.stockpile.food -= fodder;
           gainResource('food', Math.round(b.herd*0.35)); // meagre winter yield
         } else if(b.herd>0){
           b.herd -= 1;
@@ -3592,8 +3585,8 @@ function update(rawDt){
   spawnTimer -= dt;
   if(spawnTimer<=0){
     spawnTimer = decrees.openGates ? 16 : 24; // Open Gates draws newcomers faster
-    if(stockpile.food>=22 && G.villagers.length<popCapacity()){
-      stockpile.food -= 22;
+    if(G.stockpile.food>=22 && G.villagers.length<popCapacity()){
+      G.stockpile.food -= 22;
       const nv = spawnVillager();
       toast(nv.name+' joins the hold. ['+nv.trait.ic+' '+nv.trait.label+']');
       journal.settlersWelcomed++;
@@ -5342,12 +5335,12 @@ function drawMinimap(){
 
   // Roads, then structures on top.
   mmCtx.fillStyle = '#5a4e36';
-  for(const b of buildings){
+  for(const b of G.buildings){
     if(b.type!=='road') continue;
     const p = project(b.gx,b.gy);
     mmCtx.fillRect(mmX(p.x)-tw/4, mmY(p.y)-th/4, Math.max(1.5,tw/2), Math.max(1.5,th/2));
   }
-  for(const b of buildings){
+  for(const b of G.buildings){
     if(b.type==='road') continue;
     const p = project(b.gx,b.gy);
     const lit = b._fire>0;
@@ -5362,7 +5355,7 @@ function drawMinimap(){
     mmCtx.fillStyle = v.sick ? '#d04030' : '#8ade68';
     mmCtx.beginPath(); mmCtx.arc(mmX(p.x), mmY(p.y), 1.5, 0, 7); mmCtx.fill();
   }
-  for(const r of raiders){
+  for(const r of G.raiders){
     const p = project(r.gx,r.gy);
     mmCtx.fillStyle = '#ff4433';
     mmCtx.beginPath(); mmCtx.arc(mmX(p.x), mmY(p.y), 2.4, 0, 7); mmCtx.fill();
@@ -5604,7 +5597,7 @@ function render(){
       else if(t.wilds && t.resourceAmount>0 && hash2(gx*4.4,gy*5.6)>0.45){ list.push({depth:gx+gy+0.1, draw:()=>{ try{drawAnimal(gx,gy);}catch(e){} }}); }
     }
   }
-  for(const b of buildings){
+  for(const b of G.buildings){
     const c = buildingCenter(b);
     // Roads render just above terrain but below everything else
     const depth = b.type==='road' ? c.gx+c.gy-0.1 : c.gx+c.gy+0.2;
@@ -5613,10 +5606,10 @@ function render(){
   for(const v of G.villagers){
     list.push({depth:v.gx+v.gy+0.3, draw:()=>{ try{ drawVillager(v); }catch(e){} }});
   }
-  for(const r of raiders){
+  for(const r of G.raiders){
     list.push({depth:r.gx+r.gy+0.35, draw:()=>{ try{ drawRaider(r); }catch(e){} }});
   }
-  for(const cr of critters){
+  for(const cr of G.critters){
     const drawer = { deer:drawDeer, boar:drawBoar, rabbit:drawRabbit, fish:drawFish, fox:drawFox, duck:drawDuck }[cr.kind];
     if(drawer) list.push({depth:cr.gx+cr.gy+0.28, draw:()=>{ try{ drawer(cr); }catch(e){} }});
   }
@@ -5633,7 +5626,7 @@ function render(){
 
   // Birds fly above the whole scene.
   // Birds and butterflies fly above the scene rather than sorting into it.
-  for(const cr of critters){
+  for(const cr of G.critters){
     if(cr.kind==='bird'){ try{ drawBird(cr); }catch(e){} }
     else if(cr.kind==='flit'){ try{ drawFlit(cr); }catch(e){} }
   }
@@ -5716,8 +5709,8 @@ function drawDebugOverlay(){
     'FPS '+_dbgFps.toFixed(0)+'  speed '+speedMode+'x',
     'Day '+dayCount+'  '+seasonName()+'  '+phase,
     'Weather '+weather.label+(climate?'  Climate '+(climate.name||climate.ic):''),
-    'Settlers '+G.villagers.length+' ('+idle+' idle)  Buildings '+buildings.filter(b=>b.type!=='road').length,
-    'Raiders '+raiders.length+'  Fires '+buildings.filter(b=>b._fire>0).length,
+    'Settlers '+G.villagers.length+' ('+idle+' idle)  Buildings '+G.buildings.filter(b=>b.type!=='road').length,
+    'Raiders '+G.raiders.length+'  Fires '+G.buildings.filter(b=>b._fire>0).length,
     'Coins '+Math.floor(coins)+'  Tier '+HOLD_TIERS[currentTierIdx].name,
     'Toggles: '+(ADMIN.freezeNeeds?'FreezeNeeds ':'')+(ADMIN.noRaids?'NoRaids ':'')||'Toggles: none',
   ];
@@ -5786,7 +5779,7 @@ function renderLighting(){
   // Punch warm pools of light around lit buildings
   lctx.globalCompositeOperation = 'destination-out';
   const flick = 1 + Math.sin(worldTime*7)*0.04;
-  for(const b of buildings){
+  for(const b of G.buildings){
     const r0 = LIGHT_RADII[b.type];
     if(!r0) continue;
     const c = buildingCenter(b);
@@ -6092,9 +6085,9 @@ const elWood=document.getElementById('res-wood'), elStone=document.getElementByI
       elFood=document.getElementById('res-food'), elPop=document.getElementById('res-pop'),
       elCap=document.getElementById('res-cap');
 function updateHud(){
-  elWood.textContent = fmt(stockpile.wood);
-  elStone.textContent = fmt(stockpile.stone);
-  elFood.textContent = fmt(stockpile.food);
+  elWood.textContent = fmt(G.stockpile.wood);
+  elStone.textContent = fmt(G.stockpile.stone);
+  elFood.textContent = fmt(G.stockpile.food);
   document.getElementById('cap-wood').textContent = '/'+capFor('wood');
   document.getElementById('cap-stone').textContent = '/'+capFor('stone');
   document.getElementById('cap-food').textContent = '/'+capFor('food');
@@ -6107,10 +6100,10 @@ function updateHud(){
     };
   }
   const R = window._hudRefs;
-  R.planks.textContent = fmt(stockpile.planks||0);
+  R.planks.textContent = fmt(G.stockpile.planks||0);
   R.capPlanks.textContent = '/'+capFor('planks');
-  if(R.flour){ R.flour.textContent = fmt(stockpile.flour||0); R.capFlour.textContent = '/'+capFor('flour'); }
-  R.bread.textContent = fmt(stockpile.bread||0);
+  if(R.flour){ R.flour.textContent = fmt(G.stockpile.flour||0); R.capFlour.textContent = '/'+capFor('flour'); }
+  R.bread.textContent = fmt(G.stockpile.bread||0);
   R.capBread.textContent = '/'+capFor('bread');
   R.coins.textContent = fmt(coins);
   elPop.textContent = G.villagers.length;
@@ -6253,7 +6246,7 @@ function researchPanelHtml(){
   }
   html += avail.map(t=>{
     const costStr = Object.entries(t.cost).map(([k,a])=>a+' '+k).join(', ');
-    const afford = Object.entries(t.cost).every(([k,a])=>(stockpile[k]||0)>=a);
+    const afford = Object.entries(t.cost).every(([k,a])=>(G.stockpile[k]||0)>=a);
     return `<button class="action-btn list-row${(!afford||activeResearch)?' dim':''}" data-tech="${t.id}">
       <div>${t.ic} <span class="rt">${t.name}</span> — ${t.desc}<br><span class="rd">Cost: ${costStr} · ${t.time}s</span></div></button>`;
   }).join('');
@@ -6392,7 +6385,7 @@ function renderChronicleSheet(){
 function renderStatsSheet(){
   const H = statHistory.slice();
   // include a live "today" point so the graph reaches the present
-  H.push({ day:dayCount, pop:G.villagers.length, food:Math.round(stockpile.food||0), wood:Math.round(stockpile.wood||0), stone:Math.round(stockpile.stone||0) });
+  H.push({ day:dayCount, pop:G.villagers.length, food:Math.round(G.stockpile.food||0), wood:Math.round(G.stockpile.wood||0), stone:Math.round(G.stockpile.stone||0) });
   const W=300, HT=110, pad=6;
   const line = (key, col)=>{
     if(H.length<2) return '';
@@ -6621,7 +6614,7 @@ function renderBuildingSheet(b){
   } else if(def && def.proc){
     const inStr = Object.entries(def.proc.in).map(([k,a])=>a+' '+k).join(' + ');
     const outStr = Object.entries(def.proc.out).map(([k,a])=>a+' '+k).join(' + ');
-    extra = `<div class="sheet-sub" style="margin-top:6px;">${def.desc}<br>Converts <b>${inStr}</b> → <b>${outStr}</b> every ${def.proc.every}s automatically.<br>Stores — Planks: ${stockpile.planks||0}, Flour: ${stockpile.flour||0}, Bread: ${stockpile.bread||0}.</div>`;
+    extra = `<div class="sheet-sub" style="margin-top:6px;">${def.desc}<br>Converts <b>${inStr}</b> → <b>${outStr}</b> every ${def.proc.every}s automatically.<br>Stores — Planks: ${G.stockpile.planks||0}, Flour: ${G.stockpile.flour||0}, Bread: ${G.stockpile.bread||0}.</div>`;
   } else if(b.type==='watchtower' || b.type==='tavern' || b.type==='palisade' || b.type==='guardPost'){
     extra = `<div class="sheet-sub" style="margin-top:6px;">${def.desc}</div>`;
   } else if(b.type==='tradingPost'){
@@ -6674,8 +6667,8 @@ function renderBuildingSheet(b){
   sheetContent.querySelectorAll('[data-trade]').forEach(btn=>{
     btn.addEventListener('click', ()=>{
       const t = TRADE_RATES[parseInt(btn.dataset.trade,10)];
-      if(stockpile[t.give] < t.giveAmt){ toast('Not enough '+t.give+'.', true); return; }
-      stockpile[t.give] -= t.giveAmt;
+      if(G.stockpile[t.give] < t.giveAmt){ toast('Not enough '+t.give+'.', true); return; }
+      G.stockpile[t.give] -= t.giveAmt;
       const bonus = eventTradeBonus();
       const got = Math.floor(t.getAmt * bonus);
       gainResource(t.get, got);
@@ -6686,8 +6679,8 @@ function renderBuildingSheet(b){
   const repairBtn = document.getElementById('repair-btn');
   if(repairBtn) repairBtn.addEventListener('click', ()=>{
     const cost = Math.max(2, Math.ceil((100-(b.condition||100))/10));
-    if(stockpile.wood < cost){ toast('Not enough wood to repair.', true); return; }
-    stockpile.wood -= cost; b.condition = 100;
+    if(G.stockpile.wood < cost){ toast('Not enough wood to repair.', true); return; }
+    G.stockpile.wood -= cost; b.condition = 100;
     toast('🔧 Repaired for '+cost+' wood.');
     sfx('repair');
     renderBuildingSheet(b);
@@ -6732,7 +6725,7 @@ function demolishBuilding(b){
   }
   gainResource('wood', Math.floor((BUILD_DEFS[b.type]?BUILD_DEFS[b.type].cost.wood:0) * 0.5));
   for(let yy=b.gy; yy<b.gy+b.h; yy++) for(let xx=b.gx; xx<b.gx+b.w; xx++){ if(G.grid[yy] && G.grid[yy][xx]) G.grid[yy][xx].building=null; }
-  buildings = buildings.filter(x=>x!==b);
+  G.buildings = G.buildings.filter(x=>x!==b);
   toast('Building demolished.');
   deselectAll();
 }
@@ -6754,7 +6747,7 @@ function bulkAssignIdle(){
   // Order roles by need: food-producing roles first when food is under half cap
   const foodRoles = unlocked.filter(r=>['farmer','fisher','hunter'].includes(r));
   const matRoles  = unlocked.filter(r=>['lumberjack','miner'].includes(r));
-  const ordered = (stockpile.food < capFor('food')*0.5 && foodRoles.length)
+  const ordered = (G.stockpile.food < capFor('food')*0.5 && foodRoles.length)
     ? [...foodRoles, ...matRoles] : [...matRoles, ...foodRoles];
   let i=0;
   for(const v of idle){ reassignRole(v, ordered[i % ordered.length]); i++; }
@@ -6781,7 +6774,7 @@ function renderBuildPalette(){
       };
       const card = (k)=>{
         const d = BUILD_DEFS[k];
-        const afford = Object.entries(d.cost).every(([kk,amt])=>!amt || (stockpile[kk]||0)>=amt);
+        const afford = Object.entries(d.cost).every(([kk,amt])=>!amt || (G.stockpile[kk]||0)>=amt);
         return `<button class="build-card ${afford?'':'disabled'}" data-key="${k}" ${afford?'':'disabled'}>
           <span class="ic">${d.icon}</span>
           <span class="name">${d.name}</span>
@@ -6859,8 +6852,8 @@ function confirmPlacement(){
   }
   const d = BUILD_DEFS[buildMode.key];
   const costOf = (k,amt)=> (k==='stone' && researched.masonry) ? Math.ceil(amt*0.85) : amt;
-  for(const [k,amt] of Object.entries(d.cost)){ if(amt>0 && (stockpile[k]||0)<costOf(k,amt)){ toast('Not enough '+k+'.', true); return; } }
-  for(const [k,amt] of Object.entries(d.cost)){ if(amt>0) stockpile[k]-=costOf(k,amt); }
+  for(const [k,amt] of Object.entries(d.cost)){ if(amt>0 && (G.stockpile[k]||0)<costOf(k,amt)){ toast('Not enough '+k+'.', true); return; } }
+  for(const [k,amt] of Object.entries(d.cost)){ if(amt>0) G.stockpile[k]-=costOf(k,amt); }
   addBuilding(buildMode.key, gx, gy);
   spawnDust(gx+0.5, gy+0.5);
   journal.buildingsRaised++;
@@ -7044,7 +7037,7 @@ function handleTap(sx, sy){
 
   // 2) building hit test (bounding box around footprint)
   let hitB = null;
-  for(const b of buildings){
+  for(const b of G.buildings){
     const c = buildingCenter(b);
     const p = project(c.gx, c.gy);
     const halfW = TILE_W*0.55*b.w, halfH = (TILE_H*0.55*b.h) + 50; // extend up for roof
@@ -7164,11 +7157,11 @@ function loop(now){
 function serializeState(){
   return {
     v:2, savedAt: Date.now(),
-    worldTime, dayCount, stockpile, totals, questsCompleted, wolfEvents,
+    worldTime, dayCount, stockpile: G.stockpile, totals: G.totals, questsCompleted, wolfEvents,
     idleSlotCounter: G.idleSlotCounter, usedNames: G.usedNames, journal, researched, activeResearch, coins, dailyBounties, dailyProgress, bannerIdx, gameModeId,
     landId, scenarioId, scenarioWon, tcX: G.TC_X, tcY: G.TC_Y,
     grid: G.grid.map(row=>row.map(t=>({type:t.type,wilds:t.wilds,ford:t.ford||undefined,resourceAmount:t.resourceAmount,maxResource:t.maxResource,baseMax:t.baseMax,regrowAt:t.regrowAt}))),
-    buildings: buildings.map(b=>({type:b.type,gx:b.gx,gy:b.gy,condition:Math.round(b.condition===undefined?100:b.condition),herd:b.herd})),
+    buildings: G.buildings.map(b=>({type:b.type,gx:b.gx,gy:b.gy,condition:Math.round(b.condition===undefined?100:b.condition),herd:b.herd})),
     villagers: G.villagers.map(v=>({name:v.name, role:v.role, gx:v.gx, gy:v.gy, hunger:v.hunger, fatigue:v.fatigue, trait:v.trait, sick:v.sick, morale:v.morale||65, partner:v.partner||null, parents:v.parents||null, relations:v.relations||[], memories:v.memories||[], age:v.age, stage:v.stage, lifespan:v.lifespan, skills:v.skills||{}})),
     memorials: G.memorials, chronicle: chronicle, deeds: deeds, statHistory: statHistory,
     festivalBoon: festivalBoon, lastFestivalYear: lastFestivalYear,
@@ -7369,8 +7362,8 @@ function restoreVillager(vd){
 }
 function restoreState(data){
   worldTime=data.worldTime||30; dayCount=data.dayCount||1;
-  stockpile = Object.assign({wood:0,stone:0,food:0,planks:0,flour:0,bread:0}, data.stockpile);
-  totals = Object.assign({wood:0,stone:0,food:0,planks:0,flour:0,bread:0}, data.totals);
+  G.stockpile = Object.assign({wood:0,stone:0,food:0,planks:0,flour:0,bread:0}, data.stockpile);
+  G.totals = Object.assign({wood:0,stone:0,food:0,planks:0,flour:0,bread:0}, data.totals);
   questsCompleted = data.questsCompleted || {};
   wolfEvents = data.wolfEvents||0;
   G.idleSlotCounter = data.idleSlotCounter||0;
@@ -7412,7 +7405,7 @@ function restoreState(data){
     }
     G.grid.push(row);
   }
-  buildings=[];
+  G.buildings=[];
   for(const bd of data.buildings){ const nb = addBuilding(bd.type,bd.gx,bd.gy); if(nb){ nb.condition = bd.condition!==undefined ? bd.condition : 100; if(bd.herd!==undefined) nb.herd = bd.herd; } }
   G.villagers=[];
   for(const vd of data.villagers) restoreVillager(vd);
@@ -7707,11 +7700,11 @@ function resetHoldState(){
   crestChoice = crestSel ? (parseInt(crestSel.dataset.crest,10)||0) : 0;
   // Full state reset
   G.grid=[]; G.forestTiles=[]; G.stoneTiles=[]; G.waterTiles=[]; G.wildsTiles=[];
-  buildings=[]; G.villagers=[]; G.memorials=[]; chronicle=[]; deeds={}; statHistory=[]; festivalBoon=null; lastFestivalYear=0; tradeRoutes=[]; routeOffers=[]; climate=null; plague=null; raiders=[];
+  G.buildings=[]; G.villagers=[]; G.memorials=[]; chronicle=[]; deeds={}; statHistory=[]; festivalBoon=null; lastFestivalYear=0; tradeRoutes=[]; routeOffers=[]; climate=null; plague=null; G.raiders=[];
   worldTime=30; dayCount=1; wolfTimer=60; wolfEvents=0;
   spawnTimer=18; G.idleSlotCounter=0; G.usedNames=[];
   questsCompleted={}; lastSeenQuestCount=0;
-  totals={wood:0,stone:0,food:0};
+  G.totals={wood:0,stone:0,food:0};
   window.__capWarned={wood:false,stone:false,food:false,planks:false,flour:false,bread:false};
   researched={}; activeResearch=null; currentTierIdx=0; weather={type:'clear',label:'Clear',ic:'☀️'};
   coins=0; bannerIdx=crestChoice; onboardDone=false; decrees={curfew:false,tithe:false,openGates:false,rationing:false}; decisionTimer=3.2; _lastDecision=''; ledger={in:{bounties:0,deeds:0,routes:0,quests:0,tithe:0},out:{shop:0}}; rollDailyBounties();

@@ -70,4 +70,25 @@ export const G = {
   /** World-seconds until the next pairing-off and the next birth roll. */
   courtshipTimer: 90,
   birthTimer: 130,
+
+  // ── what stands on the land ─────────────────────────────────────────────
+  /** Everything raised, roads included. Draw order and every "is there a X
+   *  nearby" check walk this list. */
+  buildings: [] as any[],
+  /** Named quarters the hold grows into as buildings cluster. */
+  districts: [] as any[],
+  districtTimer: 8,
+
+  // ── the stores ──────────────────────────────────────────────────────────
+  /** What the hold holds right now. Capped per resource; see BASE_CAP. */
+  stockpile: { wood: 60, stone: 25, food: 40 } as Record<string, number>,
+  /** Lifetime gathered, never spent down — quests and deeds count against it. */
+  totals: { wood: 0, stone: 0, food: 0 } as Record<string, number>,
+
+  // ── who else is out there ───────────────────────────────────────────────
+  /** Raiders currently on the map. Empty between raids. */
+  raiders: [] as any[],
+  /** Ambient wildlife: deer, ducks, foxes and the rest. Decorative, but they
+   *  are also what a hunter hunts. */
+  critters: [] as any[],
 };
