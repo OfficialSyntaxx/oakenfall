@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.77.0
+The hold fills in. Eight buildings that were drawn by hand now have proper art:
+the forestry camp, mining post, palisade, well, lamp post, pasture, forester's
+grove and bridge. The wilds gain real creatures — deer, boar and rabbits are
+painted now rather than sketched, a fox ranges wide through the meadows, and
+ducks paddle in circles on the open water. Pastures show the flock they
+actually hold, so a herd thinned by winter is a herd you can see thinning. And
+the ground has things growing on it: mushrooms and fallen logs under the trees,
+reeds where the grass meets the water, standing stones on bare rock, wildflowers
+and berry bushes through the meadows.
+
 ## 1.76.0
 Land that looks made rather than scattered. Timber now grows in real stands,
 rock breaks the surface in outcrops, and meadows spread where the ground

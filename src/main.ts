@@ -116,6 +116,8 @@ function villagerAnimFor(v){
 const SPRITE_SCALE = {
   townCenter:150, house:74, manor:96, guardPost:84, bakery:82, forestCamp:82, miningPost:82, fishingHut:80,
   huntingCabin:82, farm:90, granary:84, tradingPost:88, watchtower:78, tavern:86, sawmill:90, windmill:84,
+  palisade:78, well:60, lampPost:26, pasture:94, forester:90, bridge:80,
+  deer:34, boar:30, rabbit:18, fox:26, duck:20, sheep:26,
   villager_idle:40, villager_lumberjack:40, villager_miner:40,
   villager_farmer:40, villager_fisher:40, villager_hunter:40,
   tree_pine:72, rock_outcrop:62,
@@ -124,7 +126,8 @@ const SPRITE_SCALE = {
 // tile's front vertex (baseY). The small Tiny Swords icons were tuned to +12;
 // full isometric building sprites (AI-generated) have their base at the very
 // bottom of the frame and need to sit lower so the footing meets the ground.
-const SPRITE_ANCHOR_Y = { house: 24, tavern: 24, sawmill: 24, windmill: 26, bakery: 24, granary: 24, tradingPost: 24, watchtower: 28 };
+const SPRITE_ANCHOR_Y = { house: 24, tavern: 24, sawmill: 24, windmill: 26, bakery: 24, granary: 24, tradingPost: 24, watchtower: 28,
+  forestCamp: 22, miningPost: 22, palisade: 20, well: 20, lampPost: 10, pasture: 26, forester: 26, bridge: 22 };
 function blitSprite(type, cx, baseY){
   const img = SPRITES[type];
   if(!img || !img.complete || img.naturalWidth===0) return false;
@@ -635,6 +638,7 @@ const CRITTER_KINDS = {
   deer:   { flee:9,    speed:2.4, graze:0.7,  wander:4.0 },
   boar:   { flee:3.5,  speed:1.9, graze:0.45, wander:2.6 },
   rabbit: { flee:16,   speed:3.2, graze:1.1,  wander:2.2 },
+  fox:    { flee:11,   speed:2.8, graze:0.5,  wander:5.0 },
 };
 function spawnWildlife(){
   critters = [];
@@ -649,6 +653,7 @@ function spawnWildlife(){
   const deerN = Math.max(2, Math.min(7, (wild.length/6)|0 || 3)) * (winter?0.5:1) | 0;
   for(let i=0;i<deerN;i++) beast('deer', pickWild());
   for(let i=0;i<(winter?1:2);i++) beast('boar', pickWild());
+  for(let i=0;i<(winter?1:2);i++) beast('fox', pickWild());
 
   // Rabbits keep to open grass rather than the deep wilds.
   const grass = [];
@@ -669,6 +674,13 @@ function spawnWildlife(){
       const t = waterTiles[(Math.random()*waterTiles.length)|0];
       critters.push({ kind:'fish', gx:t.gx, gy:t.gy, phase:Math.random()*6, next:Math.random()*6 });
     }
+    // Ducks paddle in circles near where they settled rather than wandering the
+    // map — a duck that walks onto a field is worse than no duck at all.
+    for(let i=0;i<3;i++){
+      const t = waterTiles[(Math.random()*waterTiles.length)|0];
+      critters.push({ kind:'duck', gx:t.gx, gy:t.gy, homeX:t.gx, homeY:t.gy,
+        phase:Math.random()*6, dir:Math.random()*6.28, face:1, moving:true });
+    }
   }
   // Butterflies only in the warm seasons.
   if(seasonIndex()===0 || seasonIndex()===1){
@@ -682,6 +694,19 @@ function spawnWildlife(){
 function updateWildlife(dt){
   if(!critters.length) return;
   for(const c of critters){
+    if(c.kind==='duck'){
+      c.phase += dt*2;
+      c.dir += (Math.random()-0.5)*dt*2.2;
+      const nx = c.gx + Math.cos(c.dir)*dt*0.35;
+      const ny = c.gy + Math.sin(c.dir)*dt*0.35;
+      const t = tileAt(Math.round(nx), Math.round(ny));
+      // Stay on the water, and stay near home.
+      if(t && t.type==='water' && dist2(nx, ny, c.homeX, c.homeY) < 6.25){
+        c.face = nx < c.gx ? -1 : 1;
+        c.gx = nx; c.gy = ny;
+      } else { c.dir += 2.2; }
+      continue;
+    }
     const spec = CRITTER_KINDS[c.kind];
     if(spec){
       // Grazing beasts: wander, watch for folk, bolt when one comes too close.
@@ -724,7 +749,27 @@ function updateWildlife(dt){
     }
   }
 }
+/* Sprite first, hand-drawn second. The procedural critters are NOT a
+   placeholder: a sprite that hasn't decoded yet, or fails to, must still leave
+   something alive in the wilds. Same rule as the buildings. */
+function blitCritter(kind, c){
+  const img = SPRITES[kind];
+  if(!img || !img.complete || img.naturalWidth===0) return false;
+  const p = project(c.gx, c.gy);
+  const bob = c.moving ? Math.abs(Math.sin(c.phase))*1.2 : 0;
+  const w = SPRITE_SCALE[kind] || 26;
+  const h = w * (img.naturalHeight/img.naturalWidth);
+  try{ drawShadow(p.x, p.y+3, w*0.22); }catch(e){}
+  ctx.save();
+  // The art faces left; mirror with a transform, never by negating a radius.
+  if(c.face > 0){ ctx.translate(p.x*2, 0); ctx.scale(-1, 1); }
+  try{ ctx.drawImage(img, p.x - w/2, p.y - h + 4 - bob, w, h); }
+  catch(e){ ctx.restore(); return false; }
+  ctx.restore();
+  return true;
+}
 function drawDeer(c){
+  if(blitCritter('deer', c)) return;
   const p = project(c.gx, c.gy);
   const bob = c.moving ? Math.abs(Math.sin(c.phase))*1.2 : 0;
   const cx=p.x, cy=p.y-bob;
@@ -741,6 +786,7 @@ function drawDeer(c){
   ctx.restore();
 }
 function drawBoar(c){
+  if(blitCritter('boar', c)) return;
   const p = project(c.gx, c.gy);
   const bob = c.moving ? Math.abs(Math.sin(c.phase))*0.9 : 0;
   const cx=p.x, cy=p.y-bob;
@@ -759,6 +805,7 @@ function drawBoar(c){
   ctx.restore();
 }
 function drawRabbit(c){
+  if(blitCritter('rabbit', c)) return;
   const p = project(c.gx, c.gy);
   const hop = c.moving ? Math.abs(Math.sin(c.phase*1.6))*2.4 : 0;
   const cx=p.x, cy=p.y-hop;
@@ -785,6 +832,38 @@ function drawFish(c){
   ctx.beginPath(); ctx.moveTo(cx-3,cy); ctx.lineTo(cx-5,cy-1.6); ctx.lineTo(cx-5,cy+1.6); ctx.closePath(); ctx.fill();
   ctx.strokeStyle='rgba(200,225,240,0.5)'; ctx.lineWidth=1;            // splash ring on the way down
   if(t>0.75){ ctx.beginPath(); ctx.ellipse(p.x+(t-0.5)*7, p.y, 4*(t-0.75)*4, 1.6*(t-0.75)*4, 0, 0, 7); ctx.stroke(); }
+  ctx.restore();
+}
+function drawFox(c){
+  if(blitCritter('fox', c)) return;
+  const p = project(c.gx, c.gy);
+  const bob = c.moving ? Math.abs(Math.sin(c.phase))*1.1 : 0;
+  const cx=p.x, cy=p.y-bob;
+  try{ drawShadow(cx, p.y+3, 6); }catch(e){}
+  ctx.save(); if(c.face<0){ ctx.translate(cx*2,0); ctx.scale(-1,1); }
+  ctx.fillStyle='#a5522a';
+  ctx.beginPath(); ctx.ellipse(cx,cy-3,5,2.6,0,0,7); ctx.fill();               // body
+  ctx.beginPath(); ctx.ellipse(cx+4.5,cy-5,2,1.8,0,0,7); ctx.fill();           // head
+  ctx.beginPath(); ctx.ellipse(cx-5.5,cy-3.5,3.2,1.8,0.3,0,7); ctx.fill();     // brush
+  ctx.fillStyle='#e8dcc4'; ctx.beginPath(); ctx.ellipse(cx-7.4,cy-4,1.1,0.9,0,0,7); ctx.fill(); // tail tip
+  ctx.fillStyle='#2a1c12';
+  ctx.beginPath(); ctx.moveTo(cx+3.6,cy-6.4); ctx.lineTo(cx+4.2,cy-8.2); ctx.lineTo(cx+5,cy-6.4); ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+function drawDuck(c){
+  const p = project(c.gx, c.gy);
+  const cy = p.y - 1 + Math.sin(c.phase)*0.6;   // riding the ripples
+  ctx.save();
+  ctx.strokeStyle='rgba(200,225,240,0.35)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.ellipse(p.x, p.y+2, 6, 2, 0, 0, 7); ctx.stroke();       // wake
+  ctx.restore();
+  if(blitCritter('duck', { gx:c.gx, gy:c.gy, face:c.face, phase:c.phase, moving:false })) return;
+  ctx.save(); if(c.face>0){ ctx.translate(p.x*2,0); ctx.scale(-1,1); }
+  ctx.fillStyle='#6b5a3e';
+  ctx.beginPath(); ctx.ellipse(p.x, cy-2, 4, 2.2, 0, 0, 7); ctx.fill();        // body
+  ctx.fillStyle='#2f4a35';
+  ctx.beginPath(); ctx.ellipse(p.x-3.4, cy-5, 1.5, 1.7, 0, 0, 7); ctx.fill();  // head
+  ctx.fillRect(p.x-3.9, cy-4.2, 1.2, 2.2);                                     // neck
   ctx.restore();
 }
 function drawFlit(c){
@@ -1088,7 +1167,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.76.0';
+const GAME_VERSION = '1.77.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -3690,6 +3769,19 @@ function loadDecor(){
     }
   }
 }
+/* What stands where. Cattails want a waterside tile, so grass keeps them only
+   when the tile actually touches water — checked at draw time below. */
+const SCENERY_FOR = {
+  grass:  ['wildflowers','boulders','berryBush','stump'],
+  forest: ['mushrooms','fallenLog','stump','berryBush'],
+  stone:  ['boulders','standingStones'],
+  wilds:  ['wildflowers','mushrooms','berryBush'],
+  dirt:   ['boulders'],
+};
+const SCENERY_W = {
+  wildflowers:26, boulders:30, berryBush:28, stump:26,
+  mushrooms:22, fallenLog:34, standingStones:34, cattails:28,
+};
 function decorImg(key, idx){
   const pool = DECOR[key];
   if(!pool || !pool.length) return null;
@@ -4045,7 +4137,34 @@ function drawTerrain(range){
         if(h2>0.72){ ctx.fillStyle='rgba(160,130,50,0.40)'; ctx.fillRect(p.x-3+h2*10,p.y-1,2,2); }
       } else if(t.type==='dirt'){
         if(h2>0.55){ ctx.fillStyle='rgba(0,0,0,0.18)'; ctx.beginPath(); ctx.arc(p.x+(h2-0.5)*20,p.y+(hash2(gx*2,gy*3)-0.5)*7,2,0,7); ctx.fill(); }
-      } else if(t.type==='grass' && h2 > 0.93 && decorReady){
+      }
+      /* ── SCENERY ── a scatter of standing props keyed to what the ground is:
+         mushrooms and fallen logs under the trees, cattails where the grass
+         meets water, standing stones on bare rock. Its own hash, so it doesn't
+         land on the same tiles as the bushes below. */
+      if(decorReady && !t.building){
+        const sh = hash2(gx*7.7, gy*3.3);
+        if(sh > 0.955){
+          // Reeds only where the ground actually meets the water.
+          let pool = SCENERY_FOR[t.wilds ? 'wilds' : t.type];
+          if((t.type==='grass' || t.type==='dirt')){
+            const n1 = grid[gy+1] && grid[gy+1][gx], n2 = grid[gy-1] && grid[gy-1][gx];
+            const n3 = grid[gy] && grid[gy][gx+1], n4 = grid[gy] && grid[gy][gx-1];
+            if([n1,n2,n3,n4].some(n=>n && n.type==='water')) pool = ['cattails'];
+          }
+          if(pool && pool.length){
+            const key = pool[Math.floor(hash2(gx*2.3, gy*5.1) * pool.length) % pool.length];
+            const simg = decorImg(key, 0);
+            if(simg){
+              const sw = SCENERY_W[key] || 30;
+              const shh = sw * (simg.naturalHeight/simg.naturalWidth);
+              const ox = (hash2(gx*3.7, gy*1.3)-0.5)*18, oy = (hash2(gx*1.1, gy*6.9)-0.5)*8;
+              try{ ctx.drawImage(simg, p.x - sw/2 + ox, yTop - shh + 8 + oy, sw, shh); }catch(e){}
+            }
+          }
+        }
+      }
+      if(t.type==='grass' && h2 > 0.93 && decorReady){
         const pool = hash2(gx*5,gy*7) > 0.5 ? 'bush1' : 'bush3';
         const bimg = decorImg(pool, worldTime*3 + gx + gy);
         if(bimg){
@@ -4329,6 +4448,30 @@ function drawMerchantCart(gx,gy){
   ctx.beginPath(); ctx.arc(x+16, y-14, 2.2, 0, 7); ctx.fill();
 }
 
+/* The pasture's flock, drawn straight from its herd count rather than
+   simulated separately — the animals you see ARE the animals winter can take.
+   Positions come from a hash so they don't shuffle every frame. */
+function drawHerd(b, cx, baseY){
+  const n = Math.min(4, Math.max(0, Math.round(b.herd || 0)));
+  const img = SPRITES.sheep;
+  for(let i=0;i<n;i++){
+    const ox = (hash2(b.gx*3.1+i, b.gy*2.7)-0.5) * 44;
+    const oy = (hash2(b.gx*1.9, b.gy*4.3+i)-0.5) * 16;
+    const bob = Math.sin(worldTime*1.2 + i*1.7) * 0.8;
+    const x = cx + ox, y = baseY + oy - 6 + bob;
+    try{ drawShadow(x, y+2, 5); }catch(e){}
+    if(img && img.complete && img.naturalWidth>0){
+      const w = SPRITE_SCALE.sheep || 26, h = w * (img.naturalHeight/img.naturalWidth);
+      try{ ctx.drawImage(img, x - w/2, y - h + 3, w, h); continue; }catch(e){}
+    }
+    // Hand-drawn floor: a sprite that fails to load must still leave a flock.
+    ctx.fillStyle='#e4e0d6';
+    ctx.beginPath(); ctx.ellipse(x, y-4, 4.6, 3.2, 0, 0, 7); ctx.fill();
+    ctx.fillStyle='#3a332b';
+    ctx.beginPath(); ctx.ellipse(x+4.2, y-5.6, 1.7, 1.5, 0, 0, 7); ctx.fill();
+    ctx.fillRect(x-2.6, y-1.6, 1, 2.2); ctx.fillRect(x+1.6, y-1.6, 1, 2.2);
+  }
+}
 function drawBuilding(b){
   if(b.type==='road'){ drawRoad(b.gx, b.gy); return; }
   const c = buildingCenter(b);
@@ -4340,6 +4483,7 @@ function drawBuilding(b){
   if(blitSprite(b.type, cx, baseY)){
     // Living details layered over sprite buildings
     if(b.type==='tavern' || b.type==='bakery' || b.type==='house' || b.type==='manor') chimneySmoke(cx + 10, baseY - (SPRITE_SCALE[b.type]||80)*0.72);
+    if(b.type==='pasture') drawHerd(b, cx, baseY);
     if(b.procFlash){ ctx.fillStyle=`rgba(255,220,140,${b.procFlash*0.4})`; ctx.beginPath(); ctx.arc(cx, baseY-18, 16, 0, 7); ctx.fill(); }
     return;
   }
@@ -5482,7 +5626,7 @@ function render(){
     list.push({depth:r.gx+r.gy+0.35, draw:()=>{ try{ drawRaider(r); }catch(e){} }});
   }
   for(const cr of critters){
-    const drawer = { deer:drawDeer, boar:drawBoar, rabbit:drawRabbit, fish:drawFish }[cr.kind];
+    const drawer = { deer:drawDeer, boar:drawBoar, rabbit:drawRabbit, fish:drawFish, fox:drawFox, duck:drawDuck }[cr.kind];
     if(drawer) list.push({depth:cr.gx+cr.gy+0.28, draw:()=>{ try{ drawer(cr); }catch(e){} }});
   }
   for(const m of memorials){
