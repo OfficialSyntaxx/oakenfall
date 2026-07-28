@@ -19,7 +19,7 @@ import {
   glowWindow, doorArch, chimneySmoke, drawShadow, tintedFrame,
 } from './isokit';
 import { installStorage, isNative } from './storage';
-import { G } from './state';
+import { G, saveFields, loadSavedFields, assertSaveCoverage } from './state';
 import { tileAt, genMap, reindexTiles } from './mapgen';
 import { TCODE, TCODE_R, applyBrushTo, encodeLand, decodeLand } from './landcode';
 import { sfx, buzz, startMusic, stopMusic, isSfxOn, setSfxOn, isMusicOn, setMusicOn } from './audio';
@@ -1272,6 +1272,11 @@ function logError(kind, msg){
   errorLog.push({ t: Date.now(), kind, msg: String(msg).slice(0, 300) });
   if(errorLog.length > 10) errorLog.shift();
 }
+/* A field added to G without deciding what the save does with it goes here, not
+   to a player's ruined hold. Logged rather than thrown: the suites assert this
+   log is empty, so it fails the build loudly while never bricking a live game
+   over a bookkeeping mistake. */
+try{ assertSaveCoverage(); }catch(e){ logError('save-format', e.message); console.error(e.message); }
 window.addEventListener('error', (e)=>{ logError('window', (e.message||'') + ' @' + (e.filename||'').split('/').pop() + ':' + e.lineno); });
 window.addEventListener('unhandledrejection', (e)=>{ logError('promise', e.reason); });
 
@@ -7126,23 +7131,18 @@ function loop(now){
    SAVE / LOAD
 ========================================================================= */
 function serializeState(){
-  return {
-    v:2, savedAt: Date.now(),
-    worldTime: G.worldTime, dayCount: G.dayCount, stockpile: G.stockpile, totals: G.totals,
-    questsCompleted: G.questsCompleted, wolfEvents: G.wolfEvents,
-    idleSlotCounter: G.idleSlotCounter, usedNames: G.usedNames, journal: G.journal,
-    researched: G.researched, activeResearch: G.activeResearch, coins: G.coins,
-    dailyBounties: G.dailyBounties, dailyProgress: G.dailyProgress, bannerIdx: G.bannerIdx, gameModeId,
-    landId: G.landId, scenarioId: G.scenarioId, scenarioWon: G.scenarioWon, tcX: G.TC_X, tcY: G.TC_Y,
+  /* The plain fields come from state.ts, which is also where they are declared
+     and defaulted. Nothing is listed twice, so nothing can be forgotten here —
+     see assertSaveCoverage. Only the three structures that need rebuilding on
+     load, and the handful of things that are not G's, are written by hand. */
+  return Object.assign(saveFields(), {
+    v:2, savedAt: Date.now(), gameModeId,
+    tcX: G.TC_X, tcY: G.TC_Y,
     grid: G.grid.map(row=>row.map(t=>({type:t.type,wilds:t.wilds,ford:t.ford||undefined,resourceAmount:t.resourceAmount,maxResource:t.maxResource,baseMax:t.baseMax,regrowAt:t.regrowAt}))),
     buildings: G.buildings.map(b=>({type:b.type,gx:b.gx,gy:b.gy,condition:Math.round(b.condition===undefined?100:b.condition),herd:b.herd})),
     villagers: G.villagers.map(v=>({name:v.name, role:v.role, gx:v.gx, gy:v.gy, hunger:v.hunger, fatigue:v.fatigue, trait:v.trait, sick:v.sick, morale:v.morale||65, partner:v.partner||null, parents:v.parents||null, relations:v.relations||[], memories:v.memories||[], age:v.age, stage:v.stage, lifespan:v.lifespan, skills:v.skills||{}})),
-    memorials: G.memorials, chronicle: G.chronicle, deeds: G.deeds, statHistory: G.statHistory,
-    festivalBoon: G.festivalBoon, lastFestivalYear: G.lastFestivalYear,
-    tradeRoutes: G.tradeRoutes, routeOffers: G.routeOffers, climate: G.climate, plague: G.plague,
-    unlocks: G.unlocks, onboardDone: G.onboardDone, ledger: G.ledger, holdName: G.holdName, crestChoice: G.crestChoice, decrees: G.decrees,
     ui: { mmBig: document.getElementById('minimap-wrap').classList.contains('mm-big') },
-  };
+  });
 }
 /* =========================================================================
    SAVE SLOTS
@@ -7335,26 +7335,12 @@ function restoreVillager(vd){
   });
 }
 function restoreState(data){
-  G.worldTime=data.worldTime||30; G.dayCount=data.dayCount||1;
-  G.stockpile = Object.assign({wood:0,stone:0,food:0,planks:0,flour:0,bread:0}, data.stockpile);
-  G.totals = Object.assign({wood:0,stone:0,food:0,planks:0,flour:0,bread:0}, data.totals);
-  G.questsCompleted = data.questsCompleted || {};
-  G.wolfEvents = data.wolfEvents||0;
-  G.idleSlotCounter = data.idleSlotCounter||0;
-  G.usedNames = data.usedNames||[];
-  G.journal = Object.assign({ peakPopulation:0, daysSurvived:0, wolvesSurvived:0, buildingsRaised:0, settlersWelcomed:0, wintersEndured:0 }, data.journal);
-  G.researched = data.researched || {};
-  G.activeResearch = data.activeResearch || null;
-  G.coins = data.coins||0;
-  G.dailyBounties = data.dailyBounties||[];
-  G.dailyProgress = Object.assign({wood:0,stone:0,food:0,bread:0,planks:0,flour:0,built:0}, data.dailyProgress);
-  G.bannerIdx = data.bannerIdx||0;
+  /* Plain fields first, straight from the declaration in state.ts. Anything
+     the save predates arrives at its declared default rather than undefined. */
+  loadSavedFields(data);
   gameModeId = data.gameModeId||'settler';
-  // Holds saved before scenarios existed simply have no goal set.
-  G.landId = data.landId || 'valley';
-  G.scenarioId = data.scenarioId || 'endless';
-  G.scenarioWon = !!data.scenarioWon;
   gameMode = GAME_MODES[gameModeId] || GAME_MODES.settler;
+  applyPatronBanners();
   if(data.ui && data.ui.mmBig) document.getElementById('minimap-wrap').classList.add('mm-big');
   // Restore the map at ITS OWN saved size — the save may be from a Small (26)
   // or Large (46) map while the module default is 36. Deriving G.MAP_SIZE from
@@ -7383,23 +7369,6 @@ function restoreState(data){
   for(const bd of data.buildings){ const nb = addBuilding(bd.type,bd.gx,bd.gy); if(nb){ nb.condition = bd.condition!==undefined ? bd.condition : 100; if(bd.herd!==undefined) nb.herd = bd.herd; } }
   G.villagers=[];
   for(const vd of data.villagers) restoreVillager(vd);
-  G.memorials = data.memorials || [];
-  G.chronicle = data.chronicle || [];
-  G.deeds = data.deeds || {};
-  G.statHistory = data.statHistory || [];
-  G.festivalBoon = data.festivalBoon || null;
-  G.lastFestivalYear = data.lastFestivalYear || 0;
-  G.tradeRoutes = data.tradeRoutes || [];
-  G.routeOffers = data.routeOffers || [];
-  G.climate = data.climate || null;
-  G.plague = data.plague || null;
-  G.unlocks = data.unlocks || {};
-  applyPatronBanners();
-  G.onboardDone = data.onboardDone || false;
-  if(data.ledger && data.ledger.in && data.ledger.out) G.ledger = data.ledger;
-  G.holdName = data.holdName || 'Oakenfall';
-  G.crestChoice = data.crestChoice || 0;
-  G.decrees = Object.assign({ curfew:false, tithe:false, openGates:false, rationing:false }, data.decrees||{});
   // Seed friendship/rivalry moments so restored relationships don't re-toast on load
   _relMoments.clear();
   G.villagers.forEach(v=>(v.relations||[]).forEach(r=>{

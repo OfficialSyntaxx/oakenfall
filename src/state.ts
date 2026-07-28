@@ -7,13 +7,16 @@
  * `G.grid = []` as an ordinary property write.
  *
  * Migration is per cluster, not big-bang. Each cluster moves here, its
- * references in main.ts become `G.x`, the suite runs, and it ships. What is
- * here so far is the map; villagers, economy and UI still live in main.ts.
+ * references in main.ts become `G.x`, the suite runs, and it ships. Here now:
+ * the map, the people, what stands on the land, the stores, and the world/run/
+ * coin state — everything a save records. What is left in main.ts is UI and
+ * session state: selection, build mode, camera, the sheet stack.
  *
- * The long game: `serializeState`/`restoreState` collapse into save/load of G's
- * own fields, so the save format stops being a hand-maintained list that drifts
- * from the state it mirrors. It drifted once already — TC_X was missing from
- * saves until the land editor put a hold somewhere other than the middle.
+ * The save format is declared at the bottom of this file rather than written
+ * out by hand in main.ts, which is what the migration was for. It drifted once
+ * — TC_X was missing from saves until the land editor let a player put a hold
+ * somewhere other than the middle of the map — and assertSaveCoverage() now
+ * makes that specific mistake impossible to commit quietly.
  */
 
 /** One square of ground. Loosely typed for now: the tile shape is still being
@@ -146,3 +149,103 @@ export const G = {
   /** sku → true for anything bought or redeemed. Persists in saves. */
   unlocks: {} as Record<string, boolean>,
 };
+
+/* ─────────────────────────────────────────────────────────────────────────
+   THE SAVE FORMAT
+   Every field of G is classified below, and assertSaveCoverage() refuses to
+   let one go unclassified. That guard is the whole reason this section
+   exists: the save format used to be a list hand-maintained in main.ts, and
+   it drifted — TC_X was missing for months, and nobody noticed until the land
+   editor let a player put their hold somewhere other than the middle of the
+   map, at which point every save loaded the town centre in the wrong place.
+   Adding a field to G now forces a decision about what happens to it on save.
+   ───────────────────────────────────────────────────────────────────────── */
+
+/** Fields written to the save as-is.
+ *  'replace' — take the saved value, or the default below if absent.
+ *  'merge'   — layer the saved value over the default, so a field added to an
+ *              object since the save was written arrives with its default
+ *              rather than as undefined. */
+export const SAVED_FIELDS: Record<string, 'replace' | 'merge'> = {
+  worldTime: 'replace', dayCount: 'replace', wolfEvents: 'replace',
+  climate: 'replace', plague: 'replace',
+  landId: 'replace', scenarioId: 'replace', scenarioWon: 'replace',
+  questsCompleted: 'replace', statHistory: 'replace', chronicle: 'replace',
+  deeds: 'replace', onboardDone: 'replace',
+  researched: 'replace', activeResearch: 'replace',
+  coins: 'replace', dailyBounties: 'replace',
+  tradeRoutes: 'replace', routeOffers: 'replace',
+  festivalBoon: 'replace', lastFestivalYear: 'replace',
+  holdName: 'replace', crestChoice: 'replace', bannerIdx: 'replace',
+  unlocks: 'replace',
+  usedNames: 'replace', memorials: 'replace', idleSlotCounter: 'replace',
+  stockpile: 'merge', totals: 'merge', journal: 'merge',
+  dailyProgress: 'merge', decrees: 'merge', ledger: 'merge',
+};
+
+/** What a missing field falls back to on load. Deliberately NOT the values G
+ *  starts a fresh game with: a loaded hold begins with an empty larder and
+ *  fills it from the save, where a new one is granted starting supplies. */
+export const LOAD_DEFAULTS: Record<string, any> = {
+  worldTime: 30, dayCount: 1, wolfEvents: 0,
+  climate: null, plague: null,
+  landId: 'valley', scenarioId: 'endless', scenarioWon: false,
+  questsCompleted: {}, statHistory: [], chronicle: [], deeds: {}, onboardDone: false,
+  researched: {}, activeResearch: null,
+  coins: 0, dailyBounties: [], tradeRoutes: [], routeOffers: [],
+  festivalBoon: null, lastFestivalYear: 0,
+  holdName: 'Oakenfall', crestChoice: 0, bannerIdx: 0, unlocks: {},
+  usedNames: [], memorials: [], idleSlotCounter: 0,
+  stockpile: { wood: 0, stone: 0, food: 0, planks: 0, flour: 0, bread: 0 },
+  totals: { wood: 0, stone: 0, food: 0, planks: 0, flour: 0, bread: 0 },
+  journal: { peakPopulation: 0, daysSurvived: 0, wolvesSurvived: 0, buildingsRaised: 0, settlersWelcomed: 0, wintersEndured: 0 },
+  dailyProgress: { wood: 0, stone: 0, food: 0, bread: 0, planks: 0, flour: 0, built: 0 },
+  decrees: { curfew: false, tithe: false, openGates: false, rationing: false },
+  ledger: { in: { bounties: 0, deeds: 0, routes: 0, quests: 0, tithe: 0 }, out: { shop: 0 } },
+};
+
+/** Saved, but not as a plain copy — main.ts rebuilds each one, because the
+ *  live objects hold references (a tile's building, a settler's partner) that
+ *  a naive round trip would turn into duplicates. */
+export const REBUILT_FIELDS = ['grid', 'buildings', 'villagers'];
+
+/** Not stored: derived from the rebuilt grid on load. */
+export const DERIVED_FIELDS = ['MAP_SIZE', 'TC_X', 'TC_Y', 'TC_CX', 'TC_CY',
+  'forestTiles', 'stoneTiles', 'waterTiles', 'wildsTiles'];
+
+/** Not stored: recomputed or simply allowed to start over. Guilds re-form from
+ *  settler skills, districts re-cluster from buildings, and a raid in progress
+ *  does not survive a reload by design — the hold gets its breath back. */
+export const TRANSIENT_FIELDS = ['guilds', 'districts', 'districtTimer',
+  'raiders', 'critters', 'courtshipTimer', 'birthTimer'];
+
+/** Read a save's plain fields onto G. */
+export function loadSavedFields(data: any) {
+  for (const [k, how] of Object.entries(SAVED_FIELDS)) {
+    const saved = data[k];
+    const dflt = LOAD_DEFAULTS[k];
+    if (how === 'merge') (G as any)[k] = Object.assign({}, dflt, saved && typeof saved === 'object' ? saved : null);
+    else (G as any)[k] = saved ?? dflt;
+  }
+}
+
+/** Collect G's plain fields for writing. */
+export function saveFields(): Record<string, any> {
+  const out: Record<string, any> = {};
+  for (const k of Object.keys(SAVED_FIELDS)) out[k] = (G as any)[k];
+  return out;
+}
+
+/** Throws if any field of G has escaped classification. Called once at boot so
+ *  a field added without a decision fails loudly and immediately, rather than
+ *  quietly going missing from saves for months. */
+export function assertSaveCoverage() {
+  const known = new Set([...Object.keys(SAVED_FIELDS), ...REBUILT_FIELDS, ...DERIVED_FIELDS, ...TRANSIENT_FIELDS]);
+  const stray = Object.keys(G).filter((k) => !known.has(k));
+  const noDefault = Object.keys(SAVED_FIELDS).filter((k) => !(k in LOAD_DEFAULTS));
+  const problems = [
+    ...stray.map((k) => `G.${k} is saved nowhere and declared nowhere — add it to SAVED_FIELDS, REBUILT_FIELDS, DERIVED_FIELDS or TRANSIENT_FIELDS in state.ts`),
+    ...noDefault.map((k) => `SAVED_FIELDS.${k} has no entry in LOAD_DEFAULTS`),
+  ];
+  if (problems.length) throw new Error('save format drift:\n  ' + problems.join('\n  '));
+}

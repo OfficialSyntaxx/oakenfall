@@ -163,7 +163,12 @@ await p2.click('#steward-btn'); await p2.waitForSelector('#steward-input');
 await p2.fill('#steward-input', 'stop'); await p2.click('#steward-go');
 await p2.click('#sheet-close').catch(() => {});
 const broke = await p2.evaluate(() => window.__oakDebug());
-check('spending all timber on housing empties the stores', broke.stockpile.wood < 10,
+/* This is the setup, not the check: what matters is that the hold can no
+   longer afford the cheapest workplace (a forestry camp, 40 wood), which is
+   what makes the trap a trap. Demanding a near-zero store instead raced the
+   lumberjacks — a few logs delivered between the build finishing and the
+   reading failed a run that had set the trap perfectly well. */
+check('spending all timber on housing leaves no workplace affordable', broke.stockpile.wood < 40,
   `wood ${Math.floor(broke.stockpile.wood)}`);
 await p2.click('#speed-btn');                        // let it run
 let recovered = null;
