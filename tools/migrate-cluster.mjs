@@ -107,7 +107,19 @@ for (const m of src.matchAll(re)) {
   const after = src.slice(i + m[0].length).match(/^\s*:/);
 
   if (isProperty) { skipped.push(`${lineOf(i)}  property access   ${src.slice(i - 12, i + 24).replace(/\n/g, ' ')}`); continue; }
-  if (after) { skipped.push(`${lineOf(i)}  key or ternary    ${src.slice(i - 12, i + 34).replace(/\n/g, ' ')}`); continue; }
+  if (after) {
+    /* Followed by a colon, so either an object key or the true arm of a
+       ternary. They are told apart by what comes BEFORE: a `?` means ternary,
+       and a ternary arm is a real reference that must be rewritten. Lumping
+       the two together and asking a human to squint at the list is how
+       `typeof dayCount<'u' ? dayCount : 1` survived a pass and threw on the
+       first chronicle entry. */
+    const prev = src.slice(0, i).replace(/\s+$/, '');
+    if (!prev.endsWith('?')) {
+      skipped.push(`${lineOf(i)}  object key        ${src.slice(i - 12, i + 34).replace(/\n/g, ' ')}`);
+      continue;
+    }
+  }
 
   out += src.slice(last, i) + 'G.' + m[0];
   last = i + m[0].length;

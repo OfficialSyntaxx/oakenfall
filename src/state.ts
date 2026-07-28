@@ -91,4 +91,58 @@ export const G = {
   /** Ambient wildlife: deer, ducks, foxes and the rest. Decorative, but they
    *  are also what a hunter hunts. */
   critters: [] as any[],
+
+  // ── the turning world ───────────────────────────────────────────────────
+  /** Seconds into the current day/night cycle. Everything that moves, lights
+   *  or grows reads it; isokit is handed a copy each frame via setKitTime. */
+  worldTime: 30,                // start mid-dawn
+  dayCount: 1,
+  /** How many raids the hold has come through. */
+  wolfEvents: 0,
+  /** A long-running weather turn (drought, cold snap) and a running sickness,
+   *  or null when the valley is having an ordinary time of it. */
+  climate: null as any,
+  plague: null as any,
+
+  // ── the run ─────────────────────────────────────────────────────────────
+  landId: 'valley',
+  scenarioId: 'endless',
+  /** Goal met and acknowledged. Play continues afterwards — winning Oakenfall
+   *  ends the objective, not the hold. */
+  scenarioWon: false,
+  questsCompleted: {} as Record<string, boolean>,
+  journal: { peakPopulation: 0, daysSurvived: 0, wolvesSurvived: 0, buildingsRaised: 0, settlersWelcomed: 0, wintersEndured: 0 },
+  /** One row per day: {day, pop, food, wood, stone}. Drives the graphs. */
+  statHistory: [] as any[],
+  /** The written record — births, deaths, first winters, raids weathered. */
+  chronicle: [] as any[],
+  deeds: {} as Record<string, any>,
+  decrees: { curfew: false, tithe: false, openGates: false, rationing: false },
+  onboardDone: false,
+
+  // ── study ───────────────────────────────────────────────────────────────
+  researched: {} as Record<string, boolean>,
+  activeResearch: null as any,  // {id, remaining, total}
+
+  // ── coin ────────────────────────────────────────────────────────────────
+  coins: 0,
+  /** Cumulative coin flow by category, for the economy view. */
+  ledger: { in: { bounties: 0, deeds: 0, routes: 0, quests: 0, tithe: 0 }, out: { shop: 0 } },
+  dailyBounties: [] as any[],   // [{id,key,n,reward,done,desc}]
+  dailyProgress: {} as Record<string, number>,
+  /** Standing caravan contracts, and the offers not yet taken up. */
+  tradeRoutes: [] as any[],
+  routeOffers: [] as any[],
+
+  // ── festival ────────────────────────────────────────────────────────────
+  festivalBoon: null as string | null,   // 'harvest' | 'courage' | 'craft'
+  lastFestivalYear: 0,
+
+  // ── the player's own ────────────────────────────────────────────────────
+  holdName: 'Oakenfall',
+  /** Crest colour picked at creation, and the banner currently flying. */
+  crestChoice: 0,
+  bannerIdx: 0,
+  /** sku → true for anything bought or redeemed. Persists in saves. */
+  unlocks: {} as Record<string, boolean>,
 };

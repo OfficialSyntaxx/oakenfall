@@ -38,14 +38,34 @@ modules, (3) Capacitor wrap + native storage.
 
   **Migration is per cluster, never big-bang.** Move one group of variables into
   `G`, rewrite `main.ts`'s references, `npm run verify`, commit. Done: the map
-  (MAP_SIZE, grid, TC_*, the four tile lists). Next, in rough order of
-  independence: villagers, buildings, economy/stockpile, then UI/session flags.
+  (MAP_SIZE, grid, TC_*, tile lists), the people (villagers, usedNames,
+  memorials, guilds, idleSlotCounter, courtship/birth timers), what stands on
+  the land (buildings, districts), the stores (stockpile, totals), the outsiders
+  (raiders, critters), and the world/run/coin cluster (worldTime, dayCount,
+  researched, coins, ledger, journal, deeds, chronicle, decrees, unlocks,
+  holdName, trade routes, climate, plague, …). That is everything
+  `serializeState` writes. What remains in `main.ts` is UI and session flags:
+  selection, buildMode, camera, sheet state, timers that do not persist.
 
-  Rewriting references is a scripted regex, and two traps bite every time:
-  a bare name preceded by `.` is a property access (`data.grid` must NOT become
-  `data.G.grid`), and a bare name followed by `:` may be an object key (`grid:`
-  in `serializeState`) OR a ternary (`wildsTiles ? … : …`) — so exclude on the
-  leading dot, not on the trailing colon, and fix the handful of keys by hand.
+  **Use `tools/migrate-cluster.mjs`, do not hand-roll the regex.** Five traps
+  bite, and the script handles four of them and prints the fifth:
+  - A name after `.` is somebody else's property (`data.grid` must NOT become
+    `data.G.grid`) — but `...grid` is a spread of the real binding and also
+    follows a dot.
+  - A name before `:` is an object key (`grid:` in `serializeState`) OR a
+    ternary arm (`typeof dayCount<'u' ? dayCount : 1`). Tell them apart by what
+    comes *before*: a `?` means ternary, and that IS a reference. Getting this
+    wrong ships a ReferenceError that only fires on the code path that uses it.
+  - Shorthand properties (`{ usedNames, journal }`) and declarations
+    (`let villagers = []`) cannot be rewritten in place; the script lists them.
+  - A local may shadow a global of the same name (`const coins = …` inside
+    `makeRouteOffer`). Those show up in the declaration list — revert them.
+  - The code/text scanner needs REAL template nesting. The UI is templates
+    holding `${…}` holes holding further templates; close the outer backtick at
+    the first inner one and the rest of the file desynchronises, the next
+    apostrophe in prose opens a string that never closes, and thousands of
+    lines look like text. A naive scanner found 115 references where the
+    correct one found 143.
 
   The end state: `serializeState`/`restoreState` collapse into save/load of
   `G`'s own fields, so the save format stops being a hand-maintained list that

@@ -162,9 +162,9 @@ function applyDifficulty(cfg){
   G.TC_CX = G.TC_X+0.5; G.TC_CY = G.TC_Y+0.5;
   wolfRiskMul = cfg.wolfMul * gameMode.wolfMul;
   G.stockpile = Object.assign({}, cfg.startRes);
-  landId = cfg.landId || 'valley';
-  scenarioId = cfg.goalId || 'endless';
-  scenarioWon = false;
+  G.landId = cfg.landId || 'valley';
+  G.scenarioId = cfg.goalId || 'endless';
+  G.scenarioWon = false;
 }
 
 const HUNGER_RATE = 100/340;   // per second — ~5.7 min to starve at 1× speed
@@ -211,7 +211,7 @@ const BASE_CAP = { wood:200, stone:160, food:180, planks:80, flour:60, bread:60 
 function capFor(type){
   let cap = BASE_CAP[type];
   for(const b of G.buildings) if(b.type==='granary' && (b.condition===undefined||b.condition>=35)) cap += 90;
-  if(typeof researched!=='undefined' && researched.cellars) cap += 60; // Deep Cellars
+  if(typeof G.researched!=='undefined' && G.researched.cellars) cap += 60; // Deep Cellars
   return cap;
 }
 // Safe amount of raw food that won't spoil: a small pantry baseline plus each
@@ -219,7 +219,7 @@ function capFor(type){
 function foodSafeCap(){
   let safe = 45;
   for(const b of G.buildings) if(b.type==='granary' && (b.condition===undefined||b.condition>=35)) safe += 70;
-  if(typeof researched!=='undefined' && researched.cellars) safe += 50;
+  if(typeof G.researched!=='undefined' && G.researched.cellars) safe += 50;
   return safe;
 }
 let _spoilAcc = 0, _spoilDay = 0;
@@ -228,12 +228,12 @@ function foodSpoilTick(dt){
   if(mul<=0) return; // Peaceful: nothing spoils
   const excess = (G.stockpile.food||0) - foodSafeCap();
   if(excess <= 0) return;
-  const lost = excess * (0.14/CYCLE_LEN) * mul * dt * (researched.coldstore?0.5:1); // ~14%/day of the excess
+  const lost = excess * (0.14/CYCLE_LEN) * mul * dt * (G.researched.coldstore?0.5:1); // ~14%/day of the excess
   G.stockpile.food = Math.max(0, G.stockpile.food - lost);
   _spoilAcc += lost;
   // Nudge the player about once a day if spoilage is adding up.
-  if(dayCount!==_spoilDay && _spoilAcc >= 5){
-    _spoilDay = dayCount;
+  if(G.dayCount!==_spoilDay && _spoilAcc >= 5){
+    _spoilDay = G.dayCount;
     toast('🐀 '+Math.round(_spoilAcc)+' food has spoiled for want of storage — raise a Granary.', true);
     _spoilAcc = 0;
   }
@@ -245,7 +245,7 @@ function gainResource(type, amount){
   const actuallyGained = G.stockpile[type]-before;
   if(actuallyGained>0){
     G.totals[type] = (G.totals[type]||0) + actuallyGained;   // planks/flour/bread were NaN before
-    if(typeof dailyProgress==='object' && dailyProgress[type]!==undefined) dailyProgress[type] += actuallyGained;
+    if(typeof G.dailyProgress==='object' && G.dailyProgress[type]!==undefined) G.dailyProgress[type] += actuallyGained;
   }
   if(G.stockpile[type]>=cap && amount>0){
     if(!window.__capWarned[type]){ window.__capWarned[type]=true; toast((type[0].toUpperCase()+type.slice(1))+' storage is full! Build a Granary.', true); }
@@ -259,20 +259,15 @@ window.__capWarned = {wood:false,stone:false,food:false,planks:false,flour:false
 
 const SEASON_LEN = CYCLE_LEN * 3; // 3 day/night cycles per season
 function seasonIndex(){
-  if(typeof gameMode!=='undefined' && gameMode.forceWinter) return 3; return Math.floor(worldTime / SEASON_LEN) % 4; }
+  if(typeof gameMode!=='undefined' && gameMode.forceWinter) return 3; return Math.floor(G.worldTime / SEASON_LEN) % 4; }
 function seasonName(){ return SEASON_NAMES[seasonIndex()]; }
 function seasonYieldMul(){ return seasonIndex()===3 ? 0.6 : (seasonIndex()===1 ? 1.15 : 1); } // winter slow, summer bountiful
 function seasonFatigueMul(){ return seasonIndex()===3 ? 1.25 : 1; }
 
-let worldTime = 30; // start mid-dawn
 let speedMode = 1; // 1, 2, 0(paused)
-let dayCount = 1;
 let spawnTimer = 18;
 let wolfTimer = 60;
-let wolfEvents = 0;
-let questsCompleted = {};
 // Lifetime journal — persists across sessions within a save; tracks bests for the stats page
-let journal = { peakPopulation:0, daysSurvived:0, wolvesSurvived:0, buildingsRaised:0, settlersWelcomed:0, wintersEndured:0 };
 
 /* ── SCENARIOS ── an optional end-goal for the hold. These close over live game
    state, so unlike LANDS they stay here rather than in defs.ts. Reaching one is
@@ -282,22 +277,19 @@ const SCENARIOS = {
   endless:  { name:'Endless',        ic:'♾️', desc:'No set goal. Build the hold you want, for as long as you like.',
               done:()=>false, progress:()=>'' },
   winters:  { name:'Five Winters',   ic:'❄️', desc:'Endure five winters. The cold is the oldest enemy.',
-              done:()=>journal.wintersEndured>=5, progress:()=>journal.wintersEndured+'/5 winters' },
+              done:()=>G.journal.wintersEndured>=5, progress:()=>G.journal.wintersEndured+'/5 winters' },
   town:     { name:'Rise to a Town', ic:'🏰', desc:'Grow the hold from outpost to town.',
               done:()=>currentTierIdx>=3, progress:()=>HOLD_TIERS[currentTierIdx].name+' → Town' },
   timber:   { name:'Timber Trade',   ic:'🪚', desc:'Saw 300 planks — a hold that exports is a hold that lasts.',
               done:()=>(G.totals.planks||0)>=300, progress:()=>Math.floor(G.totals.planks||0)+'/300 planks' },
   bulwark:  { name:'Bulwark',        ic:'🛡️', desc:'Drive off eight raids without losing the hold.',
-              done:()=>(journal.raidsRepelled||0)>=8, progress:()=>(journal.raidsRepelled||0)+'/8 raids repelled' },
+              done:()=>(G.journal.raidsRepelled||0)>=8, progress:()=>(G.journal.raidsRepelled||0)+'/8 raids repelled' },
 };
-let landId = 'valley';
-let scenarioId = 'endless';
-let scenarioWon = false;      // goal met and acknowledged — play continues
 function checkScenario(){
-  if(scenarioWon || scenarioId==='endless') return;
-  const sc = SCENARIOS[scenarioId];
+  if(G.scenarioWon || G.scenarioId==='endless') return;
+  const sc = SCENARIOS[G.scenarioId];
   if(!sc || !sc.done()) return;
-  scenarioWon = true;
+  G.scenarioWon = true;
   showVictory(sc);
 }
 /* Reaching the goal is a moment, not a wall. The notice congratulates, offers a
@@ -313,11 +305,11 @@ function showVictory(sc){
     <div id="victory-card">
       <div class="v-ic">${sc.ic}</div>
       <div class="v-title">${sc.name}</div>
-      <div class="v-sub">Achieved on day ${dayCount}, ${seasonName()} — ${holdName||'Oakenfall'} stands.</div>
+      <div class="v-sub">Achieved on day ${G.dayCount}, ${seasonName()} — ${G.holdName||'Oakenfall'} stands.</div>
       <div class="v-stats">
         <span>👥 ${G.villagers.length} settlers</span>
-        <span>🏗️ ${journal.buildingsRaised} raised</span>
-        <span>❄️ ${journal.wintersEndured} winters</span>
+        <span>🏗️ ${G.journal.buildingsRaised} raised</span>
+        <span>❄️ ${G.journal.wintersEndured} winters</span>
         <span>${HOLD_TIERS[currentTierIdx].ic} ${HOLD_TIERS[currentTierIdx].name}</span>
       </div>
       <button class="action-btn primary" id="v-continue">Carry on with the hold</button>
@@ -331,30 +323,26 @@ function showVictory(sc){
   wrap.addEventListener('click', (e)=>{ if(e.target===wrap) close(); });
 }
 /* ── STATS ── per-day snapshots for the Statistics view; capped, persists */
-let statHistory = []; // {day, pop, food, wood, stone}
 function captureStatSnapshot(){
-  statHistory.push({ day:dayCount, pop:G.villagers.length,
+  G.statHistory.push({ day:G.dayCount, pop:G.villagers.length,
     food:Math.round(G.stockpile.food||0), wood:Math.round(G.stockpile.wood||0), stone:Math.round(G.stockpile.stone||0) });
-  if(statHistory.length>60) statHistory.shift();
+  if(G.statHistory.length>60) G.statHistory.shift();
 }
 /* ── SEASONAL FESTIVAL ── once a year the hold chooses a lasting boon */
-let festivalBoon = null;      // 'harvest' | 'courage' | 'craft' | null
-let lastFestivalYear = 0;     // year index of the last festival held
 const FESTIVAL_BOONS = [
   {id:'harvest', ic:'🌾', name:'Harvest Feast', desc:'Fields and foragers yield +20% for the year.'},
   {id:'courage', ic:'🛡️', name:'Rite of Courage', desc:'Spirits stay higher (+8 morale) and raids sting less.'},
   {id:'craft',   ic:'🔨', name:'Craftsmen\'s Fair', desc:'Every settler works +15% faster for the year.'},
 ];
-function harvestBoonMul(){ return festivalBoon==='harvest' ? 1.2 : 1; }
+function harvestBoonMul(){ return G.festivalBoon==='harvest' ? 1.2 : 1; }
 /* ── UNLOCKS / REDEEM ── cosmetic packs bought on the website redeem here via
    a signed code, verified OFFLINE against this embedded public key (the game
    never makes a network request). The private signing key lives only in the
    website's Netlify function — codes cannot be forged from this public key. */
-let unlocks = {};   // sku → true; persists in saves
 const REDEEM_PUBKEY_SPKI = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAERa+HGQmoarIV601nzvFQOQDNa9nAJDdY8ZOSjedDrMTvfEDGKFlzBIUNc6RTQl/qMlRAXzxeW5F9mhLFTo6auQ==';
 
-function hasUnlock(sku){ return !!unlocks[sku]; }
-function isPatron(){ return !!unlocks.supporter; }
+function hasUnlock(sku){ return !!G.unlocks[sku]; }
+function isPatron(){ return !!G.unlocks.supporter; }
 let _redeemKeyPromise = null;
 function redeemPubKey(){
   if(!_redeemKeyPromise){
@@ -382,10 +370,10 @@ async function redeemCode(codeStr){
     const data = JSON.parse(new TextDecoder().decode(payloadBytes));
     const sku = data.s;
     if(!UNLOCK_SKUS[sku]) return {ok:false, reason:'This code is for content this version doesn\'t know.'};
-    const already = !!unlocks[sku];
-    unlocks[sku] = true;
+    const already = !!G.unlocks[sku];
+    G.unlocks[sku] = true;
     applyPatronBanners();
-    if(data.n) unlocks._patronName = String(data.n).slice(0,24);
+    if(data.n) G.unlocks._patronName = String(data.n).slice(0,24);
     saveUnlocks();
     if(typeof started!=='undefined' && started) saveGame && saveGame();
     return {ok:true, sku, name:UNLOCK_SKUS[sku].name, already};
@@ -395,7 +383,7 @@ function renderRedeemSheet(){
   const owned = Object.keys(UNLOCK_SKUS).filter(hasUnlock);
   sheetContent.innerHTML = `
     <div class="sheet-sub">Bought a pack on the Oakenfall website? Paste your code below to unlock it here. Codes are verified on your device — the game never goes online.</div>
-    ${unlocks._admin ? `<button class="action-btn primary" id="admin-open" style="margin:2px 0 8px;">🛠️ Open Admin Panel</button>` : ''}
+    ${G.unlocks._admin ? `<button class="action-btn primary" id="admin-open" style="margin:2px 0 8px;">🛠️ Open Admin Panel</button>` : ''}
     <input id="redeem-input" class="redeem-input" type="text" autocomplete="off" spellcheck="false" placeholder="OAK-…  (paste your code)" aria-label="Redeem code">
     <button class="action-btn primary" id="redeem-go" style="margin-top:6px;">🎁 Redeem</button>
     <div id="redeem-msg" class="sheet-sub" style="margin-top:6px;"></div>
@@ -404,7 +392,7 @@ function renderRedeemSheet(){
       ${owned.length ? owned.map(s=>`<div class="inbox-row"><span class="ib-day">${UNLOCK_SKUS[s].ic}</span><span class="ib-msg"><b>${UNLOCK_SKUS[s].name}</b> — ${UNLOCK_SKUS[s].desc}</span></div>`).join('')
         : '<div class="sheet-sub" style="opacity:.7;">No unlocks yet. Support the hold from the website to receive a code.</div>'}
     </div>
-    ${isPatron() ? `<div class="sheet-sub" style="margin-top:8px;color:var(--amber)">✦ Patron of Oakenfall${unlocks._patronName?' — '+unlocks._patronName:''}. Thank you.</div>` : ''}`;
+    ${isPatron() ? `<div class="sheet-sub" style="margin-top:8px;color:var(--amber)">✦ Patron of Oakenfall${G.unlocks._patronName?' — '+G.unlocks._patronName:''}. Thank you.</div>` : ''}`;
   const input = document.getElementById('redeem-input');
   const msg = document.getElementById('redeem-msg');
   const adminOpen = document.getElementById('admin-open');
@@ -412,7 +400,7 @@ function renderRedeemSheet(){
   document.getElementById('redeem-go').addEventListener('click', async ()=>{
     // Hidden admin unlock: a special promo code opens the developer panel.
     if(String(input.value||'').trim() === ADMIN_PROMO){
-      unlocks._admin = true; saveUnlocks();
+      G.unlocks._admin = true; saveUnlocks();
       if(typeof sfx==='function') sfx('tier');
       sheetNav.push({ id:'admin', title:'🛠️ Admin Panel', render:()=>renderAdminSheet() });
       return;
@@ -444,7 +432,7 @@ window.__oakDebug = function(){
   for(const v of G.villagers) roles[v.role] = (roles[v.role]||0) + 1;
   return {
     version: GAME_VERSION,
-    day: dayCount, time: Math.round(worldTime*100)/100, editing: editorOn,
+    day: G.dayCount, time: Math.round(G.worldTime*100)/100, editing: editorOn,
     season: seasonName(), weather: weather.type,
     villagers: G.villagers.length, roles,
     states: (()=>{ const c={}; for(const v of G.villagers) c[v.state]=(c[v.state]||0)+1; return c; })(),
@@ -461,19 +449,19 @@ window.__oakDebug = function(){
     placements: G.buildings.filter(b=>b.type!=='road').map(b=>({t:b.type, gx:b.gx, gy:b.gy})),
     worn: G.buildings.filter(b=>b.condition!==undefined && b.condition<70).length,
     onFire: G.buildings.filter(b=>b._fire>0).length,
-    activeResearch: activeResearch ? activeResearch.id : null,
-    researchedCount: Object.keys(researched).filter(k=>researched[k]).length,
+    activeResearch: G.activeResearch ? G.activeResearch.id : null,
+    researchedCount: Object.keys(G.researched).filter(k=>G.researched[k]).length,
     orders: stewardOrders.map(o=>o.kind),
     stockpile: Object.assign({}, G.stockpile),
-    coins, tier: currentTierIdx,
+    coins: G.coins, tier: currentTierIdx,
     needs: (typeof roleNeedScores==='function') ? roleNeedScores().slice(0,3) : [],
     critters: (typeof G.critters!=='undefined') ? G.critters.length : 0,
     raiders: G.raiders.length,
-    land: landId,
-    scenario: scenarioId,
-    scenarioWon,
-    scenarioProgress: (SCENARIOS[scenarioId] ? SCENARIOS[scenarioId].progress() : ''),
-    winters: journal.wintersEndured,
+    land: G.landId,
+    scenario: G.scenarioId,
+    scenarioWon: G.scenarioWon,
+    scenarioProgress: (SCENARIOS[G.scenarioId] ? SCENARIOS[G.scenarioId].progress() : ''),
+    winters: G.journal.wintersEndured,
     terrain: (()=>{ const c={}; for(const row of G.grid) for(const t of row){ const k = t.wilds?'wilds':t.type; c[k]=(c[k]||0)+1; } return c; })(),
   };
 };
@@ -496,18 +484,18 @@ window.__oakGrid = function(){
 };
 function adminGrant(kind){
   const bump = (k,n)=>{ G.stockpile[k] = (G.stockpile[k]||0) + n; };
-  const toDawn = ()=>{ worldTime = Math.floor(worldTime/CYCLE_LEN)*CYCLE_LEN + 30; };
-  const toNight = ()=>{ worldTime = Math.floor(worldTime/CYCLE_LEN)*CYCLE_LEN + DAY_LEN + 20; };
+  const toDawn = ()=>{ G.worldTime = Math.floor(G.worldTime/CYCLE_LEN)*CYCLE_LEN + 30; };
+  const toNight = ()=>{ G.worldTime = Math.floor(G.worldTime/CYCLE_LEN)*CYCLE_LEN + DAY_LEN + 20; };
   switch(kind){
     // ── Economy ──
     case 'res': ['wood','stone','food','planks','flour','bread'].forEach(k=>bump(k,500)); toast('🛠️ +500 of every resource.'); break;
-    case 'coins': coins += 1000; toast('🛠️ +1000 coins.'); break;
-    case 'coinsBig': coins += 10000; toast('🛠️ +10,000 coins.'); break;
+    case 'coins': G.coins += 1000; toast('🛠️ +1000 coins.'); break;
+    case 'coinsBig': G.coins += 10000; toast('🛠️ +10,000 coins.'); break;
     case 'craftClear': ['planks','flour','bread'].forEach(k=>{ G.stockpile[k]=0; }); toast('🛠️ Crafted stores emptied.'); break;
     case 'maxout': ['wood','stone','food','planks','flour','bread'].forEach(k=>{ G.stockpile[k] = capFor ? capFor(k) : 999; }); toast('🛠️ Stores filled to capacity.'); break;
     // ── Progress / unlocks ──
-    case 'tech': TECH_TREE.forEach(t=>{ researched[t.id] = true; }); activeResearch = null; toast('🛠️ All research unlocked.'); break;
-    case 'cosmetics': Object.keys(UNLOCK_SKUS).forEach(s=>{ unlocks[s]=true; }); applyPatronBanners && applyPatronBanners(); saveUnlocks(); toast('🛠️ All cosmetic packs unlocked.'); break;
+    case 'tech': TECH_TREE.forEach(t=>{ G.researched[t.id] = true; }); G.activeResearch = null; toast('🛠️ All research unlocked.'); break;
+    case 'cosmetics': Object.keys(UNLOCK_SKUS).forEach(s=>{ G.unlocks[s]=true; }); applyPatronBanners && applyPatronBanners(); saveUnlocks(); toast('🛠️ All cosmetic packs unlocked.'); break;
     // ── Population ──
     case 'settlers': for(let i=0;i<5;i++) spawnVillager(); toast('🛠️ +5 settlers summoned.'); break;
     case 'settler1': spawnVillager(); toast('🛠️ A settler joins.'); break;
@@ -525,14 +513,14 @@ function adminGrant(kind){
     // itself. Adding a whole cycle outright skipped the crossing entirely, so
     // the day counter never moved and none of the daily rollover — weather,
     // bounties, trade routes, stat snapshot — ever fired.
-    case 'tDay':   worldTime = (Math.floor(worldTime/CYCLE_LEN)+1)*CYCLE_LEN - 0.05; toast('🛠️ Advanced one full day.'); break;
+    case 'tDay':   G.worldTime = (Math.floor(G.worldTime/CYCLE_LEN)+1)*CYCLE_LEN - 0.05; toast('🛠️ Advanced one full day.'); break;
     case 'tSeason': {
       // Same trap as the day skip: land just short of the next season boundary
       // so update() crosses it and the season actually turns (winter tally,
       // wildlife re-seed, toasts). Adding SEASON_LEN outright skipped all of it.
-      const target = (Math.floor(worldTime/SEASON_LEN)+1)*SEASON_LEN;
-      worldTime = target - 0.05;
-      dayCount = Math.floor(worldTime/CYCLE_LEN) + 1;   // catch the counter up over the skipped days
+      const target = (Math.floor(G.worldTime/SEASON_LEN)+1)*SEASON_LEN;
+      G.worldTime = target - 0.05;
+      G.dayCount = Math.floor(G.worldTime/CYCLE_LEN) + 1;   // catch the counter up over the skipped days
       toast('🛠️ Advanced one season.'); break;
     }
     // ── Hazards (test the drama) ──
@@ -575,7 +563,6 @@ function renderAdminSheet(){
 }
 /* ── ONBOARDING ── a dismissible objective ribbon that guides a brand-new hold
    through its first steps, then bows out. */
-let onboardDone = false;
 /* ── VISIBLE RAIDS ── the raid's outcome is decided by the defense math, but
    the raiders now march in and are met, so you SEE the hold hold or break.
    Purely a dramatization layer over the already-computed result. */
@@ -644,7 +631,7 @@ function drawRaider(r){
   // torch
   const tx=cx+r.facing*7;
   ctx.strokeStyle='#241505'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(tx, cy-4); ctx.lineTo(tx, cy-16); ctx.stroke();
-  const fimg = decorImg('fire', worldTime*9 + r.gx);
+  const fimg = decorImg('fire', G.worldTime*9 + r.gx);
   if(fimg && fimg.complete && fimg.naturalWidth>0){ const w=9,h=w*(fimg.naturalHeight/fimg.naturalWidth); try{ ctx.drawImage(fimg, tx-w/2, cy-16-h, w, h); }catch(e){} }
   else { ctx.fillStyle='#e8782c'; ctx.beginPath(); ctx.ellipse(tx, cy-17, 3, 5, 0, 0, 7); ctx.fill(); }
   ctx.restore();
@@ -953,7 +940,7 @@ function foresterTick(dt){
       const base = t.baseMax || 6;
       if(t.maxResource < base){
         t.maxResource = Math.min(base, t.maxResource + 1); // replant / let the stand recover
-        if(t.maxResource>0 && t.resourceAmount<=0 && worldTime>=t.regrowAt) t.resourceAmount = Math.min(t.maxResource, 1);
+        if(t.maxResource>0 && t.resourceAmount<=0 && G.worldTime>=t.regrowAt) t.resourceAmount = Math.min(t.maxResource, 1);
       }
     }
   }
@@ -973,9 +960,9 @@ const DECISIONS = [
     ]},
   { id:'peddler', ic:'🎁', title:'The Peddler\'s Crate',
     text:'A travelling peddler offers a sealed crate, sight unseen, for 15 coins. "Could be treasure, could be turnips," he grins.',
-    cond:()=>coins>=15,
+    cond:()=>G.coins>=15,
     choices:[
-      {label:'Buy the crate (15c)', outcome:'You pry it open...', run:()=>{ coins-=15; const r=Math.random(); if(r<0.45){ const g=gainResource('planks',12); toast('📦 Fine planks! +'+g); } else if(r<0.8){ const g=gainResource('food',20); toast('📦 Salted stores. +'+g+' food'); } else { toast('📦 ...turnips. Mostly air.'); } }},
+      {label:'Buy the crate (15c)', outcome:'You pry it open...', run:()=>{ G.coins-=15; const r=Math.random(); if(r<0.45){ const g=gainResource('planks',12); toast('📦 Fine planks! +'+g); } else if(r<0.8){ const g=gainResource('food',20); toast('📦 Salted stores. +'+g+' food'); } else { toast('📦 ...turnips. Mostly air.'); } }},
       {label:'Decline', outcome:'The peddler shrugs and moves on.', run:()=>{}},
     ]},
   { id:'tribute', ic:'🏴', title:'A Bandit Ultimatum',
@@ -987,9 +974,9 @@ const DECISIONS = [
     ]},
   { id:'scholar', ic:'📚', title:'A Wandering Scholar',
     text:'A scholar seeks shelter and offers, in thanks, to share what they know — if the hold can spare a meal.',
-    cond:()=>!!activeResearch && (G.stockpile.food||0)>=12,
+    cond:()=>!!G.activeResearch && (G.stockpile.food||0)>=12,
     choices:[
-      {label:'Host them (12 food)', outcome:'By lamplight they hasten your studies.', run:()=>{ G.stockpile.food-=12; if(activeResearch) activeResearch.remaining=Math.max(0,activeResearch.remaining-25); toast('📚 Research hastened.'); changeMorale(2); }},
+      {label:'Host them (12 food)', outcome:'By lamplight they hasten your studies.', run:()=>{ G.stockpile.food-=12; if(G.activeResearch) G.activeResearch.remaining=Math.max(0,G.activeResearch.remaining-25); toast('📚 Research hastened.'); changeMorale(2); }},
       {label:'No food to spare', outcome:'They understand, and move on.', run:()=>{}},
     ]},
   { id:'feast', ic:'🍲', title:'The Folk Ask for a Feast',
@@ -1002,7 +989,7 @@ const DECISIONS = [
   { id:'ruins', ic:'🗿', title:'Old Stones in the Wood',
     text:'Foragers report tumbled ruins at the treeline — mossy, half-buried, and possibly worth digging.',
     choices:[
-      {label:'Send diggers', outcome:'They set to the old stones...', run:()=>{ const r=Math.random(); if(r<0.55){ const g=gainResource('stone',18); toast('🗿 Dressed stone salvaged! +'+g); } else if(r<0.8){ coins+=12; toast('🗿 A cache of old coin! +12'); } else { toast('🗿 The dig collapses — a fright, no more.'); changeMorale(-3); } }},
+      {label:'Send diggers', outcome:'They set to the old stones...', run:()=>{ const r=Math.random(); if(r<0.55){ const g=gainResource('stone',18); toast('🗿 Dressed stone salvaged! +'+g); } else if(r<0.8){ G.coins+=12; toast('🗿 A cache of old coin! +12'); } else { toast('🗿 The dig collapses — a fright, no more.'); changeMorale(-3); } }},
       {label:'Leave them be', outcome:'Some things are best left sleeping.', run:()=>{}},
     ]},
 ];
@@ -1033,16 +1020,15 @@ function renderDecisionSheet(d){
   }));
 }
 /* ── DECREES ── toggleable hold-wide policies, each a lasting trade-off. */
-let decrees = { curfew:false, tithe:false, openGates:false, rationing:false };
 const DECREE_DEFS = [
   {id:'curfew',    ic:'🌙', name:'Curfew',      on:'Folk stay in after dark — raids are less likely, but spirits chafe.', good:'−30% night raid risk', bad:'−5 morale'},
   {id:'tithe',     ic:'💰', name:'Tithe',       on:'A daily levy fills the coffers, at the cost of goodwill.', good:'+coins each day', bad:'−6 morale'},
   {id:'openGates', ic:'🚪', name:'Open Gates',  on:'Word spreads that all are welcome — newcomers arrive faster, but the hold is easier to reach.', good:'faster immigration', bad:'+20% raid risk'},
   {id:'rationing', ic:'🥣', name:'Rationing',   on:'Careful portions stretch the stores, but hungry work is slow work.', good:'food lasts 20% longer', bad:'−6% work speed'},
 ];
-function decreeRaidMul(){ let m=1; if(decrees.curfew && typeof isNight==='function' && isNight()) m*=0.7; if(decrees.openGates) m*=1.2; return m; }
-function decreeHungerMul(){ return decrees.rationing ? 0.8 : 1; }
-function decreeWorkMul(){ return decrees.rationing ? 0.94 : 1; }
+function decreeRaidMul(){ let m=1; if(G.decrees.curfew && typeof isNight==='function' && isNight()) m*=0.7; if(G.decrees.openGates) m*=1.2; return m; }
+function decreeHungerMul(){ return G.decrees.rationing ? 0.8 : 1; }
+function decreeWorkMul(){ return G.decrees.rationing ? 0.94 : 1; }
 const ONBOARD_STEPS = [
   {hint:'👋 Welcome, steward. Tap 🔨 and raise a House to make room for more settlers.',
    done:()=>G.buildings.some(b=>b.type==='house')},
@@ -1051,44 +1037,43 @@ const ONBOARD_STEPS = [
   {hint:'🌾 Food is life. Build a Farm and assign a Farmer before the cold comes.',
    done:()=>G.buildings.some(b=>b.type==='farm') && G.villagers.some(v=>v.role==='farmer')},
   {hint:'❄️ Now stock food and firewood — and survive your first winter.',
-   done:()=>(journal.wintersEndured||0)>=1},
+   done:()=>(G.journal.wintersEndured||0)>=1},
 ];
 function updateOnboard(){
   const el=document.getElementById('onboard-ribbon'); if(!el) return;
-  if(onboardDone){ el.classList.add('hidden'); return; }
+  if(G.onboardDone){ el.classList.add('hidden'); return; }
   let step=null;
   for(const s of ONBOARD_STEPS){ let d=false; try{ d=s.done(); }catch(e){} if(!d){ step=s; break; } }
-  if(!step){ onboardDone=true; el.classList.add('hidden'); toast('✓ You\'ve found your feet, steward — the hold is yours.'); return; }
+  if(!step){ G.onboardDone=true; el.classList.add('hidden'); toast('✓ You\'ve found your feet, steward — the hold is yours.'); return; }
   const t=document.getElementById('onboard-text'); if(t) t.textContent=step.hint;
   el.classList.remove('hidden');
 }
 function updateStatuses(){
   const el=document.getElementById('statuses'); if(!el) return;
   const pills=[];
-  if(typeof climate!=='undefined' && climate){ const c=CLIMATE_DEFS[climate.type]; pills.push({t:climate.ic+' '+c.name, c: climate.type==='fair'?'good':'warn'}); }
-  if(typeof festivalBoon!=='undefined' && festivalBoon){ const b=FESTIVAL_BOONS.find(x=>x.id===festivalBoon); if(b) pills.push({t:b.ic+' '+b.name, c:'good'}); }
-  if(typeof tradeRoutes!=='undefined' && tradeRoutes.length) pills.push({t:'🐫 '+tradeRoutes.length+' route'+(tradeRoutes.length>1?'s':''), c:''});
+  if(typeof G.climate!=='undefined' && G.climate){ const c=CLIMATE_DEFS[G.climate.type]; pills.push({t:G.climate.ic+' '+c.name, c: G.climate.type==='fair'?'good':'warn'}); }
+  if(typeof G.festivalBoon!=='undefined' && G.festivalBoon){ const b=FESTIVAL_BOONS.find(x=>x.id===G.festivalBoon); if(b) pills.push({t:b.ic+' '+b.name, c:'good'}); }
+  if(typeof G.tradeRoutes!=='undefined' && G.tradeRoutes.length) pills.push({t:'🐫 '+G.tradeRoutes.length+' route'+(G.tradeRoutes.length>1?'s':''), c:''});
   if(G.buildings.some(b=>b._fire)) pills.push({t:'🔥 Fire!', c:'warn'});
-  if(typeof plague!=='undefined' && plague) pills.push({t:'🤢 Blight', c:'warn'});
+  if(typeof G.plague!=='undefined' && G.plague) pills.push({t:'🤢 Blight', c:'warn'});
   el.innerHTML = pills.map(p=>`<span class="status-pill ${p.c}">${p.t}</span>`).join('');
 }
 /* ── DEEDS ── one-time achievements; earned map is id→day, persists in saves */
-let deeds = {};
 const DEED_DEFS = [
   {id:'firstHome',     ic:'🏠', name:'A Roof Raised',   desc:'Build your first house.',              reward:{coins:5},              check:()=>G.buildings.some(b=>b.type==='house')},
   {id:'hamlet',        ic:'🏘️', name:'Hamlet',          desc:'Grow the hold to 10 settlers.',        reward:{coins:10},             check:()=>G.villagers.length>=10},
   {id:'township',      ic:'🏰', name:'Township',        desc:'Grow the hold to 20 settlers.',        reward:{coins:20},             check:()=>G.villagers.length>=20},
-  {id:'firstWinter',   ic:'❄️', name:'First Winter',    desc:'Survive your first winter.',           reward:{coins:12,food:20},     check:()=>journal.wintersEndured>=1},
-  {id:'ironHeart',     ic:'🥶', name:'Iron Heart',      desc:'Endure three winters.',                reward:{coins:25},             check:()=>journal.wintersEndured>=3},
+  {id:'firstWinter',   ic:'❄️', name:'First Winter',    desc:'Survive your first winter.',           reward:{coins:12,food:20},     check:()=>G.journal.wintersEndured>=1},
+  {id:'ironHeart',     ic:'🥶', name:'Iron Heart',      desc:'Endure three winters.',                reward:{coins:25},             check:()=>G.journal.wintersEndured>=3},
   {id:'bridgeBuilder', ic:'🌉', name:'Bridge Builder',  desc:'Span the river with a bridge.',        reward:{coins:10,planks:6},    check:()=>G.buildings.some(b=>b.type==='bridge')},
   {id:'fullGranary',   ic:'🌾', name:'Full Granary',    desc:'Stockpile 200 provisions.',            reward:{coins:15},             check:()=>(G.stockpile.food||0)>=200},
   {id:'timberBaron',   ic:'🪵', name:'Timber Baron',    desc:'Hold 300 timber at once.',             reward:{coins:15},             check:()=>(G.stockpile.wood||0)>=300},
-  {id:'firstWed',      ic:'💞', name:'A Match Made',     desc:'See your first wedding.',              reward:{coins:8},              check:()=>(journal.weddings||0)>=1},
-  {id:'newLife',       ic:'👶', name:'New Life',        desc:'Welcome a child born in the hold.',    reward:{coins:8,food:15},      check:()=>(journal.childrenBorn||0)>=1},
+  {id:'firstWed',      ic:'💞', name:'A Match Made',     desc:'See your first wedding.',              reward:{coins:8},              check:()=>(G.journal.weddings||0)>=1},
+  {id:'newLife',       ic:'👶', name:'New Life',        desc:'Welcome a child born in the hold.',    reward:{coins:8,food:15},      check:()=>(G.journal.childrenBorn||0)>=1},
   {id:'greyHairs',     ic:'🧓', name:'Grey Hairs',      desc:'A settler lives to become an elder.',  reward:{coins:12},             check:()=>G.villagers.some(v=>v.stage==='elder')},
-  {id:'remembered',    ic:'🪦', name:'Remembered',      desc:'Lay a settler to rest in the grove.',  reward:{coins:8},              check:()=>(journal.passed||0)>=1},
-  {id:'heldGate',      ic:'🛡️', name:'Held the Gate',   desc:'Survive a raid on the hold.',          reward:{coins:15,stone:15},    check:()=>wolfEvents>=1},
-  {id:'scholar',       ic:'🔬', name:'Scholar',         desc:'Complete a research along the oak.',   reward:{coins:12},             check:()=>Object.keys(researched||{}).length>=1},
+  {id:'remembered',    ic:'🪦', name:'Remembered',      desc:'Lay a settler to rest in the grove.',  reward:{coins:8},              check:()=>(G.journal.passed||0)>=1},
+  {id:'heldGate',      ic:'🛡️', name:'Held the Gate',   desc:'Survive a raid on the hold.',          reward:{coins:15,stone:15},    check:()=>G.wolfEvents>=1},
+  {id:'scholar',       ic:'🔬', name:'Scholar',         desc:'Complete a research along the oak.',   reward:{coins:12},             check:()=>Object.keys(G.researched||{}).length>=1},
   {id:'master',        ic:'★', name:'Master of the Craft',desc:'A settler masters their trade.',      reward:{coins:15},             check:()=>G.villagers.some(v=>skillTier(v,v.role).label==='Master')},
 ];
 function rewardText(r){
@@ -1103,7 +1088,7 @@ function rewardText(r){
 }
 function grantReward(r){
   if(!r) return;
-  if(r.coins){ coins += r.coins; logCoinIn('deeds', r.coins); }
+  if(r.coins){ G.coins += r.coins; logCoinIn('deeds', r.coins); }
   if(r.food) gainResource('food', r.food);
   if(r.wood) gainResource('wood', r.wood);
   if(r.stone) gainResource('stone', r.stone);
@@ -1111,10 +1096,10 @@ function grantReward(r){
 }
 function checkDeeds(){
   for(const d of DEED_DEFS){
-    if(deeds[d.id]) continue;
+    if(G.deeds[d.id]) continue;
     let earned=false; try{ earned = d.check(); }catch(e){ earned=false; }
     if(earned){
-      deeds[d.id] = dayCount;
+      G.deeds[d.id] = G.dayCount;
       grantReward(d.reward);
       const rt = rewardText(d.reward);
       toast('🏅 Deed earned — '+d.ic+' '+d.name+(rt?' (+'+rt+')':''));
@@ -1143,22 +1128,21 @@ function rollWeather(){
 }
 /* ── CLIMATE SPELLS ── multi-day conditions layered over daily weather, with
    real bite: droughts, cold snaps, and fair spells. Announced and temporary. */
-let climate = null; // {type, ic, name, endsDay}
 const CLIMATE_DEFS = {
   drought:  {ic:'🏜️', name:'Drought',    farm:22.6,  fire:1.8, hunger:1.0, fatigue:1.0, morale:-4, seasons:[1,2]},
   coldsnap: {ic:'🥶', name:'Cold Snap',   farm:0.8,  fire:0.4, hunger:1.25,fatigue:1.2, morale:-4, seasons:[2,3]},
   fair:     {ic:'🌤️', name:'Fair Spell',  farm:1.2,  fire:0.8, hunger:1.0, fatigue:0.9, morale:5,  seasons:[0,1,2]},
 };
 function rollClimate(){
-  if(climate){ if(dayCount>=climate.endsDay){ toast(climate.ic+' The '+CLIMATE_DEFS[climate.type].name.toLowerCase()+' has broken.'); climate=null; } return; }
+  if(G.climate){ if(G.dayCount>=G.climate.endsDay){ toast(G.climate.ic+' The '+CLIMATE_DEFS[G.climate.type].name.toLowerCase()+' has broken.'); G.climate=null; } return; }
   if(gameMode.forceWinter) return; // Iron Winter is its own climate
-  if(dayCount<=3 || Math.random()>0.16) return; // uncommon
+  if(G.dayCount<=3 || Math.random()>0.16) return; // uncommon
   const s = seasonIndex();
   const options = Object.keys(CLIMATE_DEFS).filter(k=>CLIMATE_DEFS[k].seasons.includes(s));
   if(!options.length) return;
   const type = options[Math.floor(Math.random()*options.length)];
   const d = CLIMATE_DEFS[type];
-  climate = { type, ic:d.ic, name:d.name, endsDay: dayCount + 2 + Math.floor(Math.random()*2) };
+  G.climate = { type, ic:d.ic, name:d.name, endsDay: G.dayCount + 2 + Math.floor(Math.random()*2) };
   const blurb = {
     drought:'🏜️ A drought settles over the valley — fields wither and timber turns tinder-dry. Mind the fire.',
     coldsnap:'🥶 A cold snap grips the hold — folk burn through food and tire fast. Keep the stores full.',
@@ -1170,46 +1154,45 @@ function rollClimate(){
 /* ── DISASTER: BLIGHT ── a disease outbreak. Several settlers fall ill at once,
    and it spreads between those standing close while it lasts. Herbal Lore
    softens it; a Healer (shop/event) clears the currently sick. */
-let plague = null; // {endsDay}
 function rollPlague(){
-  if(plague){
-    if(dayCount>=plague.endsDay){ plague=null; toast('🌿 The sickness has run its course — the hold breathes easier.'); }
+  if(G.plague){
+    if(G.dayCount>=G.plague.endsDay){ G.plague=null; toast('🌿 The sickness has run its course — the hold breathes easier.'); }
     return;
   }
-  if(dayCount<=4 || G.villagers.length<5) return;
+  if(G.dayCount<=4 || G.villagers.length<5) return;
   if(Math.random() > 0.09) return; // rare
-  plague = { endsDay: dayCount + 2 + Math.floor(Math.random()*2) };
-  const frac = researched.herbs ? 0.18 : 0.32;
+  G.plague = { endsDay: G.dayCount + 2 + Math.floor(Math.random()*2) };
+  const frac = G.researched.herbs ? 0.18 : 0.32;
   const healthy = G.villagers.filter(v=>!v.sick && v.stage!=='child');
   const target = Math.max(1, Math.round(healthy.length*frac));
   let n=0;
   for(let i=0;i<target && healthy.length;i++){
     const v = healthy.splice(Math.floor(Math.random()*healthy.length),1)[0];
-    v.sick=true; v.sickTimer=(25+Math.random()*20)*(researched.herbs?0.6:1); n++;
+    v.sick=true; v.sickTimer=(25+Math.random()*20)*(G.researched.herbs?0.6:1); n++;
   }
   toast('🤢 A blight sweeps the hold — '+n+' settler'+(n>1?'s':'')+' have fallen ill! Seek a healer, and keep the sick from crowding.', true);
   if(typeof sfx==='function') sfx('blight');
   if(typeof chron==='function') chron('plague');
 }
 function plagueTick(dt){
-  if(!plague) return;
+  if(!G.plague) return;
   const sick = G.villagers.filter(v=>v.sick);
   if(!sick.length) return;
-  const spread = (researched.herbs ? 0.02 : 0.05) * dt;
+  const spread = (G.researched.herbs ? 0.02 : 0.05) * dt;
   for(const v of G.villagers){
     if(v.sick || v.stage==='child') continue;
     for(const s of sick){
       if(dist2(v.gx,v.gy,s.gx,s.gy) < 4){
-        if(Math.random() < spread){ v.sick=true; v.sickTimer=(25+Math.random()*20)*(researched.herbs?0.6:1); }
+        if(Math.random() < spread){ v.sick=true; v.sickTimer=(25+Math.random()*20)*(G.researched.herbs?0.6:1); }
         break;
       }
     }
   }
 }
-function climateFarmMul(){ return climate ? CLIMATE_DEFS[climate.type].farm : 1; }
-function climateFireMul(){ return climate ? CLIMATE_DEFS[climate.type].fire : 1; }
-function climateHungerMul(){ return climate ? CLIMATE_DEFS[climate.type].hunger : 1; }
-function climateFatigueMul(){ return climate ? CLIMATE_DEFS[climate.type].fatigue : 1; }
+function climateFarmMul(){ return G.climate ? CLIMATE_DEFS[G.climate.type].farm : 1; }
+function climateFireMul(){ return G.climate ? CLIMATE_DEFS[G.climate.type].fire : 1; }
+function climateHungerMul(){ return G.climate ? CLIMATE_DEFS[G.climate.type].hunger : 1; }
+function climateFatigueMul(){ return G.climate ? CLIMATE_DEFS[G.climate.type].fatigue : 1; }
 function weatherMoveMul(){ return weather.type==='storm' ? 0.8 : (weather.type==='rain' ? 0.9 : 1); }
 function weatherFarmMul(){ return (weather.type==='rain' ? 1.25 : 1) * climateFarmMul(); }
 // Deep winter freezes the river solid: anyone can cross (including raiders —
@@ -1296,10 +1279,10 @@ function buildDiagnostics(){
   const lines = [];
   lines.push('## Oakenfall Report');
   lines.push('- Version: ' + GAME_VERSION + ' · Mode: ' + gameModeId + ' · Map: ' + G.MAP_SIZE);
-  lines.push('- Day ' + dayCount + ' · ' + seasonName() + ' · ' + weather.label + ' · Tier: ' + HOLD_TIERS[currentTierIdx].name);
-  lines.push('- Pop: ' + G.villagers.length + '/' + popCapacity() + ' · Buildings: ' + G.buildings.length + ' · Coins: ' + coins);
+  lines.push('- Day ' + G.dayCount + ' · ' + seasonName() + ' · ' + weather.label + ' · Tier: ' + HOLD_TIERS[currentTierIdx].name);
+  lines.push('- Pop: ' + G.villagers.length + '/' + popCapacity() + ' · Buildings: ' + G.buildings.length + ' · Coins: ' + G.coins);
   lines.push('- Stock: ' + Object.entries(G.stockpile).map(([k,v])=>k+':'+Math.round(v)).join(' '));
-  lines.push('- Researched: ' + (Object.keys(researched).join(', ') || 'none') + (activeResearch ? ' (researching: '+activeResearch.id+')' : ''));
+  lines.push('- Researched: ' + (Object.keys(G.researched).join(', ') || 'none') + (G.activeResearch ? ' (researching: '+G.activeResearch.id+')' : ''));
   lines.push('- Device: ' + (navigator.userAgent||'?').slice(0,110));
   lines.push('- Screen: ' + cssW + 'x' + cssH + ' @' + canvasDPR + 'x · ' + (window.matchMedia('(orientation: landscape)').matches ? 'landscape' : 'portrait'));
   if(errorLog.length){
@@ -1378,13 +1361,9 @@ function renderFeedbackSheet(kind){
   });
 }
 
-let coins = 0;
 // Trader's ledger — cumulative coin flow by category, for the economy view.
-let ledger = { in:{bounties:0, deeds:0, routes:0, quests:0, tithe:0}, out:{shop:0} };
-function logCoinIn(cat, amt){ if(!ledger.in[cat]) ledger.in[cat]=0; ledger.in[cat]+=amt; }
-function logCoinOut(cat, amt){ if(!ledger.out[cat]) ledger.out[cat]=0; ledger.out[cat]+=amt; }
-let dailyBounties = [];   // [{id,key,n,reward,done,desc}]
-let dailyProgress = {};   // per-day counters
+function logCoinIn(cat, amt){ if(!G.ledger.in[cat]) G.ledger.in[cat]=0; G.ledger.in[cat]+=amt; }
+function logCoinOut(cat, amt){ if(!G.ledger.out[cat]) G.ledger.out[cat]=0; G.ledger.out[cat]+=amt; }
 const BOUNTY_POOL = [
   { id:'bwood',  key:'wood',  min:30, max:60, ic:'🪵', name:'Timber Drive',   d:n=>'Gather '+n+' wood today' },
   { id:'bstone', key:'stone', min:20, max:45, ic:'🪨', name:'Quarry Push',    d:n=>'Gather '+n+' stone today' },
@@ -1409,21 +1388,16 @@ const BANNER_UNLOCK_COLORS = {
   ember:     ['#c2451f','#e08a2c'],   // ember red, forge orange
 };
 let bannerPalette = BANNER_COLORS.slice();
-let bannerIdx = 0;
-let holdName = 'Oakenfall'; // the player's name for their settlement
-let crestChoice = 0;        // starting banner/crest colour index chosen at creation
 function applyPatronBanners(){
   bannerPalette = BANNER_COLORS.slice();
   for(const sku of Object.keys(BANNER_UNLOCK_COLORS)){
-    if(typeof unlocks!=='undefined' && unlocks[sku]) bannerPalette = bannerPalette.concat(BANNER_UNLOCK_COLORS[sku]);
+    if(typeof G.unlocks!=='undefined' && G.unlocks[sku]) bannerPalette = bannerPalette.concat(BANNER_UNLOCK_COLORS[sku]);
   }
-  if(bannerIdx >= bannerPalette.length) bannerIdx = 0;
+  if(G.bannerIdx >= bannerPalette.length) G.bannerIdx = 0;
 }
 
 /* ── TRADE ROUTES ── recurring caravan contracts: deliver goods every few days
    for coins. Needs a Trading Post. Ties the merchant economy to logistics. */
-let tradeRoutes = [];   // active: {id,name,ic,giveType,giveAmt,coins,everyDays,nextDay,missed}
-let routeOffers = [];   // pending contract offers to accept
 const ROUTE_GOODS = [
   {type:'planks', ic:'🪚', label:'planks', unit:2.4},
   {type:'bread',  ic:'🍞', label:'bread',  unit:2.2},
@@ -1442,39 +1416,39 @@ function makeRouteOffer(){
     giveType:g.type, giveAmt:amt, coins, everyDays:every };
 }
 function refreshRouteOffers(){
-  while(routeOffers.length < 3) routeOffers.push(makeRouteOffer());
+  while(G.routeOffers.length < 3) G.routeOffers.push(makeRouteOffer());
 }
 function acceptRoute(id){
   if(!hasActiveBuilding('tradingPost')){ toast('Build a Trading Post to broker caravan routes.', true); return; }
-  if(tradeRoutes.length >= 3){ toast('You can hold at most three trade routes.', true); return; }
-  const i = routeOffers.findIndex(o=>o.id===id); if(i<0) return;
-  const o = routeOffers.splice(i,1)[0];
-  o.nextDay = dayCount + o.everyDays; o.missed = 0;
-  tradeRoutes.push(o);
+  if(G.tradeRoutes.length >= 3){ toast('You can hold at most three trade routes.', true); return; }
+  const i = G.routeOffers.findIndex(o=>o.id===id); if(i<0) return;
+  const o = G.routeOffers.splice(i,1)[0];
+  o.nextDay = G.dayCount + o.everyDays; o.missed = 0;
+  G.tradeRoutes.push(o);
   toast(o.ic+' Caravan route to '+o.name+' agreed — '+o.giveAmt+' '+ROUTE_GOODS.find(g=>g.type===o.giveType).label+' every '+o.everyDays+' days.');
   refreshRouteOffers();
   renderTradeRoutesSheet();
 }
 function cancelRoute(id){
-  const i = tradeRoutes.findIndex(r=>r.id===id); if(i<0) return;
-  const r = tradeRoutes.splice(i,1)[0];
+  const i = G.tradeRoutes.findIndex(r=>r.id===id); if(i<0) return;
+  const r = G.tradeRoutes.splice(i,1)[0];
   toast('🐫 The route to '+r.name+' is dissolved.');
   renderTradeRoutesSheet();
 }
 // Called at each dawn: fulfil or miss due caravans.
 function processTradeRoutes(){
-  for(const r of tradeRoutes.slice()){
-    if(dayCount < r.nextDay) continue;
+  for(const r of G.tradeRoutes.slice()){
+    if(G.dayCount < r.nextDay) continue;
     const g = ROUTE_GOODS.find(x=>x.type===r.giveType);
     if((G.stockpile[r.giveType]||0) >= r.giveAmt){
       G.stockpile[r.giveType] -= r.giveAmt;
-      coins += r.coins; logCoinIn('routes', r.coins);
+      G.coins += r.coins; logCoinIn('routes', r.coins);
       r.missed = 0;
       toast(r.ic+' Caravan to '+r.name+' paid 💰'+r.coins+' for '+r.giveAmt+' '+g.label+'.');
     } else {
       r.missed = (r.missed||0) + 1;
       if(r.missed >= 2){
-        tradeRoutes.splice(tradeRoutes.indexOf(r),1);
+        G.tradeRoutes.splice(G.tradeRoutes.indexOf(r),1);
         toast('🐫 The route to '+r.name+' was broken — the caravan left empty twice.', true);
         G.villagers.forEach(v=>{ if(v.morale!==undefined) v.morale = clamp(v.morale-4,0,100); });
         continue;
@@ -1482,14 +1456,14 @@ function processTradeRoutes(){
         toast('⚠️ No '+g.label+' ready for the '+r.name+' caravan — one more miss ends the route.', true);
       }
     }
-    r.nextDay = dayCount + r.everyDays;
+    r.nextDay = G.dayCount + r.everyDays;
   }
 }
 function renderLedgerSheet(){
   const IN = { bounties:['🎯','Daily bounties'], quests:['📜','Goals'], deeds:['🏅','Deeds'], routes:['🐫','Trade routes'], tithe:['💰','Tithe'] };
   const OUT = { shop:['🛒','Hold Shop'] };
-  const totIn = Object.values(ledger.in).reduce((a,b)=>a+b,0);
-  const totOut = Object.values(ledger.out).reduce((a,b)=>a+b,0);
+  const totIn = Object.values(G.ledger.in).reduce((a,b)=>a+b,0);
+  const totOut = Object.values(G.ledger.out).reduce((a,b)=>a+b,0);
   const row = (ic,label,amt,tot,sign)=>{
     const pct = tot>0 ? Math.round(amt/tot*100) : 0;
     return `<div class="ledger-row"><span class="lg-ic">${ic}</span><span class="lg-label">${label}</span>
@@ -1497,14 +1471,14 @@ function renderLedgerSheet(){
       <span class="lg-amt">${sign>0?'+':'−'}${amt}</span></div>`;
   };
   sheetContent.innerHTML = `
-    <div class="sheet-sub">In the coffers now: <b>💰 ${coins}</b>.</div>
+    <div class="sheet-sub">In the coffers now: <b>💰 ${G.coins}</b>.</div>
     <div class="sheet-sub" style="margin-top:8px;"><b>Coin earned</b> — 💰${totIn} all-time</div>
     <div class="roster-list">
-      ${Object.keys(IN).map(k=>row(IN[k][0], IN[k][1], ledger.in[k]||0, totIn, 1)).join('')}
+      ${Object.keys(IN).map(k=>row(IN[k][0], IN[k][1], G.ledger.in[k]||0, totIn, 1)).join('')}
     </div>
     <div class="sheet-sub" style="margin-top:10px;"><b>Coin spent</b> — 💰${totOut} all-time</div>
     <div class="roster-list">
-      ${Object.keys(OUT).map(k=>row(OUT[k][0], OUT[k][1], ledger.out[k]||0, totOut, -1)).join('')}
+      ${Object.keys(OUT).map(k=>row(OUT[k][0], OUT[k][1], G.ledger.out[k]||0, totOut, -1)).join('')}
     </div>
     <div class="sheet-sub" style="margin-top:10px;opacity:.8;">Net across the hold's life: <b>${totIn-totOut>=0?'+':'−'}${Math.abs(totIn-totOut)}</b> coins.</div>`;
 }
@@ -1515,9 +1489,9 @@ function renderTradeRoutesSheet(){
   sheetContent.innerHTML = `
     <div class="sheet-sub">Recurring caravan contracts — deliver goods on schedule for a steady flow of coins. Requires a Trading Post.</div>
     ${!hasPost ? '<div class="sheet-sub" style="color:#e8b2a4;">⚠️ No active Trading Post — build one to broker routes.</div>' : ''}
-    <div class="sheet-sub" style="margin-top:8px;"><b>Active routes</b> (${tradeRoutes.length}/3)</div>
+    <div class="sheet-sub" style="margin-top:8px;"><b>Active routes</b> (${G.tradeRoutes.length}/3)</div>
     <div class="roster-list">
-      ${tradeRoutes.length ? tradeRoutes.map(r=>`<div class="route-row">
+      ${G.tradeRoutes.length ? G.tradeRoutes.map(r=>`<div class="route-row">
         <span style="font-size:20px;">${r.ic}</span>
         <span class="rr-main"><b>${r.name}</b><br><span class="rr-sub">${r.giveAmt} ${lbl(r.giveType)} every ${r.everyDays}d → 💰${r.coins} · next day ${r.nextDay}${r.missed?` · <span style="color:#e8b2a4;">missed once</span>`:''}</span></span>
         <button class="chip" data-cancel="${r.id}">End</button>
@@ -1525,7 +1499,7 @@ function renderTradeRoutesSheet(){
     </div>
     <div class="sheet-sub" style="margin-top:10px;"><b>Caravans seeking contracts</b></div>
     <div class="roster-list">
-      ${routeOffers.map(o=>`<button class="action-btn list-row${(!hasPost||tradeRoutes.length>=3)?' dim':''}" data-accept="${o.id}">
+      ${G.routeOffers.map(o=>`<button class="action-btn list-row${(!hasPost||G.tradeRoutes.length>=3)?' dim':''}" data-accept="${o.id}">
         <span style="font-size:20px;">${o.ic}</span>
         <span><b>${o.name}</b><br><span style="font-size:11.5px;opacity:.8;">${o.giveAmt} ${lbl(o.giveType)} every ${o.everyDays} days → 💰${o.coins} each run</span></span>
       </button>`).join('')}
@@ -1536,26 +1510,26 @@ function renderTradeRoutesSheet(){
 function buyShopItem(id){
   const it = SHOP_ITEMS.find(x=>x.id===id);
   if(!it) return;
-  if(coins < it.cost){ toast('Not enough coins — complete bounties and goals to earn more.', true); return; }
-  const _coinsBefore = coins;
-  if(id==='festival'){ if(activeEvent){ toast('An event is already underway.', true); return; } coins-=it.cost; activeEvent={type:'festival',endsAt:worldTime+55}; toast('🎉 A feast day begins!'); sfx('festival'); }
-  else if(id==='merchant'){ if(activeEvent){ toast('An event is already underway.', true); return; } coins-=it.cost; activeEvent={type:'merchant',endsAt:worldTime+70}; toast('🧳 A merchant arrives at your call!'); }
-  else if(id==='healer'){ const n=G.villagers.filter(v=>v.sick).length; if(!n){ toast('No one is sick.', true); return; } coins-=it.cost; G.villagers.forEach(v=>{v.sick=false;v.sickTimer=0;}); toast('🌿 The healer cures '+n+' settler'+(n>1?'s':'')+'.'); }
-  else if(id==='repairs'){ coins-=it.cost; let n=0; G.buildings.forEach(b=>{ if(b.condition!==undefined&&b.condition<100){b.condition=100;n++;} }); toast('🔧 '+n+' building'+(n!==1?'s':'')+' restored.'); }
-  else if(id==='rations'){ coins-=it.cost; const got=gainResource('food',25); toast('🥖 +'+got+' food delivered.'); }
-  else if(id==='banner'){ coins-=it.cost; bannerIdx=(bannerIdx+1)%bannerPalette.length; toast('🚩 The hold flies new colours!'+(bannerPalette.length>BANNER_COLORS.length?'':'')); }
-  if(_coinsBefore > coins) logCoinOut('shop', _coinsBefore - coins);
+  if(G.coins < it.cost){ toast('Not enough coins — complete bounties and goals to earn more.', true); return; }
+  const _coinsBefore = G.coins;
+  if(id==='festival'){ if(activeEvent){ toast('An event is already underway.', true); return; } G.coins-=it.cost; activeEvent={type:'festival',endsAt:G.worldTime+55}; toast('🎉 A feast day begins!'); sfx('festival'); }
+  else if(id==='merchant'){ if(activeEvent){ toast('An event is already underway.', true); return; } G.coins-=it.cost; activeEvent={type:'merchant',endsAt:G.worldTime+70}; toast('🧳 A merchant arrives at your call!'); }
+  else if(id==='healer'){ const n=G.villagers.filter(v=>v.sick).length; if(!n){ toast('No one is sick.', true); return; } G.coins-=it.cost; G.villagers.forEach(v=>{v.sick=false;v.sickTimer=0;}); toast('🌿 The healer cures '+n+' settler'+(n>1?'s':'')+'.'); }
+  else if(id==='repairs'){ G.coins-=it.cost; let n=0; G.buildings.forEach(b=>{ if(b.condition!==undefined&&b.condition<100){b.condition=100;n++;} }); toast('🔧 '+n+' building'+(n!==1?'s':'')+' restored.'); }
+  else if(id==='rations'){ G.coins-=it.cost; const got=gainResource('food',25); toast('🥖 +'+got+' food delivered.'); }
+  else if(id==='banner'){ G.coins-=it.cost; G.bannerIdx=(G.bannerIdx+1)%bannerPalette.length; toast('🚩 The hold flies new colours!'+(bannerPalette.length>BANNER_COLORS.length?'':'')); }
+  if(_coinsBefore > G.coins) logCoinOut('shop', _coinsBefore - G.coins);
   renderHubSheet('shop');
 }
 function renderShopSheet(){
   sheetContent.innerHTML = `
-    <div class="sheet-sub">Coins: <b>${coins}</b> — earned from daily bounties and completed goals.</div>
+    <div class="sheet-sub">Coins: <b>${G.coins}</b> — earned from daily bounties and completed goals.</div>
     ${SHOP_ITEMS.map(it=>`
-      <button class="action-btn list-row${coins<it.cost?' dim':''}" data-shop="${it.id}">
+      <button class="action-btn list-row${G.coins<it.cost?' dim':''}" data-shop="${it.id}">
         <div>${it.ic} <span class="rt">${it.name}</span> — 💰${it.cost}<br><span class="rd">${it.desc}</span></div>
       </button>`).join('')}
     <button class="action-btn list-row" id="routes-btn" style="margin-top:8px;">
-      <div>🐫 <span class="rt">Trade Routes</span>${tradeRoutes.length?` — ${tradeRoutes.length} active`:''}<br><span class="rd">Recurring caravan contracts for a steady coin income.</span></div>
+      <div>🐫 <span class="rt">Trade Routes</span>${G.tradeRoutes.length?` — ${G.tradeRoutes.length} active`:''}<br><span class="rd">Recurring caravan contracts for a steady coin income.</span></div>
     </button>
     <button class="action-btn list-row" id="ledger-btn" style="margin-top:6px;">
       <div>📒 <span class="rt">Trader's Ledger</span><br><span class="rd">Where your coins come from and where they go.</span></div>
@@ -1571,20 +1545,20 @@ function renderShopSheet(){
 }
 
 function rollDailyBounties(){
-  dailyProgress = { wood:0, stone:0, food:0, bread:0, planks:0, flour:0, built:0 };
+  G.dailyProgress = { wood:0, stone:0, food:0, bread:0, planks:0, flour:0, built:0 };
   const pool = [...BOUNTY_POOL];
-  dailyBounties = [];
+  G.dailyBounties = [];
   for(let i=0;i<2 && pool.length;i++){
     const idx = Math.floor(Math.random()*pool.length);
     const bt = pool.splice(idx,1)[0];
     const n = bt.min + Math.floor(Math.random()*(bt.max-bt.min+1));
-    dailyBounties.push({ id:bt.id, key:bt.key, n, reward: 8+Math.floor(n/4), done:false, ic:bt.ic, name:bt.name, desc:bt.d(n) });
+    G.dailyBounties.push({ id:bt.id, key:bt.key, n, reward: 8+Math.floor(n/4), done:false, ic:bt.ic, name:bt.name, desc:bt.d(n) });
   }
 }
 function checkBounties(){
-  for(const b of dailyBounties){
-    if(!b.done && (dailyProgress[b.key]||0) >= b.n){
-      b.done = true; { const c = Math.round(b.reward * (gameMode.bountyCoinMul||1)); coins += c; logCoinIn('bounties', c); } sfx('coin'); buzz(12);
+  for(const b of G.dailyBounties){
+    if(!b.done && (G.dailyProgress[b.key]||0) >= b.n){
+      b.done = true; { const c = Math.round(b.reward * (gameMode.bountyCoinMul||1)); G.coins += c; logCoinIn('bounties', c); } sfx('coin'); buzz(12);
       toast('💰 Bounty complete: '+b.name+' — +'+Math.round(b.reward*(gameMode.bountyCoinMul||1))+' coins!');
     }
   }
@@ -1597,19 +1571,18 @@ function relTo(v,o){ return (v.relations||(v.relations=[])).find(r=>r.name===o.n
 const _relMoments = new Set();
 function remember(v,text){ if(!v.memories)v.memories=[]; if(v.memories[0]===text)return; v.memories.unshift(text); if(v.memories.length>4)v.memories.pop(); }
 // The Chronicle — a curated, dated story of the hold's significant moments.
-let chronicle = [];
 function chronicleAdd(text){
-  chronicle.unshift({ day:(typeof dayCount!=='undefined'?dayCount:1), season:(typeof seasonName==='function'?seasonName():''), text });
-  if(chronicle.length>80) chronicle.pop();
+  G.chronicle.unshift({ day:(typeof G.dayCount!=='undefined'?G.dayCount:1), season:(typeof seasonName==='function'?seasonName():''), text });
+  if(G.chronicle.length>80) G.chronicle.pop();
 }
 function pickOne(a){ return a[Math.floor(Math.random()*a.length)]; }
 // Varied phrasings so the chronicle reads written, not logged.
 function chron(type, a, b, n){
   const T = {
     founding:[
-      'The first settlers raised the Town Center of '+holdName+' and made camp beneath the pines.',
-      'Here '+holdName+' began — a handful of souls, a fire against the dark, and the whole wood watching.',
-      'Smoke rose over the valley for the first time; the folk of '+holdName+' had come to stay.'],
+      'The first settlers raised the Town Center of '+G.holdName+' and made camp beneath the pines.',
+      'Here '+G.holdName+' began — a handful of souls, a fire against the dark, and the whole wood watching.',
+      'Smoke rose over the valley for the first time; the folk of '+G.holdName+' had come to stay.'],
     friends:[
       a+' and '+b+' became fast friends.',
       'A firm friendship took root between '+a+' and '+b+'.',
@@ -1713,7 +1686,7 @@ function memorialSpot(){
   // Position by the monotonic count of the departed, wrapping over the grove's
   // 40 plots so that when an old grave is reclaimed a new one takes its place
   // (rather than every grave stacking once the cap is reached).
-  const n=(journal.passed||0)%40;
+  const n=(G.journal.passed||0)%40;
   return { gx: G.TC_X - 4 + (n%4)*0.85, gy: G.TC_Y + 3 + Math.floor(n/4)*0.85 };
 }
 function agingTick(dt){
@@ -1748,7 +1721,7 @@ function passVillager(v){
   // The grove is finite — the oldest graves are quietly reclaimed by the forest
   // (keeps the render list and save bounded over very long games).
   if(G.memorials.length > 40) G.memorials.shift();
-  journal.passed = (journal.passed||0)+1;
+  G.journal.passed = (G.journal.passed||0)+1;
   const tier = skillTier(v, v.role);
   if(tier.label==='Master'){
     toast('🕊️ '+v.name+', a Master '+roleLabel(v.role)+', has passed at '+Math.floor((v.age||2)*4)+' seasons — a grievous loss to the hold.');
@@ -1770,7 +1743,7 @@ function passVillager(v){
    second — every idle settler asks the same question. */
 let _needCache = null, _needAt = -1;
 function roleNeedScores(){
-  if(_needCache && worldTime - _needAt < 1) return _needCache;
+  if(_needCache && G.worldTime - _needAt < 1) return _needCache;
   const pop = Math.max(1, G.villagers.length);
   const count = {};
   for(const v of G.villagers) count[v.role] = (count[v.role]||0) + 1;
@@ -1810,7 +1783,7 @@ function roleNeedScores(){
     byHand('hunter', hungry*0.5);
   }
   out.sort((a,b)=>b.score - a.score);
-  _needCache = out; _needAt = worldTime;
+  _needCache = out; _needAt = G.worldTime;
   return out;
 }
 /* An unemployed adult takes up the most-needed trade — unless the hold is on
@@ -1832,9 +1805,9 @@ function seekWork(v){
    nothing moves unless the need is substantially greater elsewhere. */
 function maybeSwitchTrade(v){
   if(v.stage==='child' || v.role==='idle') return false;
-  if(v._tradeCheck === undefined) v._tradeCheck = worldTime + 20 + Math.random()*30;
-  if(worldTime < v._tradeCheck) return false;
-  v._tradeCheck = worldTime + 30 + Math.random()*30;
+  if(v._tradeCheck === undefined) v._tradeCheck = G.worldTime + 20 + Math.random()*30;
+  if(G.worldTime < v._tradeCheck) return false;
+  v._tradeCheck = G.worldTime + 30 + Math.random()*30;
   if(G.buildings.some(b=>b._fire>0)) return false;
   const scores = roleNeedScores();
   if(!scores.length) return false;
@@ -1941,7 +1914,7 @@ function familyTick(dt){
         a.morale=clamp(a.morale+15,0,100); b2.morale=clamp(b2.morale+15,0,100);
         toast('💞 '+a.name+' and '+b2.name+' have wed beneath the pines!');
         chron('wed', a.name, b2.name);
-        journal.weddings=(journal.weddings||0)+1;
+        G.journal.weddings=(G.journal.weddings||0)+1;
       }
     }
   }
@@ -1960,7 +1933,7 @@ function familyTick(dt){
         child.age = 0; child.stage = 'child';
         toast('👶 A child is born to '+parent.name+' and '+parent.partner+' — welcome, '+child.name+'!');
         chron('born', child.name, parent.name+' and '+parent.partner);
-        journal.childrenBorn=(journal.childrenBorn||0)+1;
+        G.journal.childrenBorn=(G.journal.childrenBorn||0)+1;
       }
     }
   }
@@ -1968,17 +1941,15 @@ function familyTick(dt){
 const DECAY_RATE = 100/(10*245); // full decay over ~10 day cycles
 
 /* ── RESEARCH & POLICIES ── one active project at a time, run from the Town Center */
-let researched = {};
-let activeResearch = null; // {id, remaining, total}
 
-function techAvailable(t){ return !researched[t.id] && (!t.req || researched[t.req]); }
+function techAvailable(t){ return !G.researched[t.id] && (!t.req || G.researched[t.req]); }
 function startResearch(id){
-  if(activeResearch) { toast('Research is already underway.', true); return; }
+  if(G.activeResearch) { toast('Research is already underway.', true); return; }
   const t = TECH_TREE.find(x=>x.id===id);
-  if(!t || researched[id]) return;
+  if(!t || G.researched[id]) return;
   for(const [k,amt] of Object.entries(t.cost)){ if((G.stockpile[k]||0)<amt){ toast('Not enough '+k+' for '+t.name+'.', true); return; } }
   for(const [k,amt] of Object.entries(t.cost)) G.stockpile[k]-=amt;
-  activeResearch = { id, remaining:t.time, total:t.time };
+  G.activeResearch = { id, remaining:t.time, total:t.time };
   toast('🔬 Research begun: '+t.name);
 }
 let journalTimer = 1;
@@ -2015,7 +1986,7 @@ function rollRandomEvent(){
   if(gameMode.merchantOften && roll>0.30) roll = Math.random()<0.45 ? 0.1 : roll;
   if(roll < 0.30){
     // Traveling merchant — better trade rates for a while
-    activeEvent = { type:'merchant', endsAt: worldTime + 70 };
+    activeEvent = { type:'merchant', endsAt: G.worldTime + 70 };
     toast('🧳 A traveling merchant arrives — trade rates improved for a while!');
   } else if(roll < 0.50){
     // Wandering healer — cures all illness for food
@@ -2029,7 +2000,7 @@ function rollRandomEvent(){
     }
   } else if(roll < 0.70){
     // Festival — everyone works faster briefly
-    activeEvent = { type:'festival', endsAt: worldTime + 55 };
+    activeEvent = { type:'festival', endsAt: G.worldTime + 55 };
     toast('🎉 A festival lifts every heart — the hold works faster for a while!'); sfx('festival');
   } else if(roll < 0.85){
     // Resource vein — a random stone tile refills to double
@@ -2143,7 +2114,7 @@ function fireTick(dt){
     fireTimer = 320 + Math.random()*300;
     const cand = G.buildings.filter(b=>FLAMMABLE.has(b.type) && (b.condition===undefined||b.condition>0));
     // Only once the hold is established, and never while one is already ablaze.
-    if(gameMode.banditsEnabled!==false && dayCount>2 && cand.length>=4 && !G.buildings.some(b=>b._fire)){
+    if(gameMode.banditsEnabled!==false && G.dayCount>2 && cand.length>=4 && !G.buildings.some(b=>b._fire)){
       const chance = Math.min(0.6, 0.28 * fireDrynessMul() * (gameMode.decayMul||1));
       if(Math.random() < chance){
         const pick = cand[Math.floor(Math.random()*cand.length)];
@@ -2200,7 +2171,7 @@ function drawBuildingFire(b){
   const n = b._fire>60 ? 3 : (b._fire>30 ? 2 : 1);
   for(let i=0;i<n;i++){
     const ox = (i-(n-1)/2) * 12;
-    const img = decorImg('fire', worldTime*9 + b.gx*3.1 + i*7);
+    const img = decorImg('fire', G.worldTime*9 + b.gx*3.1 + i*7);
     if(img && img.complete && img.naturalWidth>0){
       const w = 16 + b._fire*0.12, hgt = w*(img.naturalHeight/img.naturalWidth);
       try{ ctx.drawImage(img, p.x+ox-w/2, baseY-hgt-6, w, hgt); }catch(e){}
@@ -2210,7 +2181,7 @@ function drawBuildingFire(b){
     }
   }
   // ember glow
-  ctx.fillStyle=`rgba(255,150,50,${0.12+Math.sin(worldTime*8+b.gx)*0.05})`;
+  ctx.fillStyle=`rgba(255,150,50,${0.12+Math.sin(G.worldTime*8+b.gx)*0.05})`;
   ctx.beginPath(); ctx.arc(p.x, baseY-8, 26, 0, 7); ctx.fill();
 }
 
@@ -2656,8 +2627,8 @@ function processStewardOrders(dt){
     G.stockpile.wood -= cost; b.condition = 100; o.done++; o.stall = 0;
     if(typeof sfx==='function') sfx('repair');
   } else if(o.kind==='research'){
-    if(researched[o.id]){ toast('🔬 '+o.name+' is already known.'); stewardOrders.shift(); return; }
-    if(activeResearch){ stewardStall(o); return; }
+    if(G.researched[o.id]){ toast('🔬 '+o.name+' is already known.'); stewardOrders.shift(); return; }
+    if(G.activeResearch){ stewardStall(o); return; }
     const t = TECH_TREE.find(x=>x.id===o.id);
     const short = t && Object.entries(t.cost).find(([k,amt])=>(G.stockpile[k]||0) < amt);
     if(short){
@@ -2721,7 +2692,7 @@ function stewardClause(s, out){
     // The verb landed but the subject didn't. Naming what CAN be studied beats
     // a shrug — the player knows what they meant, they just used our word for it
     // rather than theirs.
-    const open = TECH_TREE.filter(x=>!researched[x.id] && (!x.req || researched[x.req])).slice(0,4).map(x=>x.name);
+    const open = TECH_TREE.filter(x=>!G.researched[x.id] && (!x.req || G.researched[x.req])).slice(0,4).map(x=>x.name);
     if(open.length) out.push({ kind:'answer', msg:'🔬 I do not know that study. We could begin: '+open.join(', ')+'.' });
     else out.push({ kind:'answer', msg:'🔬 There is nothing left to study.' });
     return null;
@@ -2803,12 +2774,12 @@ function updateSunShadows(){
   } else { setSunShadow(0, 1); }
 }
 function isNight(){
-  const t = worldTime % CYCLE_LEN;
+  const t = G.worldTime % CYCLE_LEN;
   return t >= DAY_LEN;
 }
 function dayPhaseFrac(){
   // 0 = dawn start, 1 = full cycle
-  return (worldTime % CYCLE_LEN) / CYCLE_LEN;
+  return (G.worldTime % CYCLE_LEN) / CYCLE_LEN;
 }
 
 // A tile a settler may stand on / walk through. Water is impassable unless
@@ -2929,7 +2900,7 @@ function effMultiplier(v){
   if(v.trait && v.trait.id==='diligent') m += 0.2;
   if(v.morale!==undefined){ if(v.morale>70) m += 0.10; else if(v.morale<30) m -= 0.20; }
   if(v.stage==='elder') m *= 0.6;   // elders slow, but still contribute
-  if(festivalBoon==='craft') m += 0.15; // Craftsmen's Fair boon
+  if(G.festivalBoon==='craft') m += 0.15; // Craftsmen's Fair boon
   m *= skillMul(v);                 // proficiency from time spent in the role
   m *= decreeWorkMul();             // Rationing slows work a touch
   m *= eventSpeedBonus(); // festival boost
@@ -2951,7 +2922,7 @@ function skillMul(v){ return v.role && v.role!=='idle' ? skillTier(v, v.role).mu
 /* ── GUILDS ── two or more Masters of a trade form a guild, granting a small
    hold-wide bonus to that craft's output. Builds on skill mastery. */
 const GUILD_BONUS = 0.10;
-function guildBonusVal(){ return (typeof researched!=='undefined' && researched.charter) ? 0.15 : GUILD_BONUS; }
+function guildBonusVal(){ return (typeof G.researched!=='undefined' && G.researched.charter) ? 0.15 : GUILD_BONUS; }
 const GUILD_DEFS = {
   lumberjack:{res:'wood',  ic:'🪓', name:"Woodwrights' Guild",  blurb:'timber comes in faster hold-wide'},
   miner:     {res:'stone', ic:'⛏️', name:"Stonecutters' Guild", blurb:'stone comes in faster hold-wide'},
@@ -3029,7 +3000,7 @@ function updateVillager(v, dt){
 
   let fr = isNight() ? FATIGUE_RATE*1.8 : FATIGUE_RATE;
   fr *= seasonFatigueMul();
-  if(hasActiveBuilding('tavern')) fr *= (researched.ale ? 0.7 : 0.8);
+  if(hasActiveBuilding('tavern')) fr *= (G.researched.ale ? 0.7 : 0.8);
   if(v.trait && v.trait.id==='hardy')  fr *= 0.8;
   if(v.trait && v.trait.id==='frail')  fr *= 1.25;
   if(v.sick) fr *= 1.4;
@@ -3048,13 +3019,13 @@ function updateVillager(v, dt){
   if(v.sick) mTarget -= 18;
   if(seasonIndex()===3) mTarget -= 8;                   // winter gloom
   if(weather.type==='storm') mTarget -= 10;
-  if(researched.hearth) mTarget += 8;
+  if(G.researched.hearth) mTarget += 8;
   if(activeEvent && activeEvent.type==='festival') mTarget += 20;
-  if(festivalBoon==='courage') mTarget += 8;            // Rite of Courage boon
-  if(climate) mTarget += CLIMATE_DEFS[climate.type].morale; // fair lifts, drought/snap weigh
-  if(plague) mTarget -= 6;                               // a sickness in the hold weighs on all
-  if(decrees.curfew) mTarget -= 5;                       // decree discontent
-  if(decrees.tithe) mTarget -= 6;
+  if(G.festivalBoon==='courage') mTarget += 8;            // Rite of Courage boon
+  if(G.climate) mTarget += CLIMATE_DEFS[G.climate.type].morale; // fair lifts, drought/snap weigh
+  if(G.plague) mTarget -= 6;                               // a sickness in the hold weighs on all
+  if(G.decrees.curfew) mTarget -= 5;                       // decree discontent
+  if(G.decrees.tithe) mTarget -= 6;
   if(v.trait && v.trait.id==='steadfast') mTarget += 6;
   mTarget = clamp(mTarget, 5, 100);
   v.morale = clamp(v.morale + (mTarget - v.morale) * 0.03 * dt, 0, 100);
@@ -3077,7 +3048,7 @@ function updateVillager(v, dt){
   // illness: triggered by prolonged hunger (>85) or winter + frail
   if(!v.sick){
     const illnessRisk = (v.hunger>85 ? 0.004 : 0) + ((seasonIndex()===3 && v.trait && v.trait.id==='frail') ? 0.003 : 0);
-    if(Math.random() < illnessRisk * (researched.herbs?0.6:1) * dt){ v.sick=true; v.sickTimer = (25+Math.random()*20)*(researched.herbs?0.6:1); toast(v.name+' has fallen ill!', true); }
+    if(Math.random() < illnessRisk * (G.researched.herbs?0.6:1) * dt){ v.sick=true; v.sickTimer = (25+Math.random()*20)*(G.researched.herbs?0.6:1); toast(v.name+' has fallen ill!', true); }
   } else {
     v.sickTimer -= dt;
     if(v.sickTimer<=0){ v.sick=false; toast(v.name+' has recovered.'); }
@@ -3194,7 +3165,7 @@ function updateVillager(v, dt){
           wood:[8,12], stone:[6,9], fish:[5,8], meat:[6,10]
         };
         const yr = yields[v.resKind];
-        const toolsMul = (researched.tools && (v.resKind==='wood'||v.resKind==='stone')) ? 1.15 : 1;
+        const toolsMul = (G.researched.tools && (v.resKind==='wood'||v.resKind==='stone')) ? 1.15 : 1;
         // Working without the trade's building is gathering by hand — it keeps a
         // hold alive, it does not run one.
         const WORKPLACE_FOR = { wood:'forestCamp', stone:'miningPost', fish:'fishingHut', meat:'huntingCabin' };
@@ -3209,7 +3180,7 @@ function updateVillager(v, dt){
         if(t.resourceAmount<=0){
           const regrowTimes = {wood:[70,110], stone:[140,200], fish:[40,70], meat:[55,95]};
           const rt = regrowTimes[v.resKind];
-          t.regrowAt = worldTime + rt[0] + Math.random()*(rt[1]-rt[0]);
+          t.regrowAt = G.worldTime + rt[0] + Math.random()*(rt[1]-rt[0]);
         }
         t.workers = Math.max(0,t.workers-1);
         v.targetTile = null;
@@ -3251,13 +3222,13 @@ function updateVillager(v, dt){
       if(v.workTimer<=0){
         // Irrigation: farms touching the river yield +15%
         const fb = v.targetBuilding;
-        let irr = researched.aqueduct ? 1.15 : 1; // Aqueducts irrigate every farm
+        let irr = G.researched.aqueduct ? 1.15 : 1; // Aqueducts irrigate every farm
         for(let dy=-1;dy<=1&&irr<1.15;dy++) for(let dx=-1;dx<=1;dx++){
           const nt = tileAt(fb.gx+dx, fb.gy+dy);
           if(nt && nt.type==='water'){ irr = 1.15; break; }
         }
-        const terrace = researched.terracing ? 1.15 : 1;
-        gainResource('food', Math.max(1, Math.round((6+Math.floor(Math.random()*4)) * seasonYieldMul() * weatherFarmMul() * (researched.crops?1.2:1) * irr * terrace * harvestBoonMul() * guildFarmMul())));
+        const terrace = G.researched.terracing ? 1.15 : 1;
+        gainResource('food', Math.max(1, Math.round((6+Math.floor(Math.random()*4)) * seasonYieldMul() * weatherFarmMul() * (G.researched.crops?1.2:1) * irr * terrace * harvestBoonMul() * guildFarmMul())));
         v.workTimer = 5.5/effMultiplier(v);
       }
       break;
@@ -3306,36 +3277,36 @@ const QUESTS = [
   {id:'q6', title:'The Hunt Begins', desc:'Raise a Hunting Cabin.', icon:'🏹', check:()=>hasBuildingType('huntingCabin'), reward:{food:20}},
   {id:'q7', title:'A Growing Hold', desc:'Reach a population of 6.', icon:'👥', check:()=>G.villagers.length>=6, reward:{wood:40,stone:20}},
   {id:'q8', title:'The Storehouse', desc:'Build a Granary.', icon:'🏺', check:()=>hasBuildingType('granary'), reward:{stone:30}},
-  {id:'q9', title:'Iron Will', desc:'Survive a wolf raid.', icon:'🐺', check:()=>wolfEvents>=1, reward:{wood:25}},
+  {id:'q9', title:'Iron Will', desc:'Survive a wolf raid.', icon:'🐺', check:()=>G.wolfEvents>=1, reward:{wood:25}},
   {id:'q10', title:'Open Roads', desc:'Build a Trading Post.', icon:'⚖️', check:()=>hasBuildingType('tradingPost'), reward:{food:25}},
   {id:'q11', title:'Paved Way', desc:'Build 3 road segments.', icon:'🛤️', check:()=>G.buildings.filter(b=>b.type==='road').length>=3, reward:{stone:20}},
-  {id:'q12', title:'Survived the Frost', desc:'Endure one full Winter season.', icon:'❄️', check:()=>dayCount>=SEASON_LEN/CYCLE_LEN*4+1, reward:{wood:50,food:30}},
+  {id:'q12', title:'Survived the Frost', desc:'Endure one full Winter season.', icon:'❄️', check:()=>G.dayCount>=SEASON_LEN/CYCLE_LEN*4+1, reward:{wood:50,food:30}},
 ];
 function checkQuests(){
   for(const q of QUESTS){
-    if(questsCompleted[q.id]) continue;
+    if(G.questsCompleted[q.id]) continue;
     if(q.check()){
-      questsCompleted[q.id]=true;
-      coins += 10; logCoinIn('quests', 10);
+      G.questsCompleted[q.id]=true;
+      G.coins += 10; logCoinIn('quests', 10);
       sfx('coin');
       for(const k in q.reward) gainResource(k, q.reward[k]);
       toast('Quest complete: '+q.title+'!');
     }
   }
 }
-function questsDoneCount(){ return QUESTS.filter(q=>questsCompleted[q.id]).length; }
+function questsDoneCount(){ return QUESTS.filter(q=>G.questsCompleted[q.id]).length; }
 
 function update(rawDt){
   const dt = Math.min(rawDt, 0.08) * speedMode;
   if(dt<=0) return;
   const prevSeason = seasonIndex();
-  const prevCycle = Math.floor(worldTime/CYCLE_LEN);
-  worldTime += dt;
-  const newCycle = Math.floor(worldTime/CYCLE_LEN);
-  if(newCycle>prevCycle){ dayCount++; rollWeather(); rollClimate(); rollPlague(); rollDailyBounties(); captureStatSnapshot(); processTradeRoutes();
-    if(decrees.tithe){ const t = Math.max(1, Math.round(G.villagers.length*0.8)); coins += t; logCoinIn('tithe', t); }
+  const prevCycle = Math.floor(G.worldTime/CYCLE_LEN);
+  G.worldTime += dt;
+  const newCycle = Math.floor(G.worldTime/CYCLE_LEN);
+  if(newCycle>prevCycle){ G.dayCount++; rollWeather(); rollClimate(); rollPlague(); rollDailyBounties(); captureStatSnapshot(); processTradeRoutes();
+    if(G.decrees.tithe){ const t = Math.max(1, Math.round(G.villagers.length*0.8)); G.coins += t; logCoinIn('tithe', t); }
     decisionTimer -= 1;
-    if(decisionTimer<=0 && dayCount>3){ decisionTimer = 3 + Math.floor(Math.random()*3); rollDecision(); }
+    if(decisionTimer<=0 && G.dayCount>3){ decisionTimer = 3 + Math.floor(Math.random()*3); rollDecision(); }
   }
   const newSeason = seasonIndex();
   if(newSeason !== prevSeason){
@@ -3347,11 +3318,11 @@ function update(rawDt){
     chron('season', SEASON_NAMES[newSeason]);
     if(newSeason===3){ toast('🧊 The river freezes solid — anything can cross the ice, and the moat is gone.', true); }
     if(prevSeason===3){ window._frozenFisherToast=false; toast('💧 The thaw — the river runs (and guards it) again.'); }
-    if(newSeason===3) journal.wintersEndured++;
+    if(newSeason===3) G.journal.wintersEndured++;
     // New-year festival: at the turn into spring, the hold chooses a boon.
-    if(newSeason===0 && dayCount>2){
-      const yr = Math.floor(worldTime/(SEASON_LEN*4));
-      if(yr>lastFestivalYear){ lastFestivalYear=yr; openFestivalChoice(); }
+    if(newSeason===0 && G.dayCount>2){
+      const yr = Math.floor(G.worldTime/(SEASON_LEN*4));
+      if(yr>G.lastFestivalYear){ G.lastFestivalYear=yr; openFestivalChoice(); }
     }
   }
 
@@ -3366,13 +3337,13 @@ function update(rawDt){
         const v = exposed[Math.floor(Math.random()*exposed.length)];
         releaseClaims(v); v.carrying=null; v.state='idle'; v.fatigue=clamp(v.fatigue+15,0,100);
         toast('Wolves prowl the treeline — '+v.name+' flees home!', true);
-        wolfEvents++;
+        G.wolfEvents++;
       } else {
         const loss = Math.min(G.stockpile.food, 4+Math.floor(Math.random()*8));
         if(loss>0){
           G.stockpile.food -= loss;
           toast('A wolf pack raids the stores — '+loss+' food stolen!', true); sfx('raid');
-          wolfEvents++;
+          G.wolfEvents++;
         }
       }
     }
@@ -3395,13 +3366,13 @@ function update(rawDt){
       const guardPosts = G.buildings.filter(b=>b.type==='guardPost' && (b.condition===undefined||b.condition>=35));
       const openBridges = allBridges.filter(br=> !guardPosts.some(gp=> Math.max(Math.abs(gp.gx-br.gx), Math.abs(gp.gy-br.gy)) <= 3));
       const riverMoat = (G.waterTiles.length && !riverFrozen()) ? Math.max(0, 5 - openBridges.length*1.5) : 0;
-      const defense = guards*(researched.militia?8:4) + palisades*0.8 + towers*2 + riverMoat;
+      const defense = guards*(G.researched.militia?8:4) + palisades*0.8 + towers*2 + riverMoat;
       const strength = 10 + currentTierIdx*6 + Math.random()*8;
       const mitigation = Math.min(0.95, defense / (defense + strength));
       const raidN = 2 + Math.floor(Math.random()*2) + (currentTierIdx>=3?1:0);
       launchRaid(raidN, mitigation <= 0.72, raidEntryPoint(openBridges));
       if(mitigation > 0.72){
-        journal.raidsRepelled = (journal.raidsRepelled||0) + 1;
+        G.journal.raidsRepelled = (G.journal.raidsRepelled||0) + 1;
         toast('🛡️ Bandits probed the walls — your guards drove them off!'); sfx('raid');
       } else {
         const stealFrac = (1 - mitigation) * 0.35;
@@ -3420,7 +3391,7 @@ function update(rawDt){
             toast('🌉 Raiders poured across the unwatched bridge!', true);
           }
           toast('🏴 Bandits raid the hold — lost '+stolen.join(', ')+'!', true); sfx('raid');
-          G.villagers.forEach(v=>{ if(v.morale!==undefined){ let hit=(v.trait&&v.trait.id==='brave')?4:8; if(festivalBoon==='courage') hit*=0.5; v.morale=clamp(v.morale-hit,0,100); } });
+          G.villagers.forEach(v=>{ if(v.morale!==undefined){ let hit=(v.trait&&v.trait.id==='brave')?4:8; if(G.festivalBoon==='courage') hit*=0.5; v.morale=clamp(v.morale-hit,0,100); } });
           // Surviving a raid can steel a settler for life
           if(Math.random()<0.3 && G.villagers.length){
             const cand = G.villagers.filter(v=>!v.trait || (v.trait.id!=='brave' && v.trait.id!=='steadfast'));
@@ -3527,19 +3498,19 @@ function update(rawDt){
     if(b.procFlash) b.procFlash = Math.max(0, b.procFlash - dt*1.4);
   }
 
-  if(activeEvent && worldTime >= activeEvent.endsAt){
+  if(activeEvent && G.worldTime >= activeEvent.endsAt){
     if(activeEvent.type==='merchant') toast('🧳 The merchant packs up and moves on.');
     else if(activeEvent.type==='festival') toast('🎉 The festival winds down.');
     activeEvent = null;
   }
 
   // Research progress
-  if(activeResearch){
-    activeResearch.remaining -= dt;
-    if(activeResearch.remaining<=0){
-      const t = TECH_TREE.find(x=>x.id===activeResearch.id);
-      researched[activeResearch.id]=true;
-      activeResearch=null;
+  if(G.activeResearch){
+    G.activeResearch.remaining -= dt;
+    if(G.activeResearch.remaining<=0){
+      const t = TECH_TREE.find(x=>x.id===G.activeResearch.id);
+      G.researched[G.activeResearch.id]=true;
+      G.activeResearch=null;
       toast('🔬 '+t.ic+' Research complete: '+t.name+'!');
     }
   }
@@ -3549,9 +3520,9 @@ function update(rawDt){
   if(journalTimer<=0){
     journalTimer = 1;
     checkTierUp();
-    journal.peakPopulation = Math.max(journal.peakPopulation, G.villagers.length);
-    journal.daysSurvived = Math.max(journal.daysSurvived, dayCount);
-    journal.wolvesSurvived = wolfEvents;
+    G.journal.peakPopulation = Math.max(G.journal.peakPopulation, G.villagers.length);
+    G.journal.daysSurvived = Math.max(G.journal.daysSurvived, G.dayCount);
+    G.journal.wolvesSurvived = G.wolfEvents;
     checkBounties();
     checkDeeds();
     recomputeGuilds(true);
@@ -3563,15 +3534,15 @@ function update(rawDt){
   // fully-worked stand eventually goes barren — unless a Forester's Grove
   // replants it. (See foresterTick.)
   for(const t of G.forestTiles){
-    if(t.resourceAmount<=0 && worldTime>=t.regrowAt){
+    if(t.resourceAmount<=0 && G.worldTime>=t.regrowAt){
       if(t.maxResource>0){ t.maxResource = Math.max(0, t.maxResource-1); }
       if(t.maxResource>0) t.resourceAmount = t.maxResource;
     }
   }
   foresterTick(dt);
-  for(const t of G.stoneTiles){ if(t.resourceAmount<=0 && worldTime>=t.regrowAt){ t.resourceAmount = t.maxResource; } }
-  for(const t of G.waterTiles){ if(t.resourceAmount<=0 && worldTime>=t.regrowAt){ t.resourceAmount = t.maxResource; } }
-  for(const t of G.wildsTiles){ if(t.resourceAmount<=0 && worldTime>=t.regrowAt){ t.resourceAmount = t.maxResource; } }
+  for(const t of G.stoneTiles){ if(t.resourceAmount<=0 && G.worldTime>=t.regrowAt){ t.resourceAmount = t.maxResource; } }
+  for(const t of G.waterTiles){ if(t.resourceAmount<=0 && G.worldTime>=t.regrowAt){ t.resourceAmount = t.maxResource; } }
+  for(const t of G.wildsTiles){ if(t.resourceAmount<=0 && G.worldTime>=t.regrowAt){ t.resourceAmount = t.maxResource; } }
 
   for(const v of G.villagers.slice()) updateVillager(v, dt); // copy: villagers may leave mid-update
   processStewardOrders(dt);
@@ -3584,12 +3555,12 @@ function update(rawDt){
   // population growth
   spawnTimer -= dt;
   if(spawnTimer<=0){
-    spawnTimer = decrees.openGates ? 16 : 24; // Open Gates draws newcomers faster
+    spawnTimer = G.decrees.openGates ? 16 : 24; // Open Gates draws newcomers faster
     if(G.stockpile.food>=22 && G.villagers.length<popCapacity()){
       G.stockpile.food -= 22;
       const nv = spawnVillager();
       toast(nv.name+' joins the hold. ['+nv.trait.ic+' '+nv.trait.label+']');
-      journal.settlersWelcomed++;
+      G.journal.settlersWelcomed++;
     }
   }
 }
@@ -3869,7 +3840,7 @@ function updateWind(dt){
   const base = weather.type==='storm' ? 1.0
              : weather.type==='rain'  ? 0.55
              : weather.type==='snow'  ? 0.40 : 0.22;
-  const target = base * (0.75 + 0.25*Math.sin(worldTime*0.37));
+  const target = base * (0.75 + 0.25*Math.sin(G.worldTime*0.37));
   windGust += (target - windGust) * Math.min(1, dt*0.5);
   windPhase += dt * (0.6 + windGust*0.9);
 }
@@ -3933,7 +3904,7 @@ function drawTerrain(range){
         } else {
           // Open water: a highlight sliding across the tile, each on its own
           // phase so the river glitters rather than pulsing in unison.
-          const ph = worldTime*1.3 + h2*6.283;
+          const ph = G.worldTime*1.3 + h2*6.283;
           const a = 0.09 + Math.sin(ph)*0.06;
           if(a > 0.03){
             ctx.fillStyle = 'rgba(188,224,244,'+a.toFixed(3)+')';
@@ -4037,7 +4008,7 @@ function drawTerrain(range){
         ctx.save(); tileDiamond(p.x,wy,TILE_W,TILE_H); ctx.clip();
         ctx.strokeStyle='rgba(150,200,220,0.18)'; ctx.lineWidth=1.2;
         for(let i=0;i<3;i++){
-          const off=((worldTime*12+gx*19+gy*13+i*18)%36)-18;
+          const off=((G.worldTime*12+gx*19+gy*13+i*18)%36)-18;
           ctx.beginPath(); ctx.moveTo(p.x-TILE_W/2,wy+off*0.45);
           ctx.quadraticCurveTo(p.x,wy+off*0.45-5,p.x+TILE_W/2,wy+off*0.45); ctx.stroke();
         }
@@ -4045,7 +4016,7 @@ function drawTerrain(range){
         // Foam lapping against adjacent land (animated)
         const nN = G.grid[gy-1] && G.grid[gy-1][gx];
         const nW = G.grid[gy] && G.grid[gy][gx-1];
-        const foamA = 0.28 + Math.sin(worldTime*2.4 + gx + gy)*0.12;
+        const foamA = 0.28 + Math.sin(G.worldTime*2.4 + gx + gy)*0.12;
         ctx.strokeStyle = 'rgba(210,230,238,'+foamA+')'; ctx.lineWidth = 1.6;
         if(nN && nN.type!=='water'){ ctx.beginPath(); ctx.moveTo(p.x, wy - TILE_H/2 + 1.5); ctx.lineTo(p.x + TILE_W/2 - 3, wy - 0.5); ctx.stroke(); }
         if(nW && nW.type!=='water'){ ctx.beginPath(); ctx.moveTo(p.x, wy - TILE_H/2 + 1.5); ctx.lineTo(p.x - TILE_W/2 + 3, wy - 0.5); ctx.stroke(); }
@@ -4066,7 +4037,7 @@ function drawTerrain(range){
           const wrImg = decorImg('waterRocks', hash2(gx*3.3,gy*1.9)*4);
           if(wrImg){
             const ww = 26, wh = ww*(wrImg.naturalHeight/wrImg.naturalWidth);
-            const bobW = Math.sin(worldTime*1.6+gx+gy)*1.2;
+            const bobW = Math.sin(G.worldTime*1.6+gx+gy)*1.2;
             try { ctx.drawImage(wrImg, p.x - ww/2, wy - wh + 6 + bobW, ww, wh); } catch(e){}
           }
         }
@@ -4115,7 +4086,7 @@ function drawTerrain(range){
       }
       if(t.type==='grass' && h2 > 0.93 && decorReady){
         const pool = hash2(gx*5,gy*7) > 0.5 ? 'bush1' : 'bush3';
-        const bimg = decorImg(pool, worldTime*3 + gx + gy);
+        const bimg = decorImg(pool, G.worldTime*3 + gx + gy);
         if(bimg){
           const bw = 34, bh = bw*(bimg.naturalHeight/bimg.naturalWidth);
           ctx.drawImage(bimg, p.x - bw/2 + (hash2(gx*2,gy*9)-0.5)*16, yTop - bh + 6, bw, bh);
@@ -4245,7 +4216,7 @@ function drawTree(gx,gy){
     const oakImg = decorImg('oak', 0);
     if(oakImg){
       const hh = 82*s, w = hh*(oakImg.naturalWidth/oakImg.naturalHeight);
-      const sway = Math.sin(worldTime*1.1 + gx*0.8 + gy*0.5) * 0.022;
+      const sway = Math.sin(G.worldTime*1.1 + gx*0.8 + gy*0.5) * 0.022;
       ctx.save();
       ctx.translate(cx, baseY+8);
       ctx.transform(1, 0, sway, 1, 0, 0);
@@ -4301,7 +4272,7 @@ function drawFishSpot(gx, gy){
   const p = project(gx, gy);
   const ox = (hash2(gx*1.4, gy*2.6)-0.5)*12;
   const cx = p.x + ox, surf = p.y + WATER_DROP;      // water sits recessed
-  const t = worldTime;
+  const t = G.worldTime;
 
   // Lily pad, floating flat on the surface.
   ctx.fillStyle = '#2a4e28';
@@ -4359,8 +4330,8 @@ function drawAnimal(gx,gy){
   const p = project(gx,gy);
   const ox = (hash2(gx*2.2,gy*1.6)-0.5)*14, oy=(hash2(gx*1.1,gy*3.3)-0.5)*5;
   const cx = p.x+ox, baseY = p.y+oy+3;
-  const sway = Math.sin(worldTime*1.2 + gx+gy)*1.2;
-  const legBob = Math.abs(Math.sin(worldTime*1.8+gx))*2;
+  const sway = Math.sin(G.worldTime*1.2 + gx+gy)*1.2;
+  const legBob = Math.abs(Math.sin(G.worldTime*1.8+gx))*2;
   // shadow
   ctx.fillStyle='rgba(0,0,0,0.22)';
   ctx.beginPath(); ctx.ellipse(cx+sway, baseY+5, 10, 4, 0, 0, Math.PI*2); ctx.fill();
@@ -4441,7 +4412,7 @@ function drawHerd(b, cx, baseY){
   for(let i=0;i<n;i++){
     const ox = (hash2(b.gx*3.1+i, b.gy*2.7)-0.5) * 44;
     const oy = (hash2(b.gx*1.9, b.gy*4.3+i)-0.5) * 16;
-    const bob = Math.sin(worldTime*1.2 + i*1.7) * 0.8;
+    const bob = Math.sin(G.worldTime*1.2 + i*1.7) * 0.8;
     const x = cx + ox, y = baseY + oy - 6 + bob;
     try{ drawShadow(x, y+2, 5); }catch(e){}
     if(img && img.complete && img.naturalWidth>0){
@@ -4496,8 +4467,8 @@ function drawBuilding(b){
     // banner pole + waving pennant
     ctx.strokeStyle='#1a1108'; ctx.lineWidth=2.6;
     ctx.beginPath(); ctx.moveTo(cx, peak-2); ctx.lineTo(cx, peak-26); ctx.stroke();
-    const wave=Math.sin(worldTime*2)*3;
-    ctx.fillStyle=bannerPalette[bannerIdx]||BANNER_COLORS[0];
+    const wave=Math.sin(G.worldTime*2)*3;
+    ctx.fillStyle=bannerPalette[G.bannerIdx]||BANNER_COLORS[0];
     ctx.beginPath();
     ctx.moveTo(cx, peak-26); ctx.lineTo(cx+19+wave, peak-21); ctx.lineTo(cx+16+wave*0.5, peak-17); ctx.lineTo(cx, peak-15);
     ctx.closePath(); ctx.fill();
@@ -4719,7 +4690,7 @@ function drawBuilding(b){
     ctx.beginPath(); ctx.arc(cx+2, topY-5, 4.5, Math.PI, 0); ctx.fill();
     ctx.fillStyle='#8a7a4e'; ctx.fillRect(cx+1, topY-9, 2, 3);
     // hanging lantern glow
-    const lg = 0.5+Math.sin(worldTime*3)*0.12;
+    const lg = 0.5+Math.sin(G.worldTime*3)*0.12;
     ctx.fillStyle=`rgba(255,200,110,${lg})`;
     ctx.beginPath(); ctx.arc(cx+13, topY-20, 3, 0, 7); ctx.fill();
   }
@@ -4741,7 +4712,7 @@ function drawBuilding(b){
     ctx.fillRect(cx-14, baseY-50, 28, 8);
     for(let i=0;i<4;i++) ctx.fillRect(cx-14+i*8, baseY-55, 5, 5);
     // beacon torch — big flicker glow at top
-    const flick = Math.max(0.5, 0.75+Math.sin(worldTime*8+1)*0.25);
+    const flick = Math.max(0.5, 0.75+Math.sin(G.worldTime*8+1)*0.25);
     const g2 = ctx.createRadialGradient(cx, baseY-58, 0, cx, baseY-58, 16*flick);
     g2.addColorStop(0,'rgba(255,196,110,0.85)'); g2.addColorStop(1,'rgba(255,140,40,0)');
     ctx.fillStyle=g2;
@@ -4788,7 +4759,7 @@ function drawBuilding(b){
     plankLines(cx, baseY, -22, 14, -1);
     isoRoof(cx, topY, 22, 18, 12, '#3c2a18');
     // big circular saw blade
-    const spin = worldTime*3;
+    const spin = G.worldTime*3;
     ctx.save(); ctx.translate(cx+16, baseY-8);
     ctx.fillStyle='#8a8478';
     ctx.beginPath(); ctx.arc(0,0,7,0,7); ctx.fill();
@@ -4820,7 +4791,7 @@ function drawBuilding(b){
     ctx.beginPath(); ctx.moveTo(cx-11, baseY-33); ctx.lineTo(cx, baseY-44); ctx.lineTo(cx+11, baseY-33); ctx.closePath(); ctx.fill();
     doorArch(cx, baseY, 8, 11);
     // rotating sails
-    const rot = worldTime*0.9;
+    const rot = G.worldTime*0.9;
     ctx.save(); ctx.translate(cx, baseY-40);
     for(let i=0;i<4;i++){
       const a = rot + i*Math.PI/2;
@@ -4951,7 +4922,7 @@ function drawBuilding(b){
     ctx.beginPath(); ctx.moveTo(lx-5, ly-6); ctx.lineTo(lx, ly-11); ctx.lineTo(lx+5, ly-6); ctx.closePath(); ctx.fill();
     // flame glow — brighter after dark, gently flickering
     const dk = darknessFactor();
-    const flick = 0.65 + Math.sin(worldTime*8 + cx)*0.2;
+    const flick = 0.65 + Math.sin(G.worldTime*8 + cx)*0.2;
     const glow = 0.25 + dk*0.55;
     ctx.fillStyle='#f2c86a';
     ctx.beginPath(); ctx.ellipse(lx, ly-1, 2.4, Math.max(1, 3.4*flick), 0, 0, 7); ctx.fill();
@@ -5039,13 +5010,13 @@ function drawBuilding(b){
 }
 
 function drawTorch(x,y){
-  const fireImg = decorImg('fire', worldTime*9 + x*0.13);
+  const fireImg = decorImg('fire', G.worldTime*9 + x*0.13);
   if(fireImg){
     ctx.strokeStyle='#241505'; ctx.lineWidth=2;
     ctx.beginPath(); ctx.moveTo(x, y+10); ctx.lineTo(x, y-2); ctx.stroke();
     const w = 15, hgt = w*(fireImg.naturalHeight/fireImg.naturalWidth);
     ctx.drawImage(fireImg, x-w/2, y-hgt-1, w, hgt);
-    const flick = 0.55+Math.sin(worldTime*8+x)*0.15;
+    const flick = 0.55+Math.sin(G.worldTime*8+x)*0.15;
     const g = ctx.createRadialGradient(x, y-6, 0, x, y-6, 15);
     g.addColorStop(0, 'rgba(255,180,80,'+(0.35*flick)+')');
     g.addColorStop(1, 'rgba(255,140,40,0)');
@@ -5053,7 +5024,7 @@ function drawTorch(x,y){
     return;
   }
   ctx.fillStyle='#2a1d12'; ctx.fillRect(x-2,y-6,4,16);
-  const flick = Math.max(0.4, 0.7+Math.sin(worldTime*9 + x)*0.3);
+  const flick = Math.max(0.4, 0.7+Math.sin(G.worldTime*9 + x)*0.3);
   const grd = ctx.createRadialGradient(x,y-10,0,x,y-10,14*flick);
   grd.addColorStop(0,'rgba(255,196,110,0.9)');
   grd.addColorStop(1,'rgba(255,140,40,0)');
@@ -5084,7 +5055,7 @@ function bubbleFor(v){
   if(v.state==='sleeping') return {ic:'💤', tone:'cool'};
   if(v.state==='seekingFood') return {ic:'🍖', tone:'warn'};
   if(v.state==='seekingSleep') return {ic:'😴', tone:'cool'};
-  if(v._mentored>0 && (v.state==='working'||v.state==='farming') && Math.sin(worldTime*1.5+v.gx*2)>0) return {ic:'📖', tone:'good'};
+  if(v._mentored>0 && (v.state==='working'||v.state==='farming') && Math.sin(G.worldTime*1.5+v.gx*2)>0) return {ic:'📖', tone:'good'};
   if(v.state==='working') return {ic: ({wood:'🪓', stone:'⛏️', fish:'🎣', meat:'🏹'})[v.resKind] || '🪓', tone:'normal'};
   if(v.state==='farming') return {ic:'🌾', tone:'normal'};
   if(v.state==='walkingToDropoff' && v.carrying) {
@@ -5132,7 +5103,7 @@ function drawVillager(v){
   if(v.state!=='spawning'){
     const anim = villagerAnimFor(v);
     if(anim && anim.length && anim[0].complete && anim[0].naturalWidth>0){
-      const fi = Math.floor(worldTime*5 + (hashStr(v.id)%7)) % anim.length;
+      const fi = Math.floor(G.worldTime*5 + (hashStr(v.id)%7)) % anim.length;
       const frame = anim[fi];
       const img = tintedFrame(frame, villagerTint(v));
       // Frames are trim-cropped at bake time: character fills the image.
@@ -5144,7 +5115,7 @@ function drawVillager(v){
       try { ctx.drawImage(img, cx - w/2, cy - hgt + 7, w, hgt); } catch(e){}
       ctx.restore();
       if(v.role==='fisher' && v.state==='working'){
-        const spImg = decorImg('splash', worldTime*7 + hashStr(v.id)%5);
+        const spImg = decorImg('splash', G.worldTime*7 + hashStr(v.id)%5);
         if(spImg){
           const sw = 22, sh = sw*(spImg.naturalHeight/spImg.naturalWidth);
           try { ctx.drawImage(spImg, cx + 8, cy - sh + 12, sw, sh); } catch(e){}
@@ -5250,7 +5221,7 @@ function drawWorkerBadge(b){
   if(b.condition!==undefined && b.condition<35 && b.type!=='road'){
     const c0 = buildingCenter(b); const p0 = project(c0.gx, c0.gy);
     ctx.font='13px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    const bob0 = Math.sin(worldTime*3)*2;
+    const bob0 = Math.sin(G.worldTime*3)*2;
     ctx.fillText('⚠️', p0.x, p0.y - 48 + bob0);
   }
   if(!b.workers || b.workers<=0 || b.type==='townCenter' || b.type==='house' || b.type==='granary' || b.type==='road') return;
@@ -5360,7 +5331,7 @@ function drawMinimap(){
     mmCtx.fillStyle = '#ff4433';
     mmCtx.beginPath(); mmCtx.arc(mmX(p.x), mmY(p.y), 2.4, 0, 7); mmCtx.fill();
     mmCtx.strokeStyle = 'rgba(255,68,51,0.5)'; mmCtx.lineWidth = 1;
-    mmCtx.beginPath(); mmCtx.arc(mmX(p.x), mmY(p.y), 4.5 + Math.sin(worldTime*6)*1.5, 0, 7); mmCtx.stroke();
+    mmCtx.beginPath(); mmCtx.arc(mmX(p.x), mmY(p.y), 4.5 + Math.sin(G.worldTime*6)*1.5, 0, 7); mmCtx.stroke();
   }
 
   if(isNight()){ mmCtx.fillStyle='rgba(10,16,40,0.35)'; mmCtx.fillRect(0,0,S,S); }
@@ -5416,7 +5387,7 @@ function drawGhost(){
   const p = project(gx,gy);
 
   // Main ghost tile
-  const pulse=0.6+Math.sin(worldTime*4)*0.25;
+  const pulse=0.6+Math.sin(G.worldTime*4)*0.25;
   ctx.fillStyle = valid
     ? `rgba(120,200,120,${pulse*0.38})`
     : `rgba(220,80,60,${pulse*0.40})`;
@@ -5558,7 +5529,7 @@ function render(){
   // rebuilt on resize — allocating a gradient every frame is expensive.
   ctx.fillStyle = voidBackdrop();
   ctx.fillRect(0, 0, cssW, cssH);
-  setKitTime(worldTime);   // one clock push per frame, not one per sprite
+  setKitTime(G.worldTime);   // one clock push per frame, not one per sprite
 
   if(!G.grid.length) return; // map not yet generated
 
@@ -5704,14 +5675,14 @@ function drawDebugOverlay(){
   ctx.save();
   ctx.setTransform(canvasDPR,0,0,canvasDPR,0,0);
   const idle = G.villagers.filter(v=>v.role==='idle').length;
-  const phase = (worldTime % CYCLE_LEN) < DAY_LEN ? 'Day' : 'Night';
+  const phase = (G.worldTime % CYCLE_LEN) < DAY_LEN ? 'Day' : 'Night';
   const lines = [
     'FPS '+_dbgFps.toFixed(0)+'  speed '+speedMode+'x',
-    'Day '+dayCount+'  '+seasonName()+'  '+phase,
-    'Weather '+weather.label+(climate?'  Climate '+(climate.name||climate.ic):''),
+    'Day '+G.dayCount+'  '+seasonName()+'  '+phase,
+    'Weather '+weather.label+(G.climate?'  Climate '+(G.climate.name||G.climate.ic):''),
     'Settlers '+G.villagers.length+' ('+idle+' idle)  Buildings '+G.buildings.filter(b=>b.type!=='road').length,
     'Raiders '+G.raiders.length+'  Fires '+G.buildings.filter(b=>b._fire>0).length,
-    'Coins '+Math.floor(coins)+'  Tier '+HOLD_TIERS[currentTierIdx].name,
+    'Coins '+Math.floor(G.coins)+'  Tier '+HOLD_TIERS[currentTierIdx].name,
     'Toggles: '+(ADMIN.freezeNeeds?'FreezeNeeds ':'')+(ADMIN.noRaids?'NoRaids ':'')||'Toggles: none',
   ];
   ctx.font = '11px monospace'; ctx.textAlign='left'; ctx.textBaseline='top';
@@ -5728,7 +5699,7 @@ function renderWeather(){
   if(weather.type==='clear') return;
   ctx.save();
   ctx.setTransform(canvasDPR,0,0,canvasDPR,0,0);
-  const t = worldTime;
+  const t = G.worldTime;
   if(weather.type==='rain' || weather.type==='storm'){
     const n = weather.type==='storm' ? 90 : 55;
     ctx.strokeStyle='rgba(170,200,220,0.30)'; ctx.lineWidth=1;
@@ -5778,7 +5749,7 @@ function renderLighting(){
   lctx.fillRect(0,0,lightCanvas.width,lightCanvas.height);
   // Punch warm pools of light around lit buildings
   lctx.globalCompositeOperation = 'destination-out';
-  const flick = 1 + Math.sin(worldTime*7)*0.04;
+  const flick = 1 + Math.sin(G.worldTime*7)*0.04;
   for(const b of G.buildings){
     const r0 = LIGHT_RADII[b.type];
     if(!r0) continue;
@@ -5821,7 +5792,7 @@ function updateDayTint(){
   }
   daytintEl.style.backgroundColor = color;
   phaseLabelEl.textContent = label;
-  clockDayEl.childNodes[0].nodeValue = (holdName && holdName!=='Oakenfall' ? holdName+' · ' : '')+(gameModeId!=='settler' ? GAME_MODES[gameModeId].name+' · ' : '')+HOLD_TIERS[currentTierIdx].ic+' '+HOLD_TIERS[currentTierIdx].name+' · Day '+dayCount+' · '+seasonName()+' '+weather.ic+(climate?' '+climate.ic:'')+' · ';
+  clockDayEl.childNodes[0].nodeValue = (G.holdName && G.holdName!=='Oakenfall' ? G.holdName+' · ' : '')+(gameModeId!=='settler' ? GAME_MODES[gameModeId].name+' · ' : '')+HOLD_TIERS[currentTierIdx].ic+' '+HOLD_TIERS[currentTierIdx].name+' · Day '+G.dayCount+' · '+seasonName()+' '+weather.ic+(G.climate?' '+G.climate.ic:'')+' · ';
   const qd = questsDoneCount();
   document.getElementById('quest-dot').classList.toggle('hidden', qd>=lastSeenQuestCount);
 }
@@ -5836,15 +5807,15 @@ function renderQuestSheet(){
       <div class="pill" style="pointer-events:none;">${HOLD_TIERS[currentTierIdx].ic} ${HOLD_TIERS[currentTierIdx].name}</div>
       ${currentTierIdx < HOLD_TIERS.length-1 ? `<div class="sheet-sub" style="align-self:center;">Next: ${HOLD_TIERS[currentTierIdx+1].name} at ${HOLD_TIERS[currentTierIdx+1].pop} settlers &amp; ${HOLD_TIERS[currentTierIdx+1].bld} buildings</div>` : `<div class="sheet-sub" style="align-self:center;">Highest tier reached!</div>`}
     </div>
-    ${dailyBounties.length ? `<div class="sheet-sub" style="margin:6px 0 2px;"><b>📯 Today's Bounties</b></div>`+dailyBounties.map(bb=>`<div class="sheet-sub">${bb.done?'✅':'▫️'} ${bb.ic} ${bb.desc} — <b>${(dailyProgress[bb.key]||0) >= bb.n ? bb.n : Math.min(bb.n, Math.floor(dailyProgress[bb.key]||0))}/${bb.n}</b> · 💰${bb.reward}</div>`).join('') : ''}
+    ${G.dailyBounties.length ? `<div class="sheet-sub" style="margin:6px 0 2px;"><b>📯 Today's Bounties</b></div>`+G.dailyBounties.map(bb=>`<div class="sheet-sub">${bb.done?'✅':'▫️'} ${bb.ic} ${bb.desc} — <b>${(G.dailyProgress[bb.key]||0) >= bb.n ? bb.n : Math.min(bb.n, Math.floor(G.dailyProgress[bb.key]||0))}/${bb.n}</b> · 💰${bb.reward}</div>`).join('') : ''}
     <div class="row" style="margin:4px 0 6px;gap:6px;">
-      <button class="action-btn" id="decrees-btn" style="flex:1;">⚖️ Decrees${Object.values(decrees).some(Boolean)?' ('+Object.values(decrees).filter(Boolean).length+')':''}</button>
+      <button class="action-btn" id="decrees-btn" style="flex:1;">⚖️ Decrees${Object.values(G.decrees).some(Boolean)?' ('+Object.values(G.decrees).filter(Boolean).length+')':''}</button>
       <button class="action-btn" data-fb="bug" style="flex:1;">🐛 Report Bug</button>
       <button class="action-btn" data-fb="idea" style="flex:1;">💡 Suggest</button>
     </div>
     <div class="row" style="flex-direction:column;gap:6px;">
       ${QUESTS.map(q=>{
-        const done = !!questsCompleted[q.id];
+        const done = !!G.questsCompleted[q.id];
         const rewardStr = Object.entries(q.reward).map(([k,v])=>`+${v} ${k}`).join(', ');
         return `<div class="action-btn" style="text-align:left;display:flex;align-items:center;gap:10px;${done?'opacity:0.6;':''}">
           <span style="font-size:20px;">${done?'✅':q.icon}</span>
@@ -5868,7 +5839,7 @@ function renderDecreesSheet(){
     <div class="sheet-sub">Lasting laws for the hold. Each is a trade-off — enact what suits your reign, and change your mind whenever you like.</div>
     <div class="roster-list" style="margin-top:8px;">
       ${DECREE_DEFS.map(d=>{
-        const on = !!decrees[d.id];
+        const on = !!G.decrees[d.id];
         return `<button class="action-btn list-row${on?'':' dim'}" data-decree="${d.id}" style="align-items:flex-start;">
           <span style="font-size:20px;">${d.ic}</span>
           <span style="flex:1;"><b>${d.name}</b> <span style="color:${on?'#8fc46a':'var(--parchment-dim)'};font-size:11.5px;">${on?'● Enacted':'○ Off'}</span><br>
@@ -5879,9 +5850,9 @@ function renderDecreesSheet(){
     </div>`;
   sheetContent.querySelectorAll('[data-decree]').forEach(btn=>btn.addEventListener('click', ()=>{
     const id = btn.dataset.decree;
-    decrees[id] = !decrees[id];
+    G.decrees[id] = !G.decrees[id];
     const d = DECREE_DEFS.find(x=>x.id===id);
-    toast(d.ic+' '+d.name+(decrees[id]?' enacted.':' repealed.'));
+    toast(d.ic+' '+d.name+(G.decrees[id]?' enacted.':' repealed.'));
     if(typeof sfx==='function') sfx('tap');
     renderDecreesSheet();
   }));
@@ -6039,21 +6010,21 @@ async function exportHoldCard(){
     // vignette + border
     x.strokeStyle='#5a4a2c'; x.lineWidth=3; x.strokeRect(24,24,W-48,H-48);
     x.strokeStyle='rgba(232,161,60,0.25)'; x.lineWidth=1; x.strokeRect(32,32,W-64,H-64);
-    const crest = bannerPalette[bannerIdx] || BANNER_COLORS[crestChoice] || '#a4402c';
+    const crest = bannerPalette[G.bannerIdx] || BANNER_COLORS[G.crestChoice] || '#a4402c';
     // crest diamond
     const ccx=W/2, ccy=150;
     x.fillStyle=crest; x.beginPath(); x.moveTo(ccx,ccy-46); x.lineTo(ccx+40,ccy); x.lineTo(ccx,ccy+46); x.lineTo(ccx-40,ccy); x.closePath(); x.fill();
     x.strokeStyle='#0c0803'; x.lineWidth=3; x.stroke();
     x.fillStyle='rgba(255,240,210,0.9)'; x.font="700 34px 'Cinzel', Georgia, serif"; x.textAlign='center';
-    x.fillText((holdName||'O').charAt(0).toUpperCase(), ccx, ccy+12);
+    x.fillText((G.holdName||'O').charAt(0).toUpperCase(), ccx, ccy+12);
     // kicker + title
     x.fillStyle='#b3a681'; x.font="600 22px 'Cinzel', Georgia, serif"; x.fillText('⚜  THE CHRONICLE OF  ⚜', ccx, 250);
     x.fillStyle='#f0e2c0'; x.font="700 72px 'Cinzel', Georgia, serif";
-    x.fillText((holdName||'Oakenfall').slice(0,22), ccx, 330);
+    x.fillText((G.holdName||'Oakenfall').slice(0,22), ccx, 330);
     const tier=(HOLD_TIERS[currentTierIdx]||{ic:'🏕️',name:'Hold'});
     x.fillStyle='#e8a13c'; x.font="500 30px 'Cinzel', Georgia, serif"; x.fillText(tier.ic+' '+tier.name, ccx, 378);
     // stats row
-    const stats=[['Day', dayCount], ['Settlers', G.villagers.length], ['Winters', journal.wintersEndured||0], ['Deeds', Object.keys(deeds).length+'/'+DEED_DEFS.length]];
+    const stats=[['Day', G.dayCount], ['Settlers', G.villagers.length], ['Winters', G.journal.wintersEndured||0], ['Deeds', Object.keys(G.deeds).length+'/'+DEED_DEFS.length]];
     const bw=W/stats.length;
     stats.forEach((s,i)=>{ const sx=bw*i+bw/2;
       x.fillStyle='#f0e2c0'; x.font="700 46px 'Cinzel', Georgia, serif"; x.fillText(String(s[1]), sx, 480);
@@ -6065,8 +6036,8 @@ async function exportHoldCard(){
     // share / save
     const url=cv.toDataURL('image/png');
     const blob=await (await fetch(url)).blob();
-    const file=new File([blob], 'oakenfall-'+(holdName||'hold').toLowerCase().replace(/[^a-z0-9]+/g,'-')+'.png', {type:'image/png'});
-    if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:holdName||'Oakenfall'}); }
+    const file=new File([blob], 'oakenfall-'+(G.holdName||'hold').toLowerCase().replace(/[^a-z0-9]+/g,'-')+'.png', {type:'image/png'});
+    if(navigator.canShare && navigator.canShare({files:[file]})){ await navigator.share({files:[file], title:G.holdName||'Oakenfall'}); }
     else { const a=document.createElement('a'); a.href=url; a.download=file.name; a.click(); }
     toast('🪪 Your hold card, ready to share.');
   }catch(e){ if(e && e.name!=='AbortError') toast('🪪 Could not make the card — try again.', true); }
@@ -6105,7 +6076,7 @@ function updateHud(){
   if(R.flour){ R.flour.textContent = fmt(G.stockpile.flour||0); R.capFlour.textContent = '/'+capFor('flour'); }
   R.bread.textContent = fmt(G.stockpile.bread||0);
   R.capBread.textContent = '/'+capFor('bread');
-  R.coins.textContent = fmt(coins);
+  R.coins.textContent = fmt(G.coins);
   elPop.textContent = G.villagers.length;
   elCap.textContent = '/'+popCapacity();
   // Attention badge: idle villagers who could be working
@@ -6133,7 +6104,7 @@ function eventCategory(msg){
   return 'general';
 }
 function toast(msg, warn){
-  eventLog.push({ msg, warn:!!warn, day:dayCount, cat:eventCategory(msg) });
+  eventLog.push({ msg, warn:!!warn, day:G.dayCount, cat:eventCategory(msg) });
   if(eventLog.length>40) eventLog.shift();
   if(warn && typeof sfx==="function") sfx("warn");
   const el = document.createElement('div');
@@ -6236,22 +6207,22 @@ function miniBar(pct, color){
 /* ── Research panel: extracted from the Town Center sheet so the hub's
    Research tab and the building sheet share one implementation ── */
 function researchPanelHtml(){
-  const done = TECH_TREE.filter(t=>researched[t.id]);
+  const done = TECH_TREE.filter(t=>G.researched[t.id]);
   const avail = TECH_TREE.filter(t=>techAvailable(t));
   let html = '';
-  if(activeResearch){
-    const t = TECH_TREE.find(x=>x.id===activeResearch.id);
-    const pct = Math.round(100*(1 - activeResearch.remaining/activeResearch.total));
+  if(G.activeResearch){
+    const t = TECH_TREE.find(x=>x.id===G.activeResearch.id);
+    const pct = Math.round(100*(1 - G.activeResearch.remaining/G.activeResearch.total));
     html += `<div class="sheet-sub">${t.ic} ${t.name} — ${pct}% ${miniBar(pct,'#7a9a4a')}</div>`;
   }
   html += avail.map(t=>{
     const costStr = Object.entries(t.cost).map(([k,a])=>a+' '+k).join(', ');
     const afford = Object.entries(t.cost).every(([k,a])=>(G.stockpile[k]||0)>=a);
-    return `<button class="action-btn list-row${(!afford||activeResearch)?' dim':''}" data-tech="${t.id}">
+    return `<button class="action-btn list-row${(!afford||G.activeResearch)?' dim':''}" data-tech="${t.id}">
       <div>${t.ic} <span class="rt">${t.name}</span> — ${t.desc}<br><span class="rd">Cost: ${costStr} · ${t.time}s</span></div></button>`;
   }).join('');
   if(done.length) html += `<div class="sheet-sub" style="margin-top:6px;">Completed: ${done.map(t=>t.ic+' '+t.name).join(' · ')}</div>`;
-  if(!avail.length && !activeResearch && done.length===TECH_TREE.length) html += '<div class="sheet-sub">All knowledge of the age has been mastered.</div>';
+  if(!avail.length && !G.activeResearch && done.length===TECH_TREE.length) html += '<div class="sheet-sub">All knowledge of the age has been mastered.</div>';
   return html;
 }
 function bindResearchButtons(rerender){
@@ -6320,24 +6291,24 @@ function renderResearchTab(){
 }
 function renderJournalSheet(){
   sheetContent.innerHTML = `
-    <div class="sheet-sub">📖 <b>Hold Journal</b> — Peak settlers: ${journal.peakPopulation} · Days: ${journal.daysSurvived} · Winters: ${journal.wintersEndured} · Buildings raised: ${journal.buildingsRaised} · Settlers welcomed: ${journal.settlersWelcomed} · Wolf raids survived: ${journal.wolvesSurvived}${journal.passed?' · Passed on: '+journal.passed:''}</div>
+    <div class="sheet-sub">📖 <b>Hold Journal</b> — Peak settlers: ${G.journal.peakPopulation} · Days: ${G.journal.daysSurvived} · Winters: ${G.journal.wintersEndured} · Buildings raised: ${G.journal.buildingsRaised} · Settlers welcomed: ${G.journal.settlersWelcomed} · Wolf raids survived: ${G.journal.wolvesSurvived}${G.journal.passed?' · Passed on: '+G.journal.passed:''}</div>
     ${(()=>{ const g=Object.keys(GUILD_DEFS).filter(r=>G.guilds[r]); return g.length?`<div class="sheet-sub" style="margin-top:6px;"><b>⚜️ Guilds</b> — ${g.map(r=>GUILD_DEFS[r].ic+' '+GUILD_DEFS[r].name).join(' · ')} <span style="opacity:.7">(+${Math.round(guildBonusVal()*100)}% each)</span></div>`:''; })()}
-    <div class="sheet-sub" style="margin:8px 0 2px;"><b>🏅 Deeds</b> — ${Object.keys(deeds).length} of ${DEED_DEFS.length} earned</div>
+    <div class="sheet-sub" style="margin:8px 0 2px;"><b>🏅 Deeds</b> — ${Object.keys(G.deeds).length} of ${DEED_DEFS.length} earned</div>
     <div class="deed-G.grid">
       ${DEED_DEFS.map(d=>{
-        const got = !!deeds[d.id];
+        const got = !!G.deeds[d.id];
         const rt = rewardText(d.reward);
         return `<div class="deed${got?' got':''}" title="${d.desc}${rt?' · Reward '+rt:''}">
           <span class="deed-ic">${got?d.ic:'🔒'}</span>
           <span class="deed-name">${d.name}</span>
-          <span class="deed-desc">${got?('Day '+deeds[d.id]):d.desc}${rt?`<br><span style="color:var(--amber)">${rt}</span>`:''}</span>
+          <span class="deed-desc">${got?('Day '+G.deeds[d.id]):d.desc}${rt?`<br><span style="color:var(--amber)">${rt}</span>`:''}</span>
         </div>`;
       }).join('')}
     </div>
     <div class="sheet-sub" style="margin:10px 0 2px;"><b>📜 The Chronicle of the Hold</b></div>
-    ${chronicle.length ? chronicle.slice(0,6).map(e=>`<div class="sheet-sub" style="opacity:.92;">Day ${e.day}${e.season?', '+e.season:''} — ${e.text}</div>`).join('') : '<div class="sheet-sub" style="opacity:.7;">The chronicle awaits its first tale.</div>'}
+    ${G.chronicle.length ? G.chronicle.slice(0,6).map(e=>`<div class="sheet-sub" style="opacity:.92;">Day ${e.day}${e.season?', '+e.season:''} — ${e.text}</div>`).join('') : '<div class="sheet-sub" style="opacity:.7;">The chronicle awaits its first tale.</div>'}
     <div class="row" style="margin-top:8px;gap:6px;">
-      ${chronicle.length ? `<button class="action-btn" id="chron-btn" style="flex:1;">📜 Read the full Chronicle</button>` : ''}
+      ${G.chronicle.length ? `<button class="action-btn" id="chron-btn" style="flex:1;">📜 Read the full Chronicle</button>` : ''}
       <button class="action-btn" id="inbox-btn" style="flex:1;">📨 Events</button>
       <button class="action-btn" id="holdcard-btn" style="flex:1;">🪪 Share Card</button>
       <button class="action-btn" id="stats-btn" style="flex:1;">📊 Statistics</button>
@@ -6367,7 +6338,7 @@ function renderChronicleSheet(){
   const tier = (typeof HOLD_TIERS!=='undefined' && HOLD_TIERS[currentTierIdx]) || {ic:'🏕️', name:'Hold'};
   // Group consecutive entries by (day, season); chronicle is newest-first.
   const groups=[]; let cur=null;
-  for(const e of chronicle){
+  for(const e of G.chronicle){
     if(!cur || cur.day!==e.day || cur.season!==e.season){ cur={day:e.day, season:e.season, items:[]}; groups.push(cur); }
     cur.items.push(e.text);
   }
@@ -6377,15 +6348,15 @@ function renderChronicleSheet(){
   ).join('');
   sheetContent.innerHTML = `
     <div class="chronicle-page">
-      <div class="cx-title">The Chronicle of ${holdName}</div>
-      <div class="cx-sub">${tier.ic} ${tier.name} · Day ${dayCount} · ${seasonName()}</div>
-      ${chronicle.length ? body : '<div class="cx-line" style="text-align:center;">The chronicle awaits its first tale.</div>'}
+      <div class="cx-title">The Chronicle of ${G.holdName}</div>
+      <div class="cx-sub">${tier.ic} ${tier.name} · Day ${G.dayCount} · ${seasonName()}</div>
+      ${G.chronicle.length ? body : '<div class="cx-line" style="text-align:center;">The chronicle awaits its first tale.</div>'}
     </div>`;
 }
 function renderStatsSheet(){
-  const H = statHistory.slice();
+  const H = G.statHistory.slice();
   // include a live "today" point so the graph reaches the present
-  H.push({ day:dayCount, pop:G.villagers.length, food:Math.round(G.stockpile.food||0), wood:Math.round(G.stockpile.wood||0), stone:Math.round(G.stockpile.stone||0) });
+  H.push({ day:G.dayCount, pop:G.villagers.length, food:Math.round(G.stockpile.food||0), wood:Math.round(G.stockpile.wood||0), stone:Math.round(G.stockpile.stone||0) });
   const W=300, HT=110, pad=6;
   const line = (key, col)=>{
     if(H.length<2) return '';
@@ -6414,9 +6385,9 @@ function renderStatsSheet(){
       ${legend('#c8a850','Provisions',last.food)}
       ${legend('#8a6a3a','Timber',last.wood)}
     </div>
-    ${festivalBoon?(()=>{const b=FESTIVAL_BOONS.find(x=>x.id===festivalBoon);return b?`<div class="sheet-sub" style="margin-top:8px;">${b.ic} <b>${b.name}</b> — this year's festival blessing. ${b.desc}</div>`:'';})():''}
-    <div class="sheet-sub" style="margin-top:8px;">Peak settlers <b>${journal.peakPopulation}</b> · Days survived <b>${journal.daysSurvived}</b> · Winters endured <b>${journal.wintersEndured}</b></div>
-    <div class="sheet-sub">Buildings raised <b>${journal.buildingsRaised}</b> · Settlers welcomed <b>${journal.settlersWelcomed}</b> · Raids survived <b>${wolfEvents}</b>${journal.weddings?` · Weddings <b>${journal.weddings}</b>`:''}${journal.childrenBorn?` · Children born <b>${journal.childrenBorn}</b>`:''}${journal.passed?` · Passed on <b>${journal.passed}</b>`:''}</div>`;
+    ${G.festivalBoon?(()=>{const b=FESTIVAL_BOONS.find(x=>x.id===G.festivalBoon);return b?`<div class="sheet-sub" style="margin-top:8px;">${b.ic} <b>${b.name}</b> — this year's festival blessing. ${b.desc}</div>`:'';})():''}
+    <div class="sheet-sub" style="margin-top:8px;">Peak settlers <b>${G.journal.peakPopulation}</b> · Days survived <b>${G.journal.daysSurvived}</b> · Winters endured <b>${G.journal.wintersEndured}</b></div>
+    <div class="sheet-sub">Buildings raised <b>${G.journal.buildingsRaised}</b> · Settlers welcomed <b>${G.journal.settlersWelcomed}</b> · Raids survived <b>${G.wolfEvents}</b>${G.journal.weddings?` · Weddings <b>${G.journal.weddings}</b>`:''}${G.journal.childrenBorn?` · Children born <b>${G.journal.childrenBorn}</b>`:''}${G.journal.passed?` · Passed on <b>${G.journal.passed}</b>`:''}</div>`;
 }
 
 let inboxFilter = 'all';
@@ -6442,7 +6413,7 @@ function openFestivalChoice(){
   sheetNav.push({ id:'festival', title:'🎊 The Year\'s Festival', render(){
     sheetContent.innerHTML = `
       <div class="sheet-sub">A new year turns over the valley. The folk gather — choose the blessing that will guide the hold until next spring.</div>
-      ${festivalBoon?`<div class="sheet-sub" style="opacity:.75;">Last year's blessing: ${(FESTIVAL_BOONS.find(b=>b.id===festivalBoon)||{}).name||'—'}.</div>`:''}
+      ${G.festivalBoon?`<div class="sheet-sub" style="opacity:.75;">Last year's blessing: ${(FESTIVAL_BOONS.find(b=>b.id===G.festivalBoon)||{}).name||'—'}.</div>`:''}
       <div class="roster-list" style="margin-top:8px;">
         ${FESTIVAL_BOONS.map(b=>`<button class="action-btn list-row" data-boon="${b.id}">
           <span style="font-size:22px;">${b.ic}</span>
@@ -6451,8 +6422,8 @@ function openFestivalChoice(){
       </div>`;
     sheetContent.querySelectorAll('[data-boon]').forEach(btn=>btn.addEventListener('click', ()=>{
       const b = FESTIVAL_BOONS.find(x=>x.id===btn.dataset.boon); if(!b) return;
-      festivalBoon = b.id;
-      activeEvent = { type:'festival', endsAt: worldTime + 55 }; // a real feast to mark it
+      G.festivalBoon = b.id;
+      activeEvent = { type:'festival', endsAt: G.worldTime + 55 }; // a real feast to mark it
       toast(b.ic+' '+b.name+' — the hold rejoices!'); if(typeof sfx==='function') sfx('festival');
       if(typeof chron==='function') chron('festival', b.name);
       try{ sfx('tap'); }catch(e){}
@@ -6756,7 +6727,7 @@ function bulkAssignIdle(){
 function renderBuildPalette(){
   const keys = Object.keys(BUILD_DEFS).filter(k=>{
     const d = BUILD_DEFS[k];
-    return !d.needsTech || researched[d.needsTech];
+    return !d.needsTech || G.researched[d.needsTech];
   });
   sheetContent.innerHTML = `
     <div class="sheet-title">🔨 Raise a Building</div>
@@ -6851,13 +6822,13 @@ function confirmPlacement(){
     return;
   }
   const d = BUILD_DEFS[buildMode.key];
-  const costOf = (k,amt)=> (k==='stone' && researched.masonry) ? Math.ceil(amt*0.85) : amt;
+  const costOf = (k,amt)=> (k==='stone' && G.researched.masonry) ? Math.ceil(amt*0.85) : amt;
   for(const [k,amt] of Object.entries(d.cost)){ if(amt>0 && (G.stockpile[k]||0)<costOf(k,amt)){ toast('Not enough '+k+'.', true); return; } }
   for(const [k,amt] of Object.entries(d.cost)){ if(amt>0) G.stockpile[k]-=costOf(k,amt); }
   addBuilding(buildMode.key, gx, gy);
   spawnDust(gx+0.5, gy+0.5);
-  journal.buildingsRaised++;
-  if(dailyProgress.built!==undefined) dailyProgress.built++;
+  G.journal.buildingsRaised++;
+  if(G.dailyProgress.built!==undefined) G.dailyProgress.built++;
   sfx('build'); buzz(18);
   toast(d.name+' constructed!');
   if(buildMode.key==='palisade' && !window._palisadeWarned){
@@ -7070,7 +7041,7 @@ if(fsBtn) fsBtn.addEventListener('click', ()=>{
 });
 const onboardX = document.getElementById('onboard-x');
 if(onboardX) onboardX.addEventListener('click', ()=>{
-  onboardDone = true;
+  G.onboardDone = true;
   document.getElementById('onboard-ribbon').classList.add('hidden');
   if(typeof started!=='undefined' && started) saveGame && saveGame();
 });
@@ -7157,16 +7128,19 @@ function loop(now){
 function serializeState(){
   return {
     v:2, savedAt: Date.now(),
-    worldTime, dayCount, stockpile: G.stockpile, totals: G.totals, questsCompleted, wolfEvents,
-    idleSlotCounter: G.idleSlotCounter, usedNames: G.usedNames, journal, researched, activeResearch, coins, dailyBounties, dailyProgress, bannerIdx, gameModeId,
-    landId, scenarioId, scenarioWon, tcX: G.TC_X, tcY: G.TC_Y,
+    worldTime: G.worldTime, dayCount: G.dayCount, stockpile: G.stockpile, totals: G.totals,
+    questsCompleted: G.questsCompleted, wolfEvents: G.wolfEvents,
+    idleSlotCounter: G.idleSlotCounter, usedNames: G.usedNames, journal: G.journal,
+    researched: G.researched, activeResearch: G.activeResearch, coins: G.coins,
+    dailyBounties: G.dailyBounties, dailyProgress: G.dailyProgress, bannerIdx: G.bannerIdx, gameModeId,
+    landId: G.landId, scenarioId: G.scenarioId, scenarioWon: G.scenarioWon, tcX: G.TC_X, tcY: G.TC_Y,
     grid: G.grid.map(row=>row.map(t=>({type:t.type,wilds:t.wilds,ford:t.ford||undefined,resourceAmount:t.resourceAmount,maxResource:t.maxResource,baseMax:t.baseMax,regrowAt:t.regrowAt}))),
     buildings: G.buildings.map(b=>({type:b.type,gx:b.gx,gy:b.gy,condition:Math.round(b.condition===undefined?100:b.condition),herd:b.herd})),
     villagers: G.villagers.map(v=>({name:v.name, role:v.role, gx:v.gx, gy:v.gy, hunger:v.hunger, fatigue:v.fatigue, trait:v.trait, sick:v.sick, morale:v.morale||65, partner:v.partner||null, parents:v.parents||null, relations:v.relations||[], memories:v.memories||[], age:v.age, stage:v.stage, lifespan:v.lifespan, skills:v.skills||{}})),
-    memorials: G.memorials, chronicle: chronicle, deeds: deeds, statHistory: statHistory,
-    festivalBoon: festivalBoon, lastFestivalYear: lastFestivalYear,
-    tradeRoutes: tradeRoutes, routeOffers: routeOffers, climate: climate, plague: plague,
-    unlocks: unlocks, onboardDone: onboardDone, ledger: ledger, holdName: holdName, crestChoice: crestChoice, decrees: decrees,
+    memorials: G.memorials, chronicle: G.chronicle, deeds: G.deeds, statHistory: G.statHistory,
+    festivalBoon: G.festivalBoon, lastFestivalYear: G.lastFestivalYear,
+    tradeRoutes: G.tradeRoutes, routeOffers: G.routeOffers, climate: G.climate, plague: G.plague,
+    unlocks: G.unlocks, onboardDone: G.onboardDone, ledger: G.ledger, holdName: G.holdName, crestChoice: G.crestChoice, decrees: G.decrees,
     ui: { mmBig: document.getElementById('minimap-wrap').classList.contains('mm-big') },
   };
 }
@@ -7214,8 +7188,8 @@ async function migrateLegacySave(){
 function noteSlotSaved(){
   const prev = slotMeta[String(currentSlot)] || {};
   slotMeta[String(currentSlot)] = {
-    name: prev.name || holdName || 'Oakenfall',
-    holdName, savedAt: Date.now(), day: dayCount, pop: G.villagers.length,
+    name: prev.name || G.holdName || 'Oakenfall',
+    holdName: G.holdName, savedAt: Date.now(), day: G.dayCount, pop: G.villagers.length,
   };
 }
 async function deleteSlot(n){
@@ -7260,14 +7234,14 @@ let _loadedSavedAt = 0;
 // Unlocks (cosmetic entitlements) live in their OWN storage key as well as the
 // save, so redeemed packs survive a save wipe or a fresh hold.
 async function saveUnlocks(){
-  try{ await window.storage.set('oakenfall-unlocks', JSON.stringify(unlocks||{}), false); }catch(e){}
+  try{ await window.storage.set('oakenfall-unlocks', JSON.stringify(G.unlocks||{}), false); }catch(e){}
 }
 async function loadUnlocks(){
   try{
     const res = await window.storage.get('oakenfall-unlocks', false);
     if(res && res.value){
       const u = JSON.parse(res.value);
-      unlocks = Object.assign({}, u, unlocks); // in-memory (e.g. just-redeemed) wins
+      G.unlocks = Object.assign({}, u, G.unlocks); // in-memory (e.g. just-redeemed) wins
       applyPatronBanners();
     }
   }catch(e){}
@@ -7361,25 +7335,25 @@ function restoreVillager(vd){
   });
 }
 function restoreState(data){
-  worldTime=data.worldTime||30; dayCount=data.dayCount||1;
+  G.worldTime=data.worldTime||30; G.dayCount=data.dayCount||1;
   G.stockpile = Object.assign({wood:0,stone:0,food:0,planks:0,flour:0,bread:0}, data.stockpile);
   G.totals = Object.assign({wood:0,stone:0,food:0,planks:0,flour:0,bread:0}, data.totals);
-  questsCompleted = data.questsCompleted || {};
-  wolfEvents = data.wolfEvents||0;
+  G.questsCompleted = data.questsCompleted || {};
+  G.wolfEvents = data.wolfEvents||0;
   G.idleSlotCounter = data.idleSlotCounter||0;
   G.usedNames = data.usedNames||[];
-  journal = Object.assign({ peakPopulation:0, daysSurvived:0, wolvesSurvived:0, buildingsRaised:0, settlersWelcomed:0, wintersEndured:0 }, data.journal);
-  researched = data.researched || {};
-  activeResearch = data.activeResearch || null;
-  coins = data.coins||0;
-  dailyBounties = data.dailyBounties||[];
-  dailyProgress = Object.assign({wood:0,stone:0,food:0,bread:0,planks:0,flour:0,built:0}, data.dailyProgress);
-  bannerIdx = data.bannerIdx||0;
+  G.journal = Object.assign({ peakPopulation:0, daysSurvived:0, wolvesSurvived:0, buildingsRaised:0, settlersWelcomed:0, wintersEndured:0 }, data.journal);
+  G.researched = data.researched || {};
+  G.activeResearch = data.activeResearch || null;
+  G.coins = data.coins||0;
+  G.dailyBounties = data.dailyBounties||[];
+  G.dailyProgress = Object.assign({wood:0,stone:0,food:0,bread:0,planks:0,flour:0,built:0}, data.dailyProgress);
+  G.bannerIdx = data.bannerIdx||0;
   gameModeId = data.gameModeId||'settler';
   // Holds saved before scenarios existed simply have no goal set.
-  landId = data.landId || 'valley';
-  scenarioId = data.scenarioId || 'endless';
-  scenarioWon = !!data.scenarioWon;
+  G.landId = data.landId || 'valley';
+  G.scenarioId = data.scenarioId || 'endless';
+  G.scenarioWon = !!data.scenarioWon;
   gameMode = GAME_MODES[gameModeId] || GAME_MODES.settler;
   if(data.ui && data.ui.mmBig) document.getElementById('minimap-wrap').classList.add('mm-big');
   // Restore the map at ITS OWN saved size — the save may be from a Small (26)
@@ -7410,22 +7384,22 @@ function restoreState(data){
   G.villagers=[];
   for(const vd of data.villagers) restoreVillager(vd);
   G.memorials = data.memorials || [];
-  chronicle = data.chronicle || [];
-  deeds = data.deeds || {};
-  statHistory = data.statHistory || [];
-  festivalBoon = data.festivalBoon || null;
-  lastFestivalYear = data.lastFestivalYear || 0;
-  tradeRoutes = data.tradeRoutes || [];
-  routeOffers = data.routeOffers || [];
-  climate = data.climate || null;
-  plague = data.plague || null;
-  unlocks = data.unlocks || {};
+  G.chronicle = data.chronicle || [];
+  G.deeds = data.deeds || {};
+  G.statHistory = data.statHistory || [];
+  G.festivalBoon = data.festivalBoon || null;
+  G.lastFestivalYear = data.lastFestivalYear || 0;
+  G.tradeRoutes = data.tradeRoutes || [];
+  G.routeOffers = data.routeOffers || [];
+  G.climate = data.climate || null;
+  G.plague = data.plague || null;
+  G.unlocks = data.unlocks || {};
   applyPatronBanners();
-  onboardDone = data.onboardDone || false;
-  if(data.ledger && data.ledger.in && data.ledger.out) ledger = data.ledger;
-  holdName = data.holdName || 'Oakenfall';
-  crestChoice = data.crestChoice || 0;
-  decrees = Object.assign({ curfew:false, tithe:false, openGates:false, rationing:false }, data.decrees||{});
+  G.onboardDone = data.onboardDone || false;
+  if(data.ledger && data.ledger.in && data.ledger.out) G.ledger = data.ledger;
+  G.holdName = data.holdName || 'Oakenfall';
+  G.crestChoice = data.crestChoice || 0;
+  G.decrees = Object.assign({ curfew:false, tithe:false, openGates:false, rationing:false }, data.decrees||{});
   // Seed friendship/rivalry moments so restored relationships don't re-toast on load
   _relMoments.clear();
   G.villagers.forEach(v=>(v.relations||[]).forEach(r=>{
@@ -7610,11 +7584,11 @@ function playLand(){
   document.body.classList.remove('editing');
   document.getElementById('editor-ui').classList.add('hidden');
   started = false;
-  landId = 'custom';
+  G.landId = 'custom';
   claimSlotName();
   // A land you drew yourself is a sandbox — a goal you set the terrain for
   // isn't a goal. Build it however you like, for as long as you like.
-  scenarioId = 'endless'; scenarioWon = false;
+  G.scenarioId = 'endless'; G.scenarioWon = false;
   addBuilding('townCenter', G.TC_X, G.TC_Y);
   for(let i=0;i<3;i++) spawnVillager();
   chron('founding');
@@ -7695,32 +7669,32 @@ function finishBoot(){
 function resetHoldState(){
   // Read the player's hold identity from the start screen
   const nameEl = document.getElementById('hold-name-input');
-  holdName = ((nameEl && nameEl.value) || '').trim().slice(0,22) || 'Oakenfall';
+  G.holdName = ((nameEl && nameEl.value) || '').trim().slice(0,22) || 'Oakenfall';
   const crestSel = document.querySelector('#crest-picker .sel');
-  crestChoice = crestSel ? (parseInt(crestSel.dataset.crest,10)||0) : 0;
+  G.crestChoice = crestSel ? (parseInt(crestSel.dataset.crest,10)||0) : 0;
   // Full state reset
   G.grid=[]; G.forestTiles=[]; G.stoneTiles=[]; G.waterTiles=[]; G.wildsTiles=[];
-  G.buildings=[]; G.villagers=[]; G.memorials=[]; chronicle=[]; deeds={}; statHistory=[]; festivalBoon=null; lastFestivalYear=0; tradeRoutes=[]; routeOffers=[]; climate=null; plague=null; G.raiders=[];
-  worldTime=30; dayCount=1; wolfTimer=60; wolfEvents=0;
+  G.buildings=[]; G.villagers=[]; G.memorials=[]; G.chronicle=[]; G.deeds={}; G.statHistory=[]; G.festivalBoon=null; G.lastFestivalYear=0; G.tradeRoutes=[]; G.routeOffers=[]; G.climate=null; G.plague=null; G.raiders=[];
+  G.worldTime=30; G.dayCount=1; wolfTimer=60; G.wolfEvents=0;
   spawnTimer=18; G.idleSlotCounter=0; G.usedNames=[];
-  questsCompleted={}; lastSeenQuestCount=0;
+  G.questsCompleted={}; lastSeenQuestCount=0;
   G.totals={wood:0,stone:0,food:0};
   window.__capWarned={wood:false,stone:false,food:false,planks:false,flour:false,bread:false};
-  researched={}; activeResearch=null; currentTierIdx=0; weather={type:'clear',label:'Clear',ic:'☀️'};
-  coins=0; bannerIdx=crestChoice; onboardDone=false; decrees={curfew:false,tithe:false,openGates:false,rationing:false}; decisionTimer=3.2; _lastDecision=''; ledger={in:{bounties:0,deeds:0,routes:0,quests:0,tithe:0},out:{shop:0}}; rollDailyBounties();
+  G.researched={}; G.activeResearch=null; currentTierIdx=0; weather={type:'clear',label:'Clear',ic:'☀️'};
+  G.coins=0; G.bannerIdx=G.crestChoice; G.onboardDone=false; G.decrees={curfew:false,tithe:false,openGates:false,rationing:false}; decisionTimer=3.2; _lastDecision=''; G.ledger={in:{bounties:0,deeds:0,routes:0,quests:0,tithe:0},out:{shop:0}}; rollDailyBounties();
   applyDifficulty(readDifficultyConfig());
 }
 /* A fresh hold names its slot after itself. Founding over an old hold replaces
    it outright, so carrying the old name across would just be misleading. */
 function claimSlotName(){
-  slotMeta[String(currentSlot)] = { name: holdName, holdName, day:1, pop:0, savedAt:0 };
+  slotMeta[String(currentSlot)] = { name: G.holdName, holdName: G.holdName, day:1, pop:0, savedAt:0 };
   saveSlotIndex();
 }
 function startNewGame(){
   resizeCanvas();
   resetHoldState();
   claimSlotName();
-  genMap(landId);
+  genMap(G.landId);
   addBuilding('townCenter', G.TC_X, G.TC_Y);
   for(let i=0;i<3;i++) spawnVillager();
   chron('founding');
@@ -7731,7 +7705,7 @@ async function continueGame(){
   const loaded = await loadGame();
   if(!loaded){ startNewGame(); return; }
   const offSum = applyOfflineProgress();
-  if(!dailyBounties.length) rollDailyBounties();
+  if(!G.dailyBounties.length) rollDailyBounties();
   finishBoot();
   if(offSum) showOfflineSummary(offSum);
   else toast('Welcome back to Oakenfall.');
