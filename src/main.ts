@@ -9,7 +9,7 @@
  * Safe under module scope: the game has no inline HTML event handlers, and
  * every intentional global is an explicit window.* assignment.
  */
-import { LANDS, BUILD_DEFS, ROLE_DEFS, TECH_TREE, HOLD_TIERS, SEASON_NAMES, WEATHER_TABLE, MM_COLORS, VILLAGER_TINTS, RAIDER_VARIANTS, NUM_WORDS, UNLOCK_SKUS, GAME_MODES } from './defs';
+import { LANDS, BUILD_DEFS, ROLE_DEFS, TECH_TREE, HOLD_TIERS, SEASON_NAMES, WEATHER_TABLE, MM_COLORS, roleLabel, VILLAGER_TINTS, RAIDER_VARIANTS, NUM_WORDS, UNLOCK_SKUS, GAME_MODES } from './defs';
 
 import { TILE_W, TILE_H, clamp, lerp, dist2, hash2, hashStr, project, inProject, fmt } from './math';
 import {
@@ -27,6 +27,8 @@ import { DAY_LEN, NIGHT_LEN, CYCLE_LEN, SEASON_LEN, setForceWinter, seasonIndex,
 function updateSunShadows(){ setSunShadow(...sunShadow()); }
 import { tileAt, genMap, reindexTiles } from './mapgen';
 import { tileWalkable, nearestWalkable, pathFind } from './pathfind';
+import { initSkills, SKILL_TIERS, skillTier, skillMul, gainSkill, hasNearbyMentor,
+  GUILD_DEFS, guildBonusVal, recomputeGuilds, guildMulRes, guildFarmMul } from './skills';
 import { initWeather, getWeather, setWeather, rollWeather, rollClimate, rollPlague, plagueTick,
   climateFarmMul, climateFireMul, climateHungerMul, climateFatigueMul,
   weatherMoveMul, weatherFarmMul, weatherFatigueMul, WEATHER_DEFS, CLIMATE_DEFS } from './weather';
@@ -453,6 +455,8 @@ window.__oakDebug = function(){
     buildings: G.buildings.filter(b=>b.type!=='road').map(b=>b.type),
     placements: G.buildings.filter(b=>b.type!=='road').map(b=>({t:b.type, gx:b.gx, gy:b.gy})),
     worn: G.buildings.filter(b=>b.condition!==undefined && b.condition<70).length,
+    guilds: Object.keys(G.guilds).filter(r=>G.guilds[r]),
+    masters: G.villagers.filter(v=>v.role && v.role!=='idle' && skillTier(v,v.role).label==='Master').length,
     onFire: G.buildings.filter(b=>b._fire>0).length,
     activeResearch: G.activeResearch ? G.activeResearch.id : null,
     researchedCount: Object.keys(G.researched).filter(k=>G.researched[k]).length,
@@ -523,6 +527,11 @@ function adminGrant(kind){
     case 'settlers': for(let i=0;i<5;i++) spawnVillager(); toast('🛠️ +5 settlers summoned.'); break;
     case 'settler1': spawnVillager(); toast('🛠️ A settler joins.'); break;
     case 'morale': G.villagers.forEach(v=>{ v.morale = 100; }); toast('🛠️ Every settler is content.'); break;
+    /* Mastery takes ~420 seconds of steady work in a trade, so guilds are all
+       but unreachable in a test run. Granting it outright is the only way to
+       exercise them without playing for an hour. */
+    case 'master': G.villagers.forEach(v=>{ if(v.role && v.role!=='idle'){ v.skills = v.skills||{}; v.skills[v.role] = 500; } });
+                   recomputeGuilds(true); toast('🛠️ Every settler is a Master of their trade.'); break;
     case 'heal': G.villagers.forEach(v=>{ v.sick = false; v.hunger = 0; v.fatigue = 0; }); toast('🛠️ All settlers healed & rested.'); break;
     // ── Weather ──
     case 'wClear': setWeather('clear'); toast('🛠️ Weather: clear.'); break;
@@ -575,7 +584,7 @@ function renderAdminSheet(){
     ${sect('💰 Economy', [['res','📦 +500 of every resource'],['maxout','🏺 Fill all stores to cap'],['craftClear','🧹 Empty crafted stores'],['coins','💰 +1,000 coins'],['coinsBig','💰 +10,000 coins']])}
     ${sect('🌤️ Weather', [['wClear','☀️ Clear'],['wRain','🌧️ Rain'],['wStorm','⛈️ Storm + lightning'],['wSnow','🌨️ Snowfall']])}
     ${sect('🕰️ Time', [['tDawn','🌅 Jump to dawn'],['tNight','🌙 Jump to night'],['tDay','📅 Advance one day'],['tSeason','🍂 Advance one season']])}
-    ${sect('👥 Population', [['settler1','🚶 Summon 1 settler'],['settlers','👥 Summon 5 settlers'],['morale','😊 All morale to 100'],['heal','❤️ Heal, feed & rest all']])}
+    ${sect('👥 Population', [['settler1','🚶 Summon 1 settler'],['settlers','👥 Summon 5 settlers'],['morale','😊 All morale to 100'],['heal','❤️ Heal, feed & rest all'],['master','★ Master every trade']])}
     ${sect('🔓 Unlocks', [['tech','🔬 Unlock all research'],['cosmetics','🎁 Unlock all cosmetic packs']])}
     ${sect('🔥 Hazards', [['raid','🏴 Trigger a raid'],['fire','🔥 Start a fire'],['douse','🪣 Douse all fires'],['decay','🏚️ Wear every building down']])}
     ${sect('🐛 Toggles', [['freeze','🧊 Freeze hunger/fatigue'+onoff(ADMIN.freezeNeeds)],['noraid','🛡️ Block raids'+onoff(ADMIN.noRaids)],['debug','📊 Debug overlay'+onoff(ADMIN.debug)]])}
@@ -2447,72 +2456,6 @@ function effMultiplier(v){
   m *= eventSpeedBonus(); // festival boost
   return Math.max(0.12, m);  // floor at 12% so villager never becomes truly catatonic
 }
-/* ── SKILL GROWTH ── settlers get better at a role the longer they work it */
-const SKILL_TIERS = [
-  {min:0,   label:'',        ic:'',  mul:1},
-  {min:150, label:'Skilled', ic:'✦', mul:1.08},
-  {min:420, label:'Master',  ic:'★', mul:1.18},
-];
-function skillTier(v, role){
-  const xp = (v.skills && v.skills[role]) || 0;
-  let t = SKILL_TIERS[0];
-  for(const s of SKILL_TIERS){ if(xp >= s.min) t = s; }
-  return t;
-}
-function skillMul(v){ return v.role && v.role!=='idle' ? skillTier(v, v.role).mul : 1; }
-/* ── GUILDS ── two or more Masters of a trade form a guild, granting a small
-   hold-wide bonus to that craft's output. Builds on skill mastery. */
-const GUILD_BONUS = 0.10;
-function guildBonusVal(){ return (typeof G.researched!=='undefined' && G.researched.charter) ? 0.15 : GUILD_BONUS; }
-const GUILD_DEFS = {
-  lumberjack:{res:'wood',  ic:'🪓', name:"Woodwrights' Guild",  blurb:'timber comes in faster hold-wide'},
-  miner:     {res:'stone', ic:'⛏️', name:"Stonecutters' Guild", blurb:'stone comes in faster hold-wide'},
-  farmer:    {res:'farm',  ic:'🌾', name:"Ploughmen's Guild",   blurb:'the fields yield more hold-wide'},
-  fisher:    {res:'fish',  ic:'🎣', name:"Fishers' Guild",      blurb:'the nets come back fuller'},
-  hunter:    {res:'meat',  ic:'🏹', name:"Hunters' Lodge",      blurb:'the hunt is more bountiful'},
-};
-function recomputeGuilds(announce){
-  const count={};
-  for(const v of G.villagers){ if(v.role && skillTier(v,v.role).label==='Master') count[v.role]=(count[v.role]||0)+1; }
-  for(const role in GUILD_DEFS){
-    const active = (count[role]||0) >= 2;
-    if(active && !G.guilds[role] && announce){
-      const g=GUILD_DEFS[role];
-      toast(g.ic+' The '+g.name+' has formed — '+g.blurb+' (+'+Math.round(guildBonusVal()*100)+'%).');
-      if(typeof chron==='function') chron('guild', g.name);
-    }
-    G.guilds[role] = active;
-  }
-}
-function guildMulRes(resKind){
-  const map={wood:'lumberjack', stone:'miner', fish:'fisher', meat:'hunter'};
-  const role=map[resKind]; return (role && G.guilds[role]) ? 1+guildBonusVal() : 1;
-}
-function guildFarmMul(){ return G.guilds.farmer ? 1+guildBonusVal() : 1; }
-function hasNearbyMentor(v){
-  // A Master of the same role working within ~4 tiles mentors the learner.
-  for(const o of G.villagers){
-    if(o===v || o.role!==v.role) continue;
-    if(skillTier(o, o.role).label!=='Master') continue;
-    if(dist2(o.gx,o.gy,v.gx,v.gy) < 16) return true;
-  }
-  return false;
-}
-function gainSkill(v, dt){
-  if(!v.role || v.role==='idle' || v.stage==='child') return;
-  if(!v.skills) v.skills = {};
-  const before = skillTier(v, v.role);
-  // Apprenticeship: a nearby Master of the same trade doubles learning speed
-  // (but only helps those not yet Masters themselves).
-  const mentored = before.label!=='Master' && hasNearbyMentor(v);
-  if(mentored) v._mentored = 0.6; // brief flag for the mood bubble
-  else if(v._mentored) v._mentored = Math.max(0, v._mentored - dt);
-  v.skills[v.role] = (v.skills[v.role] || 0) + dt*(mentored?2:1);
-  const after = skillTier(v, v.role);
-  if(after.label && after.label !== before.label){
-    toast(after.ic+' '+v.name+' is now a '+after.label+' '+roleLabel(v.role)+(mentored?' (well taught)':'')+'.');
-  }
-}
 
 function findResourceTarget(v, list){
   let best=null, bestD=Infinity;
@@ -3371,6 +3314,7 @@ initCritters({ ctx, sprites: SPRITES, spriteScale: SPRITE_SCALE, waterDrop: WATE
    chronicle directly — the module stays pure simulation that way, and can be
    reasoned about without a DOM. */
 initWeather({ toast, chron, sfx, forceWinter: ()=>!!gameMode.forceWinter });
+initSkills({ toast, chron });
 
 const TILE_COLORS = {
   grass: ['#2f4528','#33492c','#2a3f25','#304826'],
@@ -6096,7 +6040,6 @@ function renderVillagerSheet(v){
     });
   });
 }
-function roleLabel(r){ return (ROLE_DEFS[r]&&ROLE_DEFS[r].label) || r; }
 function stateLabel(v){
   const map = {
     spawning:'Newly arrived, still finding their feet.',

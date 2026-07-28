@@ -139,3 +139,9 @@ export const LANDS = {
     river:{ count:1, width:3, wind:0.8 }, forest:16, stone:6, wilds:6, fords:1, lakes:2,
   },
 };
+
+/** A trade's display name — "Lumberjack" for 'lumberjack'. Lives here rather
+ *  than in main.ts because more than one module now needs to name a role. */
+export function roleLabel(r: string): string {
+  return (ROLE_DEFS[r] && ROLE_DEFS[r].label) || r;
+}

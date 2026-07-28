@@ -145,6 +145,20 @@ await page.waitForTimeout(12000);
 const mended = (await snap()).worn;
 check('buildings wear down and can be mended', worn > 0 && mended < worn, `${worn} worn → ${mended}`);
 
+/* ---- skills and guilds ----
+ * Mastery takes about 420 seconds of steady work in one trade, so no test run
+ * reaches it by playing — which is why nothing covered guilds at all until
+ * now. The admin grant makes Masters outright; what is asserted is the
+ * consequence, that a guild forms from them. */
+await order('put 2 to lumberjack and 2 to mining');
+await page.waitForTimeout(6000);
+await admin('master');
+await page.waitForTimeout(600);
+const guilded = await snap();
+check('settlers reach mastery', guilded.masters >= 2, `${guilded.masters} masters`);
+check('masters of a trade form a guild', guilded.guilds.length > 0,
+  guilded.guilds.length ? guilded.guilds.join(', ') : 'no guild formed');
+
 // ---- seasons: a full year must turn, and winter must arrive ----
 const seasons = new Set();
 for (let i = 0; i < 5; i++) {
