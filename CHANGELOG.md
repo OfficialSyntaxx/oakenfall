@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.77.2
+Fishing spots look like fishing spots. Instead of a fish lying on the surface,
+you now see what you'd see from a bank: a dark shape turning slowly under the
+water, rising close enough to catch the light and sometimes breaking it with a
+flick of its tail, with bubbles drifting up to pop in rings. Leaping fish now
+leave the water where the water actually is, and splash on both ends of the
+arc. There are fewer spots overall, so the ones you find feel like somewhere
+worth putting a hut.
+
 ## 1.77.1
 The ducks float properly. They were standing on the surface rather than sitting
 in it — now they ride at the waterline with their bellies below it, pushing a

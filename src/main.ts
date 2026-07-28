@@ -823,15 +823,17 @@ function drawRabbit(c){
 function drawFish(c){
   if(!(c.jump > 0)) return;                       // only visible mid-arc
   const p = project(c.gx, c.gy);
+  const surf = p.y + WATER_DROP;                   // leaves from the water, not the bank
   const t = 1 - c.jump;                            // 0 → 1 across the leap
   const lift = Math.sin(t*Math.PI)*7;
-  const cx = p.x + (t-0.5)*7, cy = p.y - lift - 2;
+  const cx = p.x + (t-0.5)*7, cy = surf - lift - 2;
   ctx.save();
   ctx.fillStyle='#8fa8b8';
   ctx.beginPath(); ctx.ellipse(cx, cy, 3.2, 1.5, -0.5+t, 0, 7); ctx.fill();
   ctx.beginPath(); ctx.moveTo(cx-3,cy); ctx.lineTo(cx-5,cy-1.6); ctx.lineTo(cx-5,cy+1.6); ctx.closePath(); ctx.fill();
   ctx.strokeStyle='rgba(200,225,240,0.5)'; ctx.lineWidth=1;            // splash ring on the way down
-  if(t>0.75){ ctx.beginPath(); ctx.ellipse(p.x+(t-0.5)*7, p.y, 4*(t-0.75)*4, 1.6*(t-0.75)*4, 0, 0, 7); ctx.stroke(); }
+  if(t < 0.18){ ctx.beginPath(); ctx.ellipse(p.x-3.5, surf, 5*(0.18-t)*6, 2*(0.18-t)*6, 0, 0, 7); ctx.stroke(); }   // takeoff
+  if(t > 0.75){ ctx.beginPath(); ctx.ellipse(p.x+(t-0.5)*7, surf, 4*(t-0.75)*4, 1.6*(t-0.75)*4, 0, 0, 7); ctx.stroke(); }
   ctx.restore();
 }
 function drawFox(c){
@@ -1200,7 +1202,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.77.1';
+const GAME_VERSION = '1.77.2';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -4376,33 +4378,68 @@ function drawRock(gx,gy){
   }
 }
 
-function drawFishSpot(gx,gy){
-  const p = project(gx,gy);
-  const ox = (hash2(gx*1.4,gy*2.6)-0.5)*12;
-  const cx = p.x+ox, cy = p.y+1;
+/* A live fishing spot, seen from above the water rather than on it.
+   The old version drew a whole fish lying on the surface, at land height —
+   which is the same mistake the ducks had. What tells you fish are HERE is what
+   you'd actually see from a bank: a dark shape gliding under the surface,
+   bubbles rising and popping, and the rings they leave. */
+function drawFishSpot(gx, gy){
+  const p = project(gx, gy);
+  const ox = (hash2(gx*1.4, gy*2.6)-0.5)*12;
+  const cx = p.x + ox, surf = p.y + WATER_DROP;      // water sits recessed
   const t = worldTime;
-  // lily pad
-  ctx.fillStyle='#2a4e28';
-  ctx.beginPath(); ctx.ellipse(cx-6, cy+2, 5, 2.5, -0.3, 0, Math.PI*2); ctx.fill();
-  // ripple rings
-  ctx.strokeStyle='rgba(180,210,220,0.28)'; ctx.lineWidth=1;
-  ctx.beginPath(); ctx.ellipse(cx, cy, 8+Math.sin(t*1.8+gx)*1.5, 3.5, 0, 0, Math.PI*2); ctx.stroke();
-  ctx.strokeStyle='rgba(180,210,220,0.15)'; ctx.lineWidth=0.8;
-  ctx.beginPath(); ctx.ellipse(cx, cy, 14+Math.sin(t*1.4+gy)*2, 5, 0, 0, Math.PI*2); ctx.stroke();
-  // fish — use ctx.scale to flip direction, never negative radii
-  const bob = Math.sin(t*2.2+gx*3+gy)*2.5;
-  const facingRight = Math.sin(t*0.8+gx) > 0;
+
+  // Lily pad, floating flat on the surface.
+  ctx.fillStyle = '#2a4e28';
+  ctx.beginPath(); ctx.ellipse(cx-7, surf+2, 5, 2.4, -0.3, 0, 7); ctx.fill();
+  ctx.fillStyle = 'rgba(120,160,110,0.25)';
+  ctx.beginPath(); ctx.ellipse(cx-8, surf+1.4, 2.4, 1.1, -0.3, 0, 7); ctx.fill();
+
+  // The fish itself: a shadow under the water, never a body on top of it.
+  // It circles slowly, rising close enough to the surface to catch the light.
+  const a = t*0.7 + gx*1.3 + gy*0.7;
+  const fx = cx + Math.cos(a)*7, fy = surf + 1.5 + Math.sin(a*1.3)*1.8;
+  const depth = 0.5 + Math.sin(a*1.3)*0.5;           // 0 deep … 1 just under
   ctx.save();
-  ctx.translate(cx, cy+bob);
-  if(!facingRight) ctx.scale(-1, 1); // mirror without touching radii
-  ctx.fillStyle='#7a9aab';
-  ctx.beginPath(); ctx.ellipse(2, 0, 6, 2.5, 0.25, 0, Math.PI*2); ctx.fill();
-  // tail
-  ctx.beginPath(); ctx.moveTo(-4, 0); ctx.lineTo(-8, -3); ctx.lineTo(-8, 3); ctx.closePath(); ctx.fill();
-  // specular highlight
-  ctx.fillStyle='rgba(200,230,240,0.45)';
-  ctx.beginPath(); ctx.ellipse(1, -0.8, 2.5, 1, 0.4, 0, Math.PI); ctx.fill();
+  ctx.globalAlpha = 0.18 + depth*0.26;
+  ctx.fillStyle = '#0d2029';
+  ctx.translate(fx, fy);
+  ctx.rotate(Math.sin(a)*0.35);
+  ctx.beginPath(); ctx.ellipse(0, 0, 5.5, 1.9, 0, 0, 7); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(-4.5, 0); ctx.lineTo(-8, -2.2); ctx.lineTo(-8, 2.2); ctx.closePath(); ctx.fill();
   ctx.restore();
+
+  // Bubbles: rise, shrink, and leave a ring where they break the surface.
+  for(let i=0;i<3;i++){
+    const ph = ((t*0.45 + hash2(gx*7+i, gy*3.1)) % 1);
+    const bx = cx + (hash2(gx*2+i, gy*5.3)-0.5)*11;
+    const by = surf + 4.5 - ph*5.5;
+    if(ph < 0.82){
+      ctx.globalAlpha = 0.30 * (1 - ph*0.6);
+      ctx.fillStyle = '#cfe6f2';
+      ctx.beginPath(); ctx.arc(bx, by, 1.5 - ph*0.7, 0, 7); ctx.fill();
+    } else {
+      const pop = (ph - 0.82) / 0.18;                 // the burst at the top
+      ctx.globalAlpha = 0.30 * (1 - pop);
+      ctx.strokeStyle = '#cfe6f2'; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.ellipse(bx, surf - 0.5, 1.5 + pop*4, 0.6 + pop*1.6, 0, 0, 7); ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  // Slow rings spreading from the spot.
+  ctx.strokeStyle = 'rgba(180,210,220,0.24)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.ellipse(cx, surf, 8 + Math.sin(t*1.8+gx)*1.5, 3.2, 0, 0, 7); ctx.stroke();
+  ctx.strokeStyle = 'rgba(180,210,220,0.12)'; ctx.lineWidth = 0.8;
+  ctx.beginPath(); ctx.ellipse(cx, surf, 14 + Math.sin(t*1.4+gy)*2, 4.8, 0, 0, 7); ctx.stroke();
+
+  // Once in a while a tail breaks the surface where the shape is shallowest.
+  if(depth > 0.94){
+    ctx.fillStyle = 'rgba(150,180,196,0.65)';
+    ctx.beginPath();
+    ctx.moveTo(fx-4, surf); ctx.lineTo(fx-7, surf-4); ctx.lineTo(fx-2.5, surf-1.2);
+    ctx.closePath(); ctx.fill();
+  }
 }
 function drawAnimal(gx,gy){
   const p = project(gx,gy);
@@ -5642,7 +5679,7 @@ function render(){
       if(!t) continue;
       if(t.type==='forest' && t.resourceAmount>0){ list.push({depth:gx+gy+0.1, draw:()=>{ try{drawTree(gx,gy);}catch(e){} }}); }
       else if(t.type==='stone' && t.resourceAmount>0){ list.push({depth:gx+gy+0.1, draw:()=>{ try{drawRock(gx,gy);}catch(e){} }}); }
-      else if(t.type==='water' && !t.building && !riverFrozen() && t.resourceAmount>0 && hash2(gx*5.1,gy*4.2)>0.4){ list.push({depth:gx+gy+0.1, draw:()=>{ try{drawFishSpot(gx,gy);}catch(e){} }}); }
+      else if(t.type==='water' && !t.building && !riverFrozen() && t.resourceAmount>0 && hash2(gx*5.1,gy*4.2)>0.62){ list.push({depth:gx+gy+0.1, draw:()=>{ try{drawFishSpot(gx,gy);}catch(e){} }}); }   // thinned: on 60% of tiles the open water read as wallpaper
       else if(t.wilds && t.resourceAmount>0 && hash2(gx*4.4,gy*5.6)>0.45){ list.push({depth:gx+gy+0.1, draw:()=>{ try{drawAnimal(gx,gy);}catch(e){} }}); }
     }
   }
