@@ -52,4 +52,22 @@ export const G = {
   stoneTiles: [] as Tile[],
   waterTiles: [] as Tile[],
   wildsTiles: [] as Tile[],
+
+  // ── the people ──────────────────────────────────────────────────────────
+  /** Every settler alive in the hold. Loosely typed while updateVillager and
+   *  the role scoring still live in main.ts; tightening it is its own step. */
+  villagers: [] as any[],
+  /** Names already given out, so the hold does not raise two Wrens. Persisted:
+   *  reusing a dead settler's name reads as a bug to a player who knew them. */
+  usedNames: [] as string[],
+  /** The departed, and where their stone stands in the memorial grove. */
+  memorials: [] as any[],
+  /** role → true once two or more Masters of that trade form a guild. */
+  guilds: {} as Record<string, boolean>,
+  /** Monotonic counter handing each settler a distinct idling spot, so a hold
+   *  with nothing to do does not stack every spare hand on one tile. */
+  idleSlotCounter: 0,
+  /** World-seconds until the next pairing-off and the next birth roll. */
+  courtshipTimer: 90,
+  birthTimer: 130,
 };

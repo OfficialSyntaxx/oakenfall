@@ -177,12 +177,11 @@ const DAY_LEN = 260, NIGHT_LEN = 160, CYCLE_LEN = DAY_LEN + NIGHT_LEN;
 const NAME_POOL = ["Eldric","Brom","Sela","Tamsin","Joran","Wren","Osric","Maela","Garrick","Ysolde",
   "Cormac","Liora","Dunwald","Petra","Aldric","Senna","Halvard","Rosalind","Thane","Briala",
   "Ulric","Maren","Stigr","Edda","Conrad","Isolde","Bram","Freya","Aldous","Cael"];
-let usedNames = [];
 function rollName(){
-  let pool = NAME_POOL.filter(n=>!usedNames.includes(n));
-  if(pool.length===0){ usedNames=[]; pool=NAME_POOL; }
+  let pool = NAME_POOL.filter(n=>!G.usedNames.includes(n));
+  if(pool.length===0){ G.usedNames=[]; pool=NAME_POOL; }
   const n = pool[Math.floor(Math.random()*pool.length)];
-  usedNames.push(n);
+  G.usedNames.push(n);
   return n;
 }
 
@@ -209,7 +208,6 @@ let buildings = [];
    throttles exceptions, it never surfaced as a crash: settlers simply walked to
    the trees, filled their arms, dropped nothing, and went back for more. */
 function findTC(){ return buildings.find(b=>b.type==='townCenter') || null; }
-let villagers = [];
 let stockpile = { wood:60, stone:25, food:40 };
 let totals = { wood:0, stone:0, food:0 }; // lifetime gathered, drives quests
 const BASE_CAP = { wood:200, stone:160, food:180, planks:80, flour:60, bread:60 };
@@ -320,7 +318,7 @@ function showVictory(sc){
       <div class="v-title">${sc.name}</div>
       <div class="v-sub">Achieved on day ${dayCount}, ${seasonName()} — ${holdName||'Oakenfall'} stands.</div>
       <div class="v-stats">
-        <span>👥 ${villagers.length} settlers</span>
+        <span>👥 ${G.villagers.length} settlers</span>
         <span>🏗️ ${journal.buildingsRaised} raised</span>
         <span>❄️ ${journal.wintersEndured} winters</span>
         <span>${HOLD_TIERS[currentTierIdx].ic} ${HOLD_TIERS[currentTierIdx].name}</span>
@@ -338,7 +336,7 @@ function showVictory(sc){
 /* ── STATS ── per-day snapshots for the Statistics view; capped, persists */
 let statHistory = []; // {day, pop, food, wood, stone}
 function captureStatSnapshot(){
-  statHistory.push({ day:dayCount, pop:villagers.length,
+  statHistory.push({ day:dayCount, pop:G.villagers.length,
     food:Math.round(stockpile.food||0), wood:Math.round(stockpile.wood||0), stone:Math.round(stockpile.stone||0) });
   if(statHistory.length>60) statHistory.shift();
 }
@@ -446,13 +444,13 @@ const ADMIN = { freezeNeeds:false, noRaids:false, debug:false };
    Deliberately a copy — nothing here can be used to mutate game state. */
 window.__oakDebug = function(){
   const roles = {};
-  for(const v of villagers) roles[v.role] = (roles[v.role]||0) + 1;
+  for(const v of G.villagers) roles[v.role] = (roles[v.role]||0) + 1;
   return {
     version: GAME_VERSION,
     day: dayCount, time: Math.round(worldTime*100)/100, editing: editorOn,
     season: seasonName(), weather: weather.type,
-    villagers: villagers.length, roles,
-    states: (()=>{ const c={}; for(const v of villagers) c[v.state]=(c[v.state]||0)+1; return c; })(),
+    villagers: G.villagers.length, roles,
+    states: (()=>{ const c={}; for(const v of G.villagers) c[v.state]=(c[v.state]||0)+1; return c; })(),
     /* Claimed work slots vs settlers actually holding one. A gap means tiles
        were claimed and never released, which slowly starves the hold of places
        to work. */
@@ -461,7 +459,7 @@ window.__oakDebug = function(){
        That is right, but it means a fault can run for months in silence — see
        findTC. Anything in here is a real error the game swallowed. */
     errors: errorLog.map(e=>e.kind+': '+e.msg.slice(0,90)),
-    claimants: villagers.filter(v=>v.targetTile).length,
+    claimants: G.villagers.filter(v=>v.targetTile).length,
     buildings: buildings.filter(b=>b.type!=='road').map(b=>b.type),
     placements: buildings.filter(b=>b.type!=='road').map(b=>({t:b.type, gx:b.gx, gy:b.gy})),
     worn: buildings.filter(b=>b.condition!==undefined && b.condition<70).length,
@@ -487,7 +485,7 @@ window.__oakDebug = function(){
 /* Every settler's working record, read-only. The counts in __oakDebug tell you
    the hold has stalled; this tells you why. */
 window.__oakProbe = function(){
-  return villagers.map(v=>({
+  return G.villagers.map(v=>({
     name:v.name, role:v.role, state:v.state,
     workTimer:+(v.workTimer||0).toFixed(2), resKind:v.resKind||null,
     tile: v.targetTile ? {gx:v.targetTile.gx, gy:v.targetTile.gy, amt:v.targetTile.resourceAmount, workers:v.targetTile.workers} : null,
@@ -516,8 +514,8 @@ function adminGrant(kind){
     // ── Population ──
     case 'settlers': for(let i=0;i<5;i++) spawnVillager(); toast('🛠️ +5 settlers summoned.'); break;
     case 'settler1': spawnVillager(); toast('🛠️ A settler joins.'); break;
-    case 'morale': villagers.forEach(v=>{ v.morale = 100; }); toast('🛠️ Every settler is content.'); break;
-    case 'heal': villagers.forEach(v=>{ v.sick = false; v.hunger = 0; v.fatigue = 0; }); toast('🛠️ All settlers healed & rested.'); break;
+    case 'morale': G.villagers.forEach(v=>{ v.morale = 100; }); toast('🛠️ Every settler is content.'); break;
+    case 'heal': G.villagers.forEach(v=>{ v.sick = false; v.hunger = 0; v.fatigue = 0; }); toast('🛠️ All settlers healed & rested.'); break;
     // ── Weather ──
     case 'wClear': setWeather('clear'); toast('🛠️ Weather: clear.'); break;
     case 'wRain':  setWeather('rain');  toast('🛠️ Weather: rain.'); break;
@@ -613,7 +611,7 @@ function raiderTick(dt){
     if(!tgt){ raiders.splice(raiders.indexOf(r),1); continue; }
     const dx=tgt.gx-r.gx, dy=tgt.gy-r.gy, d=Math.hypot(dx,dy)||0.001;
     if(r.state==='advance'){
-      const guard = villagers.find(v=>v.role==='guard' && !v.sick && v.stage!=='child' && dist2(v.gx,v.gy,r.gx,r.gy)<4.5);
+      const guard = G.villagers.find(v=>v.role==='guard' && !v.sick && v.stage!=='child' && dist2(v.gx,v.gy,r.gx,r.gy)<4.5);
       const reach = r.didSteal ? 1.5 : 3.6; // thieves reach the stores; the rest are turned back short of it
       if(guard || d < reach){
         try{ spawnBoom(r.gx, r.gy); }catch(e){}
@@ -739,7 +737,7 @@ function updateWildlife(dt){
       // Grazing beasts: wander, watch for folk, bolt when one comes too close.
       c.phase += dt*4;
       let fd=Infinity, fv=null;
-      for(const v of villagers){ const d=dist2(c.gx,c.gy,v.gx,v.gy); if(d<fd){ fd=d; fv=v; } }
+      for(const v of G.villagers){ const d=dist2(c.gx,c.gy,v.gx,v.gy); if(d<fd){ fd=d; fv=v; } }
       const spooked = fv && fd < spec.flee;
       if(spooked){
         const a = Math.atan2(c.gy-fv.gy, c.gx-fv.gx) || 0;
@@ -969,12 +967,12 @@ function foresterTick(dt){
    when no sheet is open (so they never interrupt), a few in-game days apart. */
 let decisionTimer = 3.2; // in-game days until the first
 let _lastDecision = '';
-function changeMorale(delta){ villagers.forEach(v=>{ if(v.morale!==undefined) v.morale=clamp(v.morale+delta,0,100); }); }
+function changeMorale(delta){ G.villagers.forEach(v=>{ if(v.morale!==undefined) v.morale=clamp(v.morale+delta,0,100); }); }
 const DECISIONS = [
   { id:'refugees', ic:'🚪', title:'Strangers at the Gate',
     text:'A ragged family stands at the palisade — three souls, footsore and hungry, asking to join the hold.',
     choices:[
-      {label:'Take them in', outcome:'The family joins the hold, grateful.', run:()=>{ let n=0; const room=popCapacity()-villagers.length; for(let i=0;i<Math.min(2,Math.max(0,room));i++){ spawnVillager(); n++; } stockpile.food=Math.max(0,(stockpile.food||0)-10); toast(n>0?('👪 '+n+' newcomer'+(n>1?'s':'')+' join the hold.'):'👪 No room — but you shared what you could.'); changeMorale(4); }},
+      {label:'Take them in', outcome:'The family joins the hold, grateful.', run:()=>{ let n=0; const room=popCapacity()-G.villagers.length; for(let i=0;i<Math.min(2,Math.max(0,room));i++){ spawnVillager(); n++; } stockpile.food=Math.max(0,(stockpile.food||0)-10); toast(n>0?('👪 '+n+' newcomer'+(n>1?'s':'')+' join the hold.'):'👪 No room — but you shared what you could.'); changeMorale(4); }},
       {label:'Share food, send them on', outcome:'You give them provisions for the road.', run:()=>{ stockpile.food=Math.max(0,(stockpile.food||0)-8); changeMorale(2); }},
       {label:'Turn them away', outcome:'The gate stays shut. The folk mutter.', run:()=>{ changeMorale(-5); }},
     ]},
@@ -1054,9 +1052,9 @@ const ONBOARD_STEPS = [
   {hint:'👋 Welcome, steward. Tap 🔨 and raise a House to make room for more settlers.',
    done:()=>buildings.some(b=>b.type==='house')},
   {hint:'🪓 Build a Forestry Camp, then tap a settler and set them to Lumberjack — timber builds everything.',
-   done:()=>buildings.some(b=>b.type==='forestCamp') && villagers.some(v=>v.role==='lumberjack')},
+   done:()=>buildings.some(b=>b.type==='forestCamp') && G.villagers.some(v=>v.role==='lumberjack')},
   {hint:'🌾 Food is life. Build a Farm and assign a Farmer before the cold comes.',
-   done:()=>buildings.some(b=>b.type==='farm') && villagers.some(v=>v.role==='farmer')},
+   done:()=>buildings.some(b=>b.type==='farm') && G.villagers.some(v=>v.role==='farmer')},
   {hint:'❄️ Now stock food and firewood — and survive your first winter.',
    done:()=>(journal.wintersEndured||0)>=1},
 ];
@@ -1083,8 +1081,8 @@ function updateStatuses(){
 let deeds = {};
 const DEED_DEFS = [
   {id:'firstHome',     ic:'🏠', name:'A Roof Raised',   desc:'Build your first house.',              reward:{coins:5},              check:()=>buildings.some(b=>b.type==='house')},
-  {id:'hamlet',        ic:'🏘️', name:'Hamlet',          desc:'Grow the hold to 10 settlers.',        reward:{coins:10},             check:()=>villagers.length>=10},
-  {id:'township',      ic:'🏰', name:'Township',        desc:'Grow the hold to 20 settlers.',        reward:{coins:20},             check:()=>villagers.length>=20},
+  {id:'hamlet',        ic:'🏘️', name:'Hamlet',          desc:'Grow the hold to 10 settlers.',        reward:{coins:10},             check:()=>G.villagers.length>=10},
+  {id:'township',      ic:'🏰', name:'Township',        desc:'Grow the hold to 20 settlers.',        reward:{coins:20},             check:()=>G.villagers.length>=20},
   {id:'firstWinter',   ic:'❄️', name:'First Winter',    desc:'Survive your first winter.',           reward:{coins:12,food:20},     check:()=>journal.wintersEndured>=1},
   {id:'ironHeart',     ic:'🥶', name:'Iron Heart',      desc:'Endure three winters.',                reward:{coins:25},             check:()=>journal.wintersEndured>=3},
   {id:'bridgeBuilder', ic:'🌉', name:'Bridge Builder',  desc:'Span the river with a bridge.',        reward:{coins:10,planks:6},    check:()=>buildings.some(b=>b.type==='bridge')},
@@ -1092,11 +1090,11 @@ const DEED_DEFS = [
   {id:'timberBaron',   ic:'🪵', name:'Timber Baron',    desc:'Hold 300 timber at once.',             reward:{coins:15},             check:()=>(stockpile.wood||0)>=300},
   {id:'firstWed',      ic:'💞', name:'A Match Made',     desc:'See your first wedding.',              reward:{coins:8},              check:()=>(journal.weddings||0)>=1},
   {id:'newLife',       ic:'👶', name:'New Life',        desc:'Welcome a child born in the hold.',    reward:{coins:8,food:15},      check:()=>(journal.childrenBorn||0)>=1},
-  {id:'greyHairs',     ic:'🧓', name:'Grey Hairs',      desc:'A settler lives to become an elder.',  reward:{coins:12},             check:()=>villagers.some(v=>v.stage==='elder')},
+  {id:'greyHairs',     ic:'🧓', name:'Grey Hairs',      desc:'A settler lives to become an elder.',  reward:{coins:12},             check:()=>G.villagers.some(v=>v.stage==='elder')},
   {id:'remembered',    ic:'🪦', name:'Remembered',      desc:'Lay a settler to rest in the grove.',  reward:{coins:8},              check:()=>(journal.passed||0)>=1},
   {id:'heldGate',      ic:'🛡️', name:'Held the Gate',   desc:'Survive a raid on the hold.',          reward:{coins:15,stone:15},    check:()=>wolfEvents>=1},
   {id:'scholar',       ic:'🔬', name:'Scholar',         desc:'Complete a research along the oak.',   reward:{coins:12},             check:()=>Object.keys(researched||{}).length>=1},
-  {id:'master',        ic:'★', name:'Master of the Craft',desc:'A settler masters their trade.',      reward:{coins:15},             check:()=>villagers.some(v=>skillTier(v,v.role).label==='Master')},
+  {id:'master',        ic:'★', name:'Master of the Craft',desc:'A settler masters their trade.',      reward:{coins:15},             check:()=>G.villagers.some(v=>skillTier(v,v.role).label==='Master')},
 ];
 function rewardText(r){
   if(!r) return '';
@@ -1183,11 +1181,11 @@ function rollPlague(){
     if(dayCount>=plague.endsDay){ plague=null; toast('🌿 The sickness has run its course — the hold breathes easier.'); }
     return;
   }
-  if(dayCount<=4 || villagers.length<5) return;
+  if(dayCount<=4 || G.villagers.length<5) return;
   if(Math.random() > 0.09) return; // rare
   plague = { endsDay: dayCount + 2 + Math.floor(Math.random()*2) };
   const frac = researched.herbs ? 0.18 : 0.32;
-  const healthy = villagers.filter(v=>!v.sick && v.stage!=='child');
+  const healthy = G.villagers.filter(v=>!v.sick && v.stage!=='child');
   const target = Math.max(1, Math.round(healthy.length*frac));
   let n=0;
   for(let i=0;i<target && healthy.length;i++){
@@ -1200,10 +1198,10 @@ function rollPlague(){
 }
 function plagueTick(dt){
   if(!plague) return;
-  const sick = villagers.filter(v=>v.sick);
+  const sick = G.villagers.filter(v=>v.sick);
   if(!sick.length) return;
   const spread = (researched.herbs ? 0.02 : 0.05) * dt;
-  for(const v of villagers){
+  for(const v of G.villagers){
     if(v.sick || v.stage==='child') continue;
     for(const s of sick){
       if(dist2(v.gx,v.gy,s.gx,s.gy) < 4){
@@ -1304,7 +1302,7 @@ function buildDiagnostics(){
   lines.push('## Oakenfall Report');
   lines.push('- Version: ' + GAME_VERSION + ' · Mode: ' + gameModeId + ' · Map: ' + G.MAP_SIZE);
   lines.push('- Day ' + dayCount + ' · ' + seasonName() + ' · ' + weather.label + ' · Tier: ' + HOLD_TIERS[currentTierIdx].name);
-  lines.push('- Pop: ' + villagers.length + '/' + popCapacity() + ' · Buildings: ' + buildings.length + ' · Coins: ' + coins);
+  lines.push('- Pop: ' + G.villagers.length + '/' + popCapacity() + ' · Buildings: ' + buildings.length + ' · Coins: ' + coins);
   lines.push('- Stock: ' + Object.entries(stockpile).map(([k,v])=>k+':'+Math.round(v)).join(' '));
   lines.push('- Researched: ' + (Object.keys(researched).join(', ') || 'none') + (activeResearch ? ' (researching: '+activeResearch.id+')' : ''));
   lines.push('- Device: ' + (navigator.userAgent||'?').slice(0,110));
@@ -1385,7 +1383,6 @@ function renderFeedbackSheet(kind){
   });
 }
 
-let courtshipTimer = 90, birthTimer = 130;
 let coins = 0;
 // Trader's ledger — cumulative coin flow by category, for the economy view.
 let ledger = { in:{bounties:0, deeds:0, routes:0, quests:0, tithe:0}, out:{shop:0} };
@@ -1484,7 +1481,7 @@ function processTradeRoutes(){
       if(r.missed >= 2){
         tradeRoutes.splice(tradeRoutes.indexOf(r),1);
         toast('🐫 The route to '+r.name+' was broken — the caravan left empty twice.', true);
-        villagers.forEach(v=>{ if(v.morale!==undefined) v.morale = clamp(v.morale-4,0,100); });
+        G.villagers.forEach(v=>{ if(v.morale!==undefined) v.morale = clamp(v.morale-4,0,100); });
         continue;
       } else {
         toast('⚠️ No '+g.label+' ready for the '+r.name+' caravan — one more miss ends the route.', true);
@@ -1548,7 +1545,7 @@ function buyShopItem(id){
   const _coinsBefore = coins;
   if(id==='festival'){ if(activeEvent){ toast('An event is already underway.', true); return; } coins-=it.cost; activeEvent={type:'festival',endsAt:worldTime+55}; toast('🎉 A feast day begins!'); sfx('festival'); }
   else if(id==='merchant'){ if(activeEvent){ toast('An event is already underway.', true); return; } coins-=it.cost; activeEvent={type:'merchant',endsAt:worldTime+70}; toast('🧳 A merchant arrives at your call!'); }
-  else if(id==='healer'){ const n=villagers.filter(v=>v.sick).length; if(!n){ toast('No one is sick.', true); return; } coins-=it.cost; villagers.forEach(v=>{v.sick=false;v.sickTimer=0;}); toast('🌿 The healer cures '+n+' settler'+(n>1?'s':'')+'.'); }
+  else if(id==='healer'){ const n=G.villagers.filter(v=>v.sick).length; if(!n){ toast('No one is sick.', true); return; } coins-=it.cost; G.villagers.forEach(v=>{v.sick=false;v.sickTimer=0;}); toast('🌿 The healer cures '+n+' settler'+(n>1?'s':'')+'.'); }
   else if(id==='repairs'){ coins-=it.cost; let n=0; buildings.forEach(b=>{ if(b.condition!==undefined&&b.condition<100){b.condition=100;n++;} }); toast('🔧 '+n+' building'+(n!==1?'s':'')+' restored.'); }
   else if(id==='rations'){ coins-=it.cost; const got=gainResource('food',25); toast('🥖 +'+got+' food delivered.'); }
   else if(id==='banner'){ coins-=it.cost; bannerIdx=(bannerIdx+1)%bannerPalette.length; toast('🚩 The hold flies new colours!'+(bannerPalette.length>BANNER_COLORS.length?'':'')); }
@@ -1706,8 +1703,8 @@ function bumpRel(v,o,amount){
 let _relAcc=0;
 function relationsTick(dt){
   _relAcc+=dt; if(_relAcc<10) return; _relAcc=0;
-  for(let i=0;i<villagers.length;i++) for(let j=i+1;j<villagers.length;j++){
-    const a=villagers[i], b=villagers[j];
+  for(let i=0;i<G.villagers.length;i++) for(let j=i+1;j<G.villagers.length;j++){
+    const a=G.villagers[i], b=G.villagers[j];
     if(a.state==='spawning'||b.state==='spawning') continue;
     if(Math.hypot(a.gx-b.gx,a.gy-b.gy)<2.4){ bumpRel(a,b,6); bumpRel(b,a,6); }
   }
@@ -1717,7 +1714,6 @@ function relationsTick(dt){
    a memorial grove. Paced on its own clock so lives are observable in a
    session but gentle on the workforce (births keep pace). */
 const AGE_YEAR=720, ADULT_AGE=1.5, ELDER_BEFORE=1.2, LIFESPAN_BASE=5.5;
-let memorials = []; // {name, gx, gy}
 function memorialSpot(){
   // Position by the monotonic count of the departed, wrapping over the grove's
   // 40 plots so that when an old grave is reclaimed a new one takes its place
@@ -1727,7 +1723,7 @@ function memorialSpot(){
 }
 function agingTick(dt){
   const dy = dt/AGE_YEAR;
-  for(const v of [...villagers]){
+  for(const v of [...G.villagers]){
     if(v.age===undefined){ v.age=2; v.stage='adult'; v.lifespan=LIFESPAN_BASE; }
     if(v.state==='spawning') continue;
     v.age += dy;
@@ -1744,24 +1740,24 @@ function agingTick(dt){
   }
 }
 function passVillager(v){
-  villagers = villagers.filter(x=>x!==v);
+  G.villagers = G.villagers.filter(x=>x!==v);
   releaseClaims(v);
-  villagers.forEach(o=>{
+  G.villagers.forEach(o=>{
     if(o.relations) o.relations = o.relations.filter(r=>r.name!==v.name);
     if(o.partner===v.name){ o.partner=null; o.morale=clamp((o.morale||65)-12,0,100); remember(o,'lost '+v.name); }
     if(o.parents && o.parents.includes(v.name)){ o.morale=clamp((o.morale||65)-6,0,100); }
   });
   if(selection && selection.ref===v) deselectAll();
   const spot = memorialSpot();
-  memorials.push({name:v.name, gx:spot.gx, gy:spot.gy});
+  G.memorials.push({name:v.name, gx:spot.gx, gy:spot.gy});
   // The grove is finite — the oldest graves are quietly reclaimed by the forest
   // (keeps the render list and save bounded over very long games).
-  if(memorials.length > 40) memorials.shift();
+  if(G.memorials.length > 40) G.memorials.shift();
   journal.passed = (journal.passed||0)+1;
   const tier = skillTier(v, v.role);
   if(tier.label==='Master'){
     toast('🕊️ '+v.name+', a Master '+roleLabel(v.role)+', has passed at '+Math.floor((v.age||2)*4)+' seasons — a grievous loss to the hold.');
-    villagers.forEach(o=>{ if(o.morale!==undefined) o.morale=clamp(o.morale-3,0,100); }); // the whole hold mourns a master
+    G.villagers.forEach(o=>{ if(o.morale!==undefined) o.morale=clamp(o.morale-3,0,100); }); // the whole hold mourns a master
   } else {
     toast('🕊️ '+v.name+' passed peacefully at '+Math.floor((v.age||2)*4)+' seasons — laid to rest in the grove.');
   }
@@ -1780,9 +1776,9 @@ function passVillager(v){
 let _needCache = null, _needAt = -1;
 function roleNeedScores(){
   if(_needCache && worldTime - _needAt < 1) return _needCache;
-  const pop = Math.max(1, villagers.length);
+  const pop = Math.max(1, G.villagers.length);
   const count = {};
-  for(const v of villagers) count[v.role] = (count[v.role]||0) + 1;
+  for(const v of G.villagers) count[v.role] = (count[v.role]||0) + 1;
   const frac = (k)=> (stockpile[k]||0) / Math.max(1, capFor(k));
   const out = [];
   const add = (role, workplace, score)=>{
@@ -1899,13 +1895,13 @@ function ambientIdle(v){
   }
   const fr = (v.relations||[]).filter(r=>r.type==='friend' && r.s>50);
   if(fr.length && Math.random()<0.5){
-    const o = villagers.find(x=>x.name===fr[Math.floor(Math.random()*fr.length)].name);
+    const o = G.villagers.find(x=>x.name===fr[Math.floor(Math.random()*fr.length)].name);
     if(o){ v.idleGX=clamp(o.gx+(Math.random()-0.5)*1.2,1,G.MAP_SIZE-2); v.idleGY=clamp(o.gy+(Math.random()-0.5)*1.2,1,G.MAP_SIZE-2); v.ambientEmote='💬'; return; }
   }
   if(v.stage==='child'){
     // Children keep near a parent when there is one to keep near — they trail
     // whoever is working rather than milling about the square on their own.
-    const kin = (v.parents||[]).map(n=>villagers.find(x=>x.name===n)).filter(Boolean);
+    const kin = (v.parents||[]).map(n=>G.villagers.find(x=>x.name===n)).filter(Boolean);
     if(kin.length && Math.random()<0.65){
       const p = kin[Math.floor(Math.random()*kin.length)];
       v.idleGX = clamp(p.gx + (Math.random()-0.5)*2.0, 1, G.MAP_SIZE-2);
@@ -1920,7 +1916,7 @@ function ambientIdle(v){
   }
   // Married folk seek each other out when the day's work is done.
   if(v.partner && Math.random()<0.45){
-    const spouse = villagers.find(x=>x.name===v.partner);
+    const spouse = G.villagers.find(x=>x.name===v.partner);
     if(spouse){
       v.idleGX = clamp(spouse.gx + (Math.random()-0.5)*1.4, 1, G.MAP_SIZE-2);
       v.idleGY = clamp(spouse.gy + (Math.random()-0.5)*1.2, 1, G.MAP_SIZE-2);
@@ -1934,10 +1930,10 @@ function ambientIdle(v){
 }
 
 function familyTick(dt){
-  courtshipTimer -= dt;
-  if(courtshipTimer<=0){
-    courtshipTimer = 80 + Math.random()*60;
-    const single = villagers.filter(v=>!v.partner && v.morale>50 && v.state!=='spawning');
+  G.courtshipTimer -= dt;
+  if(G.courtshipTimer<=0){
+    G.courtshipTimer = 80 + Math.random()*60;
+    const single = G.villagers.filter(v=>!v.partner && v.morale>50 && v.state!=='spawning');
     if(single.length>=2){
       const a = single[Math.floor(Math.random()*single.length)];
       // Prefer to wed a close friend, if one is also single; else a random match.
@@ -1954,14 +1950,14 @@ function familyTick(dt){
       }
     }
   }
-  birthTimer -= dt;
-  if(birthTimer<=0){
-    birthTimer = 120 + Math.random()*80;
-    if(villagers.length < popCapacity() && stockpile.food > 30){
-      const couples = villagers.filter(v=>v.partner && v.morale>55 && villagers.some(o=>o.name===v.partner));
+  G.birthTimer -= dt;
+  if(G.birthTimer<=0){
+    G.birthTimer = 120 + Math.random()*80;
+    if(G.villagers.length < popCapacity() && stockpile.food > 30){
+      const couples = G.villagers.filter(v=>v.partner && v.morale>55 && G.villagers.some(o=>o.name===v.partner));
       if(couples.length){
         const parent = couples[Math.floor(Math.random()*couples.length)];
-        const other = villagers.find(o=>o.name===parent.partner);
+        const other = G.villagers.find(o=>o.name===parent.partner);
         const inheritedTrait = Math.random()<0.5 ? parent.trait : (other?other.trait:parent.trait);
         const child = spawnVillager(null, inheritedTrait);
         child.gx = parent.gx; child.gy = parent.gy;
@@ -1997,7 +1993,7 @@ let activeEvent = null; // {type, endsAt, data}
 
 let currentTierIdx = 0;
 function computeTierIdx(){
-  const pop = villagers.length;
+  const pop = G.villagers.length;
   const bld = buildings.filter(b=>b.type!=='road' && b.type!=='townCenter').length;
   let idx = 0;
   for(let i=HOLD_TIERS.length-1; i>=0; i--){
@@ -2028,10 +2024,10 @@ function rollRandomEvent(){
     toast('🧳 A traveling merchant arrives — trade rates improved for a while!');
   } else if(roll < 0.50){
     // Wandering healer — cures all illness for food
-    const sickCount = villagers.filter(v=>v.sick).length;
+    const sickCount = G.villagers.filter(v=>v.sick).length;
     if(sickCount>0 && stockpile.food>=8){
       stockpile.food -= 8;
-      villagers.forEach(v=>{ v.sick=false; v.sickTimer=0; });
+      G.villagers.forEach(v=>{ v.sick=false; v.sickTimer=0; });
       toast('🌿 A wandering healer cures '+sickCount+' sick villager'+(sickCount>1?'s':'')+' for 8 food.');
     } else if(sickCount>0){
       toast('🌿 A healer passed by, but the stores couldn\'t afford their fee (8 food).');
@@ -2117,7 +2113,7 @@ function removeBuilding(b){
   for(let yy=b.gy; yy<b.gy+b.h; yy++) for(let xx=b.gx; xx<b.gx+b.w; xx++){
     if(G.grid[yy] && G.grid[yy][xx] && G.grid[yy][xx].building===b) G.grid[yy][xx].building = null;
   }
-  villagers.forEach(v=>{
+  G.villagers.forEach(v=>{
     if(v.targetBuilding===b){ v.targetBuilding=null; v.path=[]; v.pathTarget=null;
       if(/^walking/.test(v.state) || v.state==='working' || v.state==='farming') v.state='idle'; }
   });
@@ -2169,7 +2165,7 @@ function fireTick(dt){
   const ambientDouse = weather.type==='storm'?11:weather.type==='rain'?8:weather.type==='snow'?6:0;
   for(const b of burning){
     const c = buildingCenter(b);
-    const near = villagers.filter(v=>v.stage!=='child' && dist2(v.gx,v.gy,c.gx,c.gy) < 9).length;
+    const near = G.villagers.filter(v=>v.stage!=='child' && dist2(v.gx,v.gy,c.gx,c.gy) < 9).length;
     const wellDouse = nearWell(c.gx,c.gy) ? 4.5 : 0;   // a well close by keeps water flowing
     const douse = ambientDouse + wellDouse + near*2.2 + (b._bucket||0);
     b._bucket = Math.max(0, (b._bucket||0) - dt*7);
@@ -2179,7 +2175,7 @@ function fireTick(dt){
     if(b._fire <= 0.5){
       delete b._fire; delete b._bucket;
       toast('💧 The fire at your '+(BUILD_DEFS[b.type]?BUILD_DEFS[b.type].name:b.type)+' is out.');
-      villagers.forEach(v=>{ if(dist2(v.gx,v.gy,c.gx,c.gy)<9 && v.morale!==undefined) v.morale=clamp(v.morale+3,0,100); });
+      G.villagers.forEach(v=>{ if(dist2(v.gx,v.gy,c.gx,c.gy)<9 && v.morale!==undefined) v.morale=clamp(v.morale+3,0,100); });
       continue;
     }
     if(b.condition <= 0){
@@ -2187,7 +2183,7 @@ function fireTick(dt){
       removeBuilding(b);
       toast('🔥 Your '+nm+' has burned to the ground!', true);
       if(typeof chron==='function') chron('fire', nm);
-      villagers.forEach(v=>{ if(v.morale!==undefined) v.morale=clamp(v.morale-6,0,100); });
+      G.villagers.forEach(v=>{ if(v.morale!==undefined) v.morale=clamp(v.morale-6,0,100); });
       continue;
     }
     // spread to a nearby timber building when the blaze is strong
@@ -2374,9 +2370,8 @@ const LEGACY_TRAITS = {
   steadfast: {id:'steadfast', label:'Steadfast', ic:'🕯️', desc:'Carries a loved one\'s memory — steadier morale.'},
 };
 
-let idleSlotCounter = 0;
 function spawnVillager(nameOverride, traitOverride){
-  const slot = idleSlotCounter++;
+  const slot = G.idleSlotCounter++;
   // Phyllotaxis (sunflower) spiral: golden-angle rotation with sqrt-scaled radius.
   // This spreads villagers evenly outward forever with no clustering, unlike a
   // fixed 3-ring pattern which starts overlapping once population passes ~9.
@@ -2413,7 +2408,7 @@ function spawnVillager(nameOverride, traitOverride){
     skills:{},   // role → experience points; grows while working that role
   };
   if(trait.id==='hardy') v.lifespan += 0.8;
-  villagers.push(v);
+  G.villagers.push(v);
   return v;
 }
 
@@ -2550,7 +2545,7 @@ function stewardAssignGatherers(res){
   const role = roleFor[res]; if(!role) return 'unprocessable'; // planks/flour/bread come from processors
   if(!hasActiveBuilding(bFor[role])) return 'noplace';
   // Already have workers on it? Then gathering is under way — no need to pull more.
-  if(villagers.some(v=>v.role===role)) return 'ok';
+  if(G.villagers.some(v=>v.role===role)) return 'ok';
   return stewardStaff(role, 6) > 0 ? 'ok' : 'noidle';
 }
 /* Staff a trade: idle hands first, then the most over-staffed other trade.
@@ -2558,11 +2553,11 @@ function stewardAssignGatherers(res){
    is precisely when you most want to say it. Never strips a trade to nobody. */
 function stewardStaff(role, count){
   let moved = 0;
-  const free = villagers.filter(v=>v.role==='idle' && v.stage!=='child' && v.state!=='spawning');
+  const free = G.villagers.filter(v=>v.role==='idle' && v.stage!=='child' && v.state!=='spawning');
   for(const v of free){ if(moved>=count) break; reassignRole(v, role); moved++; }
   if(moved >= count) return moved;
   const counts = {};
-  for(const v of villagers){ if(v.stage!=='child' && v.state!=='spawning') counts[v.role] = (counts[v.role]||0)+1; }
+  for(const v of G.villagers){ if(v.stage!=='child' && v.state!=='spawning') counts[v.role] = (counts[v.role]||0)+1; }
   while(moved < count){
     let from = null, most = 1;                   // must leave at least one behind
     for(const r of Object.keys(counts)){
@@ -2570,7 +2565,7 @@ function stewardStaff(role, count){
       if(counts[r] > most){ most = counts[r]; from = r; }
     }
     if(!from) break;
-    const v = villagers.find(x=>x.role===from && x.stage!=='child' && x.state!=='spawning');
+    const v = G.villagers.find(x=>x.role===from && x.stage!=='child' && x.state!=='spawning');
     if(!v){ counts[from] = 0; continue; }
     reassignRole(v, role);
     counts[from]--; counts[role] = (counts[role]||0)+1; moved++;
@@ -2691,9 +2686,9 @@ function stewardAnswer(s){
   if(/\b(how much|how many|do we have|what do we have)\b/.test(s)){
     const res = stewardLookup(s, STEWARD_RES);
     if(res) return '📜 We hold '+Math.floor(stockpile[res]||0)+' '+res+'.';
-    if(/\b(settlers|people|folk|villagers|souls|population)\b/.test(s)){
-      const idle = villagers.filter(v=>v.role==='idle').length;
-      return '📜 '+villagers.length+' souls in the hold'+(idle?', '+idle+' of them idle.':', all at work.');
+    if(/\b(settlers|people|folk|G.villagers|souls|population)\b/.test(s)){
+      const idle = G.villagers.filter(v=>v.role==='idle').length;
+      return '📜 '+G.villagers.length+' souls in the hold'+(idle?', '+idle+' of them idle.':', all at work.');
     }
   }
   if(/\b(what are you doing|status|report|progress)\b/.test(s)){
@@ -2962,7 +2957,6 @@ function skillTier(v, role){
 function skillMul(v){ return v.role && v.role!=='idle' ? skillTier(v, v.role).mul : 1; }
 /* ── GUILDS ── two or more Masters of a trade form a guild, granting a small
    hold-wide bonus to that craft's output. Builds on skill mastery. */
-let guilds = {}; // role → true when the guild is active
 const GUILD_BONUS = 0.10;
 function guildBonusVal(){ return (typeof researched!=='undefined' && researched.charter) ? 0.15 : GUILD_BONUS; }
 const GUILD_DEFS = {
@@ -2974,25 +2968,25 @@ const GUILD_DEFS = {
 };
 function recomputeGuilds(announce){
   const count={};
-  for(const v of villagers){ if(v.role && skillTier(v,v.role).label==='Master') count[v.role]=(count[v.role]||0)+1; }
+  for(const v of G.villagers){ if(v.role && skillTier(v,v.role).label==='Master') count[v.role]=(count[v.role]||0)+1; }
   for(const role in GUILD_DEFS){
     const active = (count[role]||0) >= 2;
-    if(active && !guilds[role] && announce){
+    if(active && !G.guilds[role] && announce){
       const g=GUILD_DEFS[role];
       toast(g.ic+' The '+g.name+' has formed — '+g.blurb+' (+'+Math.round(guildBonusVal()*100)+'%).');
       if(typeof chron==='function') chron('guild', g.name);
     }
-    guilds[role] = active;
+    G.guilds[role] = active;
   }
 }
 function guildMulRes(resKind){
   const map={wood:'lumberjack', stone:'miner', fish:'fisher', meat:'hunter'};
-  const role=map[resKind]; return (role && guilds[role]) ? 1+guildBonusVal() : 1;
+  const role=map[resKind]; return (role && G.guilds[role]) ? 1+guildBonusVal() : 1;
 }
-function guildFarmMul(){ return guilds.farmer ? 1+guildBonusVal() : 1; }
+function guildFarmMul(){ return G.guilds.farmer ? 1+guildBonusVal() : 1; }
 function hasNearbyMentor(v){
   // A Master of the same role working within ~4 tiles mentors the learner.
-  for(const o of villagers){
+  for(const o of G.villagers){
     if(o===v || o.role!==v.role) continue;
     if(skillTier(o, o.role).label!=='Master') continue;
     if(dist2(o.gx,o.gy,v.gx,v.gy) < 16) return true;
@@ -3055,7 +3049,7 @@ function updateVillager(v, dt){
   let mTarget = 60;
   if((stockpile.bread||0) > 0) mTarget += 12;          // bread in the stores
   if(hasBuildingType('tavern')) mTarget += 10;          // somewhere warm to drink
-  if(villagers.length <= popCapacity()) mTarget += 8;   // a roof for everyone
+  if(G.villagers.length <= popCapacity()) mTarget += 8;   // a roof for everyone
   else mTarget -= 15;                                   // overcrowded
   if(v.hunger>75) mTarget -= 20;
   if(v.sick) mTarget -= 18;
@@ -3072,15 +3066,15 @@ function updateVillager(v, dt){
   mTarget = clamp(mTarget, 5, 100);
   v.morale = clamp(v.morale + (mTarget - v.morale) * 0.03 * dt, 0, 100);
   // Sustained despair → the settler leaves the hold
-  if(v.morale < 15 && villagers.length > 3){
+  if(v.morale < 15 && G.villagers.length > 3){
     v.moraleLowT = (v.moraleLowT||0) + dt;
     if(v.moraleLowT > 60){
       releaseClaims(v);
-      villagers.splice(villagers.indexOf(v), 1);
+      G.villagers.splice(G.villagers.indexOf(v), 1);
       toast('💔 '+v.name+' has lost heart and left the hold...', true);
       // A left-behind partner carries their memory — and steadier resolve
       if(v.partner){
-        const p = villagers.find(o=>o.name===v.partner);
+        const p = G.villagers.find(o=>o.name===v.partner);
         if(p){ p.trait = LEGACY_TRAITS.steadfast; toast('🕯️ '+p.name+' keeps '+v.name+'\'s memory close — Steadfast.'); }
       }
       return;
@@ -3108,7 +3102,7 @@ function updateVillager(v, dt){
     // Utility needs: eat sooner when there's food to spare (settlers no longer
     // work themselves to the brink of starvation), but hold out through a
     // famine so a lean hold doesn't drain its last stores. Rest a touch earlier.
-    const foodToSpare = (stockpile.food||0) > villagers.length;
+    const foodToSpare = (stockpile.food||0) > G.villagers.length;
     const hungerSeek = foodToSpare ? 86 : 96;
     if(v.fatigue>=92){ releaseClaims(v); v.state='seekingSleep'; }
     else if(v.hunger>=hungerSeek){ releaseClaims(v); v.state='seekingFood'; }
@@ -3317,7 +3311,7 @@ const QUESTS = [
   {id:'q4', title:'Tend the Fields', desc:'Raise a Farm.', icon:'🌾', check:()=>hasBuildingType('farm'), reward:{wood:25}},
   {id:'q5', title:'Net the River', desc:'Raise a Fishing Hut.', icon:'🎣', check:()=>hasBuildingType('fishingHut'), reward:{food:20}},
   {id:'q6', title:'The Hunt Begins', desc:'Raise a Hunting Cabin.', icon:'🏹', check:()=>hasBuildingType('huntingCabin'), reward:{food:20}},
-  {id:'q7', title:'A Growing Hold', desc:'Reach a population of 6.', icon:'👥', check:()=>villagers.length>=6, reward:{wood:40,stone:20}},
+  {id:'q7', title:'A Growing Hold', desc:'Reach a population of 6.', icon:'👥', check:()=>G.villagers.length>=6, reward:{wood:40,stone:20}},
   {id:'q8', title:'The Storehouse', desc:'Build a Granary.', icon:'🏺', check:()=>hasBuildingType('granary'), reward:{stone:30}},
   {id:'q9', title:'Iron Will', desc:'Survive a wolf raid.', icon:'🐺', check:()=>wolfEvents>=1, reward:{wood:25}},
   {id:'q10', title:'Open Roads', desc:'Build a Trading Post.', icon:'⚖️', check:()=>hasBuildingType('tradingPost'), reward:{food:25}},
@@ -3346,7 +3340,7 @@ function update(rawDt){
   worldTime += dt;
   const newCycle = Math.floor(worldTime/CYCLE_LEN);
   if(newCycle>prevCycle){ dayCount++; rollWeather(); rollClimate(); rollPlague(); rollDailyBounties(); captureStatSnapshot(); processTradeRoutes();
-    if(decrees.tithe){ const t = Math.max(1, Math.round(villagers.length*0.8)); coins += t; logCoinIn('tithe', t); }
+    if(decrees.tithe){ const t = Math.max(1, Math.round(G.villagers.length*0.8)); coins += t; logCoinIn('tithe', t); }
     decisionTimer -= 1;
     if(decisionTimer<=0 && dayCount>3){ decisionTimer = 3 + Math.floor(Math.random()*3); rollDecision(); }
   }
@@ -3374,7 +3368,7 @@ function update(rawDt){
     wolfTimer = 100 + Math.random()*70;
     const riskMul = (hasBuildingType('watchtower') ? 0.3 : 1) * wolfRiskMul * decreeRaidMul();
     if(Math.random() < 0.55*riskMul){
-      const exposed = villagers.filter(v=>(v.state==='walkingToResource'||v.state==='working') && v.targetTile && (v.targetTile.type==='forest'||v.targetTile.wilds));
+      const exposed = G.villagers.filter(v=>(v.state==='walkingToResource'||v.state==='working') && v.targetTile && (v.targetTile.type==='forest'||v.targetTile.wilds));
       if(exposed.length>0){
         const v = exposed[Math.floor(Math.random()*exposed.length)];
         releaseClaims(v); v.carrying=null; v.state='idle'; v.fatigue=clamp(v.fatigue+15,0,100);
@@ -3398,7 +3392,7 @@ function update(rawDt){
   if(banditTimer<=0){
     banditTimer = 160 + Math.random()*120;
     if(!ADMIN.noRaids && gameMode.banditsEnabled && currentTierIdx>=2 && Math.random()<0.5*decreeRaidMul()){
-      const guards = villagers.filter(v=>v.role==='guard' && !v.sick).length;
+      const guards = G.villagers.filter(v=>v.role==='guard' && !v.sick).length;
       const palisades = buildings.filter(b=>b.type==='palisade').length;
       const towers = buildings.filter(b=>b.type==='watchtower' && (b.condition===undefined||b.condition>=35)).length;
       // The river is a natural moat — worth real defense while it stands
@@ -3433,10 +3427,10 @@ function update(rawDt){
             toast('🌉 Raiders poured across the unwatched bridge!', true);
           }
           toast('🏴 Bandits raid the hold — lost '+stolen.join(', ')+'!', true); sfx('raid');
-          villagers.forEach(v=>{ if(v.morale!==undefined){ let hit=(v.trait&&v.trait.id==='brave')?4:8; if(festivalBoon==='courage') hit*=0.5; v.morale=clamp(v.morale-hit,0,100); } });
+          G.villagers.forEach(v=>{ if(v.morale!==undefined){ let hit=(v.trait&&v.trait.id==='brave')?4:8; if(festivalBoon==='courage') hit*=0.5; v.morale=clamp(v.morale-hit,0,100); } });
           // Surviving a raid can steel a settler for life
-          if(Math.random()<0.3 && villagers.length){
-            const cand = villagers.filter(v=>!v.trait || (v.trait.id!=='brave' && v.trait.id!=='steadfast'));
+          if(Math.random()<0.3 && G.villagers.length){
+            const cand = G.villagers.filter(v=>!v.trait || (v.trait.id!=='brave' && v.trait.id!=='steadfast'));
             if(cand.length){
               const vv = cand[Math.floor(Math.random()*cand.length)];
               vv.trait = LEGACY_TRAITS.brave;
@@ -3562,7 +3556,7 @@ function update(rawDt){
   if(journalTimer<=0){
     journalTimer = 1;
     checkTierUp();
-    journal.peakPopulation = Math.max(journal.peakPopulation, villagers.length);
+    journal.peakPopulation = Math.max(journal.peakPopulation, G.villagers.length);
     journal.daysSurvived = Math.max(journal.daysSurvived, dayCount);
     journal.wolvesSurvived = wolfEvents;
     checkBounties();
@@ -3586,7 +3580,7 @@ function update(rawDt){
   for(const t of G.waterTiles){ if(t.resourceAmount<=0 && worldTime>=t.regrowAt){ t.resourceAmount = t.maxResource; } }
   for(const t of G.wildsTiles){ if(t.resourceAmount<=0 && worldTime>=t.regrowAt){ t.resourceAmount = t.maxResource; } }
 
-  for(const v of villagers.slice()) updateVillager(v, dt); // copy: villagers may leave mid-update
+  for(const v of G.villagers.slice()) updateVillager(v, dt); // copy: villagers may leave mid-update
   processStewardOrders(dt);
   updateWildlife(dt);
   updateGroundCover(dt);
@@ -3598,7 +3592,7 @@ function update(rawDt){
   spawnTimer -= dt;
   if(spawnTimer<=0){
     spawnTimer = decrees.openGates ? 16 : 24; // Open Gates draws newcomers faster
-    if(stockpile.food>=22 && villagers.length<popCapacity()){
+    if(stockpile.food>=22 && G.villagers.length<popCapacity()){
       stockpile.food -= 22;
       const nv = spawnVillager();
       toast(nv.name+' joins the hold. ['+nv.trait.ic+' '+nv.trait.label+']');
@@ -5363,7 +5357,7 @@ function drawMinimap(){
   }
 
   // Your folk, and anything threatening them.
-  for(const v of villagers){
+  for(const v of G.villagers){
     const p = project(v.gx,v.gy);
     mmCtx.fillStyle = v.sick ? '#d04030' : '#8ade68';
     mmCtx.beginPath(); mmCtx.arc(mmX(p.x), mmY(p.y), 1.5, 0, 7); mmCtx.fill();
@@ -5616,7 +5610,7 @@ function render(){
     const depth = b.type==='road' ? c.gx+c.gy-0.1 : c.gx+c.gy+0.2;
     list.push({depth, draw:()=>{ try{ drawBuilding(b); if(b.type!=='road') drawWorkerBadge(b); if(b._fire) drawBuildingFire(b); }catch(e){} }});
   }
-  for(const v of villagers){
+  for(const v of G.villagers){
     list.push({depth:v.gx+v.gy+0.3, draw:()=>{ try{ drawVillager(v); }catch(e){} }});
   }
   for(const r of raiders){
@@ -5626,7 +5620,7 @@ function render(){
     const drawer = { deer:drawDeer, boar:drawBoar, rabbit:drawRabbit, fish:drawFish, fox:drawFox, duck:drawDuck }[cr.kind];
     if(drawer) list.push({depth:cr.gx+cr.gy+0.28, draw:()=>{ try{ drawer(cr); }catch(e){} }});
   }
-  for(const m of memorials){
+  for(const m of G.memorials){
     list.push({depth:m.gx+m.gy+0.05, draw:()=>{ try{ drawMemorial(m); }catch(e){} }});
   }
   // Visiting merchant: their cart stands by the Town Center while the event runs
@@ -5716,13 +5710,13 @@ function drawDebugOverlay(){
   _dbgLast = now;
   ctx.save();
   ctx.setTransform(canvasDPR,0,0,canvasDPR,0,0);
-  const idle = villagers.filter(v=>v.role==='idle').length;
+  const idle = G.villagers.filter(v=>v.role==='idle').length;
   const phase = (worldTime % CYCLE_LEN) < DAY_LEN ? 'Day' : 'Night';
   const lines = [
     'FPS '+_dbgFps.toFixed(0)+'  speed '+speedMode+'x',
     'Day '+dayCount+'  '+seasonName()+'  '+phase,
     'Weather '+weather.label+(climate?'  Climate '+(climate.name||climate.ic):''),
-    'Settlers '+villagers.length+' ('+idle+' idle)  Buildings '+buildings.filter(b=>b.type!=='road').length,
+    'Settlers '+G.villagers.length+' ('+idle+' idle)  Buildings '+buildings.filter(b=>b.type!=='road').length,
     'Raiders '+raiders.length+'  Fires '+buildings.filter(b=>b._fire>0).length,
     'Coins '+Math.floor(coins)+'  Tier '+HOLD_TIERS[currentTierIdx].name,
     'Toggles: '+(ADMIN.freezeNeeds?'FreezeNeeds ':'')+(ADMIN.noRaids?'NoRaids ':'')||'Toggles: none',
@@ -6066,7 +6060,7 @@ async function exportHoldCard(){
     const tier=(HOLD_TIERS[currentTierIdx]||{ic:'🏕️',name:'Hold'});
     x.fillStyle='#e8a13c'; x.font="500 30px 'Cinzel', Georgia, serif"; x.fillText(tier.ic+' '+tier.name, ccx, 378);
     // stats row
-    const stats=[['Day', dayCount], ['Settlers', villagers.length], ['Winters', journal.wintersEndured||0], ['Deeds', Object.keys(deeds).length+'/'+DEED_DEFS.length]];
+    const stats=[['Day', dayCount], ['Settlers', G.villagers.length], ['Winters', journal.wintersEndured||0], ['Deeds', Object.keys(deeds).length+'/'+DEED_DEFS.length]];
     const bw=W/stats.length;
     stats.forEach((s,i)=>{ const sx=bw*i+bw/2;
       x.fillStyle='#f0e2c0'; x.font="700 46px 'Cinzel', Georgia, serif"; x.fillText(String(s[1]), sx, 480);
@@ -6119,10 +6113,10 @@ function updateHud(){
   R.bread.textContent = fmt(stockpile.bread||0);
   R.capBread.textContent = '/'+capFor('bread');
   R.coins.textContent = fmt(coins);
-  elPop.textContent = villagers.length;
+  elPop.textContent = G.villagers.length;
   elCap.textContent = '/'+popCapacity();
   // Attention badge: idle villagers who could be working
-  const idleCount = villagers.filter(v=>v.role==='idle' && v.state!=='spawning').length;
+  const idleCount = G.villagers.filter(v=>v.role==='idle' && v.state!=='spawning').length;
   const badge = R.badge;
   if(badge){
     if(idleCount>0){ badge.style.display='block'; badge.textContent = idleCount; }
@@ -6288,11 +6282,11 @@ function renderRosterSheet(){
     name:  (a,b)=> (a.name||'').localeCompare(b.name||''),
     morale:(a,b)=> (a.morale||0)-(b.morale||0),
   };
-  const list = villagers.slice().sort(sorters[rosterSort]||sorters.role);
-  const idle = villagers.filter(v=>v.role==='idle'&&v.state!=='spawning').length;
+  const list = G.villagers.slice().sort(sorters[rosterSort]||sorters.role);
+  const idle = G.villagers.filter(v=>v.role==='idle'&&v.state!=='spawning').length;
   const stageIc = v=> v.stage==='child'?'🧒':v.stage==='elder'?'🧓':'🧑';
   sheetContent.innerHTML = `
-    <div class="sheet-sub">${villagers.length} settler${villagers.length!==1?'s':''}${idle?` · <span style="color:var(--amber)">${idle} idle</span>`:''}. Tap one to open their sheet.</div>
+    <div class="sheet-sub">${G.villagers.length} settler${G.villagers.length!==1?'s':''}${idle?` · <span style="color:var(--amber)">${idle} idle</span>`:''}. Tap one to open their sheet.</div>
     <div class="roster-sort">Sort:
       ${['role','morale','name'].map(s=>`<button class="chip${s===rosterSort?' sel':''}" data-sort="${s}">${s[0].toUpperCase()+s.slice(1)}</button>`).join('')}
     </div>
@@ -6334,7 +6328,7 @@ function renderResearchTab(){
 function renderJournalSheet(){
   sheetContent.innerHTML = `
     <div class="sheet-sub">📖 <b>Hold Journal</b> — Peak settlers: ${journal.peakPopulation} · Days: ${journal.daysSurvived} · Winters: ${journal.wintersEndured} · Buildings raised: ${journal.buildingsRaised} · Settlers welcomed: ${journal.settlersWelcomed} · Wolf raids survived: ${journal.wolvesSurvived}${journal.passed?' · Passed on: '+journal.passed:''}</div>
-    ${(()=>{ const g=Object.keys(GUILD_DEFS).filter(r=>guilds[r]); return g.length?`<div class="sheet-sub" style="margin-top:6px;"><b>⚜️ Guilds</b> — ${g.map(r=>GUILD_DEFS[r].ic+' '+GUILD_DEFS[r].name).join(' · ')} <span style="opacity:.7">(+${Math.round(guildBonusVal()*100)}% each)</span></div>`:''; })()}
+    ${(()=>{ const g=Object.keys(GUILD_DEFS).filter(r=>G.guilds[r]); return g.length?`<div class="sheet-sub" style="margin-top:6px;"><b>⚜️ Guilds</b> — ${g.map(r=>GUILD_DEFS[r].ic+' '+GUILD_DEFS[r].name).join(' · ')} <span style="opacity:.7">(+${Math.round(guildBonusVal()*100)}% each)</span></div>`:''; })()}
     <div class="sheet-sub" style="margin:8px 0 2px;"><b>🏅 Deeds</b> — ${Object.keys(deeds).length} of ${DEED_DEFS.length} earned</div>
     <div class="deed-G.grid">
       ${DEED_DEFS.map(d=>{
@@ -6398,7 +6392,7 @@ function renderChronicleSheet(){
 function renderStatsSheet(){
   const H = statHistory.slice();
   // include a live "today" point so the graph reaches the present
-  H.push({ day:dayCount, pop:villagers.length, food:Math.round(stockpile.food||0), wood:Math.round(stockpile.wood||0), stone:Math.round(stockpile.stone||0) });
+  H.push({ day:dayCount, pop:G.villagers.length, food:Math.round(stockpile.food||0), wood:Math.round(stockpile.wood||0), stone:Math.round(stockpile.stone||0) });
   const W=300, HT=110, pad=6;
   const line = (key, col)=>{
     if(H.length<2) return '';
@@ -6551,7 +6545,7 @@ function renderVillagerSheet(v){
     <div class="sheet-sub">${stateLabel(v)}${v.trait ? ` · <span style="color:var(--amber)">${v.trait.ic} ${v.trait.label}</span> — ${v.trait.desc}` : ''}</div>
     ${(()=>{ const t=skillTier(v,v.role); return (v.role!=='idle'&&t.label) ? `<div class="sheet-sub"><span style="color:var(--amber)">${t.ic} ${t.label} ${roleLabel(v.role)}</span> — +${Math.round((t.mul-1)*100)}% at their craft</div>` : ''; })()}
     <div class="sheet-sub" style="font-style:italic;opacity:0.75;margin-top:4px;">${v.parents ? v.name+' was born in Oakenfall to '+v.parents[0]+' and '+v.parents[1]+'.' : backstoryFor(v)}</div>
-    ${v.partner ? `<div class="sheet-sub">💞 Wed to <b>${v.partner}</b>${villagers.some(o=>o.name===v.partner)?'':' <span style="opacity:0.7">(departed)</span>'}</div>` : ''}
+    ${v.partner ? `<div class="sheet-sub">💞 Wed to <b>${v.partner}</b>${G.villagers.some(o=>o.name===v.partner)?'':' <span style="opacity:0.7">(departed)</span>'}</div>` : ''}
     ${(()=>{
       const fr=(v.relations||[]).filter(r=>r.type==='friend'&&r.s>40).map(r=>r.name);
       const rv=(v.relations||[]).filter(r=>r.type==='rival'&&r.s<-25).map(r=>r.name);
@@ -6610,7 +6604,7 @@ function renderBuildingSheet(b){
   const def = BUILD_DEFS[b.type];
   let extra = '';
   if(b.type==='townCenter'){
-    extra = `<div class="sheet-sub" style="margin-top:6px;">Population ${villagers.length} / ${popCapacity()}. Villagers eat and sleep here.</div>`;
+    extra = `<div class="sheet-sub" style="margin-top:6px;">Population ${G.villagers.length} / ${popCapacity()}. Villagers eat and sleep here.</div>`;
   } else if(b.type==='house'){
     extra = `<div class="sheet-sub" style="margin-top:6px;">Provides shelter for +3 settlers.</div>`;
   } else if(b.type==='manor'){
@@ -6712,7 +6706,7 @@ function renderTileSheet(t){
   const kind = t.wilds ? 'wilds' : t.type;
   const info = TILE_INFO[kind];
   if(!info) return;
-  const anyIdleRole = villagers.find(v=>v.role==='idle');
+  const anyIdleRole = G.villagers.find(v=>v.role==='idle');
   sheetContent.innerHTML = `
     <div class="sheet-title">${info.icon} ${info.name}</div>
     <div class="sheet-sub">${t.resourceAmount>0 ? `Yield remaining: ${t.resourceAmount}/${t.maxResource}` : (t.type==='forest' && t.maxResource<=0 ? '🪵 Barren — this stand is felled out. A Forester\'s Grove nearby can replant it.' : 'Depleted — recovering.')}${t.type==='forest' && t.maxResource>0 && t.baseMax && t.maxResource<t.baseMax ? ' <span style="opacity:.7">(tiring — '+t.maxResource+'/'+t.baseMax+')</span>' : ''}</div>
@@ -6722,7 +6716,7 @@ function renderTileSheet(t){
   `;
   const sbtn = document.getElementById('send-idle-btn');
   if(sbtn) sbtn.addEventListener('click', ()=>{
-    const v = villagers.find(vv=>vv.role==='idle');
+    const v = G.villagers.find(vv=>vv.role==='idle');
     if(!v) return;
     releaseClaims(v);
     v.role = info.role; v.resKind = info.resKind;
@@ -6733,7 +6727,7 @@ function renderTileSheet(t){
 }
 
 function demolishBuilding(b){
-  for(const v of villagers){
+  for(const v of G.villagers){
     if(v.targetBuilding===b){ releaseClaims(v); v.state='idle'; }
   }
   gainResource('wood', Math.floor((BUILD_DEFS[b.type]?BUILD_DEFS[b.type].cost.wood:0) * 0.5));
@@ -6748,7 +6742,7 @@ function demolishBuilding(b){
 /* Assign every idle villager to the most-needed unlocked role.
    Priority: food if low, then wood, then stone — cycling so a batch spreads out. */
 function bulkAssignIdle(){
-  const idle = villagers.filter(v=>v.role==='idle' && v.state!=='spawning');
+  const idle = G.villagers.filter(v=>v.role==='idle' && v.state!=='spawning');
   if(!idle.length){ toast('No idle settlers.'); return; }
   const unlocked = [];
   if(hasBuildingType('farm')) unlocked.push('farmer');
@@ -6774,7 +6768,7 @@ function renderBuildPalette(){
   sheetContent.innerHTML = `
     <div class="sheet-title">🔨 Raise a Building</div>
     <div class="sheet-sub">Choose a structure, then position it and confirm.</div>
-    ${villagers.some(v=>v.role==='idle'&&v.state!=='spawning') ? `<button class="action-btn primary" id="bulk-assign-btn" style="margin:4px 0 8px;">⚒️ Put all idle settlers to work</button>` : ''}
+    ${G.villagers.some(v=>v.role==='idle'&&v.state!=='spawning') ? `<button class="action-btn primary" id="bulk-assign-btn" style="margin:4px 0 8px;">⚒️ Put all idle settlers to work</button>` : ''}
     ${(()=>{
       const CAT = { home:'🏠 Homes', food:'🌾 Food & Provisions', industry:'🪓 Industry', trade:'⚖️ Trade & Hall', defense:'🛡️ Defense', road:'🛤️ Roadworks' };
       const CATOF = {
@@ -7041,7 +7035,7 @@ function handleTap(sx, sy){
   const wp = screenToWorldPixel(sx, sy);
   // 1) villager hit test
   let hitV = null, hitVD = 22*22;
-  for(const v of villagers){
+  for(const v of G.villagers){
     const p = project(v.gx, v.gy);
     const d = dist2(wp.x, wp.y-10, p.x, p.y-12);
     if(d < hitVD){ hitVD = d; hitV = v; }
@@ -7171,12 +7165,12 @@ function serializeState(){
   return {
     v:2, savedAt: Date.now(),
     worldTime, dayCount, stockpile, totals, questsCompleted, wolfEvents,
-    idleSlotCounter, usedNames, journal, researched, activeResearch, coins, dailyBounties, dailyProgress, bannerIdx, gameModeId,
+    idleSlotCounter: G.idleSlotCounter, usedNames: G.usedNames, journal, researched, activeResearch, coins, dailyBounties, dailyProgress, bannerIdx, gameModeId,
     landId, scenarioId, scenarioWon, tcX: G.TC_X, tcY: G.TC_Y,
     grid: G.grid.map(row=>row.map(t=>({type:t.type,wilds:t.wilds,ford:t.ford||undefined,resourceAmount:t.resourceAmount,maxResource:t.maxResource,baseMax:t.baseMax,regrowAt:t.regrowAt}))),
     buildings: buildings.map(b=>({type:b.type,gx:b.gx,gy:b.gy,condition:Math.round(b.condition===undefined?100:b.condition),herd:b.herd})),
-    villagers: villagers.map(v=>({name:v.name, role:v.role, gx:v.gx, gy:v.gy, hunger:v.hunger, fatigue:v.fatigue, trait:v.trait, sick:v.sick, morale:v.morale||65, partner:v.partner||null, parents:v.parents||null, relations:v.relations||[], memories:v.memories||[], age:v.age, stage:v.stage, lifespan:v.lifespan, skills:v.skills||{}})),
-    memorials: memorials, chronicle: chronicle, deeds: deeds, statHistory: statHistory,
+    villagers: G.villagers.map(v=>({name:v.name, role:v.role, gx:v.gx, gy:v.gy, hunger:v.hunger, fatigue:v.fatigue, trait:v.trait, sick:v.sick, morale:v.morale||65, partner:v.partner||null, parents:v.parents||null, relations:v.relations||[], memories:v.memories||[], age:v.age, stage:v.stage, lifespan:v.lifespan, skills:v.skills||{}})),
+    memorials: G.memorials, chronicle: chronicle, deeds: deeds, statHistory: statHistory,
     festivalBoon: festivalBoon, lastFestivalYear: lastFestivalYear,
     tradeRoutes: tradeRoutes, routeOffers: routeOffers, climate: climate, plague: plague,
     unlocks: unlocks, onboardDone: onboardDone, ledger: ledger, holdName: holdName, crestChoice: crestChoice, decrees: decrees,
@@ -7228,7 +7222,7 @@ function noteSlotSaved(){
   const prev = slotMeta[String(currentSlot)] || {};
   slotMeta[String(currentSlot)] = {
     name: prev.name || holdName || 'Oakenfall',
-    holdName, savedAt: Date.now(), day: dayCount, pop: villagers.length,
+    holdName, savedAt: Date.now(), day: dayCount, pop: G.villagers.length,
   };
 }
 async function deleteSlot(n){
@@ -7310,7 +7304,7 @@ function applyOfflineProgress(){
   const simSec = Math.min(elapsedRealSec, 8*3600) * 0.35;
   // Count working-capable villagers per resource route
   let woodWorkers=0, stoneWorkers=0, foodWorkers=0;
-  for(const v of villagers){
+  for(const v of G.villagers){
     if(v.role==='lumberjack') woodWorkers++;
     else if(v.role==='miner') stoneWorkers++;
     else if(v.role==='farmer'||v.role==='fisher'||v.role==='hunter') foodWorkers++;
@@ -7323,14 +7317,14 @@ function applyOfflineProgress(){
     food:  Math.floor(foodWorkers  * perWorkerRate * simSec * 0.9),
   };
   // Villagers also ate while away: 2 food per villager per simulated "day"
-  const foodEaten = Math.floor(villagers.length * 2 * (simSec / CYCLE_LEN));
+  const foodEaten = Math.floor(G.villagers.length * 2 * (simSec / CYCLE_LEN));
   gains.food = Math.max(0, gains.food - foodEaten);
   const applied = {};
   for(const k of ['wood','stone','food']){
     if(gains[k] > 0) applied[k] = gainResource(k, gains[k]);
   }
   // Everyone wakes rested and fed after time away
-  for(const v of villagers){ v.hunger = Math.min(v.hunger, 30); v.fatigue = Math.min(v.fatigue, 20); }
+  for(const v of G.villagers){ v.hunger = Math.min(v.hunger, 30); v.fatigue = Math.min(v.fatigue, 20); }
   const hours = elapsedRealSec/3600;
   const awayLabel = hours >= 1 ? Math.round(hours*10)/10 + ' hours' : Math.round(elapsedRealSec/60) + ' minutes';
   return { awayLabel, applied, hadWorkers: (woodWorkers+stoneWorkers+foodWorkers)>0 };
@@ -7359,7 +7353,7 @@ function showOfflineSummary(sum){
 }
 function restoreVillager(vd){
   const speedBonus = (vd.trait && vd.trait.id==='swift') ? 0.26 : 0;
-  villagers.push({
+  G.villagers.push({
     id:'v'+Math.random().toString(36).slice(2,9),
     name:vd.name, trait:vd.trait||rollTrait(), role:vd.role, state:'idle',
     sick:vd.sick||false, sickTimer:0, morale:vd.morale!==undefined?vd.morale:65, partner:vd.partner||null, parents:vd.parents||null,
@@ -7379,8 +7373,8 @@ function restoreState(data){
   totals = Object.assign({wood:0,stone:0,food:0,planks:0,flour:0,bread:0}, data.totals);
   questsCompleted = data.questsCompleted || {};
   wolfEvents = data.wolfEvents||0;
-  idleSlotCounter = data.idleSlotCounter||0;
-  usedNames = data.usedNames||[];
+  G.idleSlotCounter = data.idleSlotCounter||0;
+  G.usedNames = data.usedNames||[];
   journal = Object.assign({ peakPopulation:0, daysSurvived:0, wolvesSurvived:0, buildingsRaised:0, settlersWelcomed:0, wintersEndured:0 }, data.journal);
   researched = data.researched || {};
   activeResearch = data.activeResearch || null;
@@ -7420,9 +7414,9 @@ function restoreState(data){
   }
   buildings=[];
   for(const bd of data.buildings){ const nb = addBuilding(bd.type,bd.gx,bd.gy); if(nb){ nb.condition = bd.condition!==undefined ? bd.condition : 100; if(bd.herd!==undefined) nb.herd = bd.herd; } }
-  villagers=[];
+  G.villagers=[];
   for(const vd of data.villagers) restoreVillager(vd);
-  memorials = data.memorials || [];
+  G.memorials = data.memorials || [];
   chronicle = data.chronicle || [];
   deeds = data.deeds || {};
   statHistory = data.statHistory || [];
@@ -7441,7 +7435,7 @@ function restoreState(data){
   decrees = Object.assign({ curfew:false, tithe:false, openGates:false, rationing:false }, data.decrees||{});
   // Seed friendship/rivalry moments so restored relationships don't re-toast on load
   _relMoments.clear();
-  villagers.forEach(v=>(v.relations||[]).forEach(r=>{
+  G.villagers.forEach(v=>(v.relations||[]).forEach(r=>{
     const key=[v.name,r.name].sort().join('|');
     if(r.type==='friend'&&r.s>40)_relMoments.add('fr'+key);
     if(r.type==='rival'&&r.s<-25)_relMoments.add('rv'+key);
@@ -7713,9 +7707,9 @@ function resetHoldState(){
   crestChoice = crestSel ? (parseInt(crestSel.dataset.crest,10)||0) : 0;
   // Full state reset
   G.grid=[]; G.forestTiles=[]; G.stoneTiles=[]; G.waterTiles=[]; G.wildsTiles=[];
-  buildings=[]; villagers=[]; memorials=[]; chronicle=[]; deeds={}; statHistory=[]; festivalBoon=null; lastFestivalYear=0; tradeRoutes=[]; routeOffers=[]; climate=null; plague=null; raiders=[];
+  buildings=[]; G.villagers=[]; G.memorials=[]; chronicle=[]; deeds={}; statHistory=[]; festivalBoon=null; lastFestivalYear=0; tradeRoutes=[]; routeOffers=[]; climate=null; plague=null; raiders=[];
   worldTime=30; dayCount=1; wolfTimer=60; wolfEvents=0;
-  spawnTimer=18; idleSlotCounter=0; usedNames=[];
+  spawnTimer=18; G.idleSlotCounter=0; G.usedNames=[];
   questsCompleted={}; lastSeenQuestCount=0;
   totals={wood:0,stone:0,food:0};
   window.__capWarned={wood:false,stone:false,food:false,planks:false,flour:false,bread:false};
