@@ -1223,7 +1223,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.79.0';
+const GAME_VERSION = '1.80.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue

@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.80.0
+The front door, tidied. Sharing a link to Oakenfall anywhere — a message, a
+post, a chat — now shows a real dusk shot of a working hold instead of a blurry
+upscaled icon. The opening valley no longer falls back to a black rectangle if
+its scenery fails to arrive; there is a sky and a ridgeline waiting underneath
+it either way.
+
+Around the site: the hold's own page is reachable from the menu rather than
+only by knowing the address, every page carries a single proper heading, and
+the smaller taps on a phone were widened to something a thumb can actually hit.
+
 ## 1.79.0
 An honest accounting of the sound. The six sound-effect files the game has
 shipped since the audio update were corrupt and never once played — every sound

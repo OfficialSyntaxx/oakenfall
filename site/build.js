@@ -117,14 +117,10 @@ if (fs.existsSync(livingSrc)) {
   fs.copyFileSync(livingSrc, path.join(OUT, 'living', 'index.html'));
 }
 
-// 3D prototype (Three.js, procedural placeholder art) served at /3d/ — a
-// testbed for the "stylized 3D rebuild" direction. Uses a CDN (site-only, not
-// the game's single-file rule); does not affect the game or the homepage.
-const poc3dSrc = path.join(ROOT, 'game', 'oakenfall-3d-poc.html');
-if (fs.existsSync(poc3dSrc)) {
-  fs.mkdirSync(path.join(OUT, '3d'), { recursive: true });
-  fs.copyFileSync(poc3dSrc, path.join(OUT, '3d', 'index.html'));
-}
+/* The 3D prototype is deliberately NOT published. The owner abandoned that
+   direction — the game is staying 2.5D — and it was reachable at /3d/, linked
+   from nowhere, pulling three.js off a CDN. The source stays in game/ as a
+   record; it just isn't deployed. */
 
 // Cinematic scroll landing page = the homepage (/), also at /valley/.
 // Standalone HTML (its own <head>/scripts); copied raw, not through layout.
@@ -171,6 +167,13 @@ for (const file of fs.readdirSync(path.join(SITE, 'pages'))) {
     .replace(/<!--\s*(title|desc|slug):[\s\S]*?-->\n?/g, '')
     .replace('<!--CHANGELOG-->', changelog)
     .replace('<!--CREDITS-->', credits);
+  // Every page shipped without an <h1>: its headline was an <h2> beneath a
+  // kicker line. Search engines and screen readers both take the first heading
+  // as the page's name, so promote it. site.css sizes .district h1 to match the
+  // h2 it replaces, so nothing moves on screen.
+  if (!/<h1[\s>]/.test(content)) {
+    content = content.replace(/<h2([\s>])/, '<h1$1').replace(/<\/h2>/, '</h1>');
+  }
   const page = layout
     .replace(/{{title}}/g, title)
     .replace(/{{desc}}/g, desc)
