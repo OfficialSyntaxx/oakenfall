@@ -59,8 +59,14 @@ export function stopMusic(): void { if(musicEl){ try{ musicEl.pause(); }catch(e)
 /* ── SYNTH ── the floor under everything. NEVER remove. */
 let AC: any = null, sfxOn = true;
 function ac(): any { if(!AC){ try{ AC=new ((window as any).AudioContext||(window as any).webkitAudioContext)(); }catch(e){} } if(AC&&AC.state==='suspended') AC.resume(); return AC; }
+/** Every sound the hold makes. An unrecognised kind falls back to the tap
+ *  rather than silently building an oscillator it never starts — a typo should
+ *  be audible, not invisible. */
+const KINDS = ['tap','build','coin','tier','warn','repair','chop','mine','open','close',
+               'deed','festival','fire','blight','raid'];
 export function sfx(kind: string): void {
   if(!sfxOn) return;
+  if(!KINDS.includes(kind)) kind = 'tap';
   if(AUDIO_B64[kind] && playSample(kind)) return;
   const a=ac(); if(!a) return;
   const t=a.currentTime;

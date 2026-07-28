@@ -203,7 +203,12 @@ function rollName(){
 ========================================================================= */
 let buildings = [];
 // Safe Town Centre lookup — always returns a building or null, never throws
-function findTC(){ return findTC() || null; }
+/* The town hall: every hauler's fallback drop-off, and the anchor a dozen other
+   systems measure from. This called ITSELF — infinite recursion, throwing on
+   every invocation since the Vite migration. Because the frame loop catches and
+   throttles exceptions, it never surfaced as a crash: settlers simply walked to
+   the trees, filled their arms, dropped nothing, and went back for more. */
+function findTC(){ return buildings.find(b=>b.type==='townCenter') || null; }
 let villagers = [];
 let stockpile = { wood:60, stone:25, food:40 };
 let totals = { wood:0, stone:0, food:0 }; // lifetime gathered, drives quests
@@ -447,6 +452,16 @@ window.__oakDebug = function(){
     day: dayCount, time: Math.round(worldTime*100)/100, editing: editorOn,
     season: seasonName(), weather: weather.type,
     villagers: villagers.length, roles,
+    states: (()=>{ const c={}; for(const v of villagers) c[v.state]=(c[v.state]||0)+1; return c; })(),
+    /* Claimed work slots vs settlers actually holding one. A gap means tiles
+       were claimed and never released, which slowly starves the hold of places
+       to work. */
+    claims: (()=>{ let n=0; for(const row of G.grid) for(const t of row) n += (t.workers||0); return n; })(),
+    /* The frame loop catches exceptions so one bad frame can't kill the game.
+       That is right, but it means a fault can run for months in silence — see
+       findTC. Anything in here is a real error the game swallowed. */
+    errors: errorLog.map(e=>e.kind+': '+e.msg.slice(0,90)),
+    claimants: villagers.filter(v=>v.targetTile).length,
     buildings: buildings.filter(b=>b.type!=='road').map(b=>b.type),
     placements: buildings.filter(b=>b.type!=='road').map(b=>({t:b.type, gx:b.gx, gy:b.gy})),
     worn: buildings.filter(b=>b.condition!==undefined && b.condition<70).length,
@@ -466,6 +481,18 @@ window.__oakDebug = function(){
 };
 /* Terrain as one letter per tile ('w' = wilds), read-only like __oakDebug.
    Kept out of the snapshot itself so every other caller isn't paying for it. */
+/* Every settler's working record, read-only. The counts in __oakDebug tell you
+   the hold has stalled; this tells you why. */
+window.__oakProbe = function(){
+  return villagers.map(v=>({
+    name:v.name, role:v.role, state:v.state,
+    workTimer:+(v.workTimer||0).toFixed(2), resKind:v.resKind||null,
+    tile: v.targetTile ? {gx:v.targetTile.gx, gy:v.targetTile.gy, amt:v.targetTile.resourceAmount, workers:v.targetTile.workers} : null,
+    carrying: v.carrying || null,
+    hunger:Math.round(v.hunger), fatigue:Math.round(v.fatigue), morale:Math.round(v.morale||0),
+    eff:+effMultiplier(v).toFixed(2), stage:v.stage,
+  }));
+};
 window.__oakGrid = function(){
   return G.grid.map(row=>row.map(t=> t.wilds ? 'w' : t.type.charAt(0)));
 };
@@ -1192,7 +1219,7 @@ let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire ro
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.77.2';
+const GAME_VERSION = '1.78.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -1764,6 +1791,23 @@ function roleNeedScores(){
   add('lumberjack','forestCamp', (1 - frac('wood'))*1.25);
   add('miner','miningPost', (1 - frac('stone'))*1.05);
   if(currentTierIdx >= 2) add('guard','guardPost', 0.85);   // worth raiding now
+
+  /* Last resort only. If the hold has NO workplace at all, its people gather
+     deadfall and forage by hand — badly, but enough to climb back. Without this
+     a hold that spends its last timber on housing can never gather wood again,
+     has no way to raise the camp that would let it, and starves with every
+     settler standing idle: reachable in the first five minutes by doing exactly
+     what the tutorial says. It is deliberately a fallback rather than a
+     competing option, so a camp you just built never sits idle while your folk
+     forage instead — and it only wakes when the hold cannot even afford the
+     cheapest workplace, so a fresh hold still waits for the player to build
+     rather than wandering off to forage on turn one. */
+  const cheapestWorkplace = (BUILD_DEFS.forestCamp && BUILD_DEFS.forestCamp.cost.wood) || 40;
+  if(!out.length && (stockpile.wood||0) < cheapestWorkplace){
+    const byHand = (role, score)=> out.push({ role, score: score / (1 + (count[role]||0)), raw: score, workers: count[role]||0, byHand:true });
+    byHand('lumberjack', (1 - frac('wood'))*0.55);
+    byHand('hunter', hungry*0.5);
+  }
   out.sort((a,b)=>b.score - a.score);
   _needCache = out; _needAt = worldTime;
   return out;
@@ -3143,9 +3187,13 @@ function updateVillager(v, dt){
         };
         const yr = yields[v.resKind];
         const toolsMul = (researched.tools && (v.resKind==='wood'||v.resKind==='stone')) ? 1.15 : 1;
+        // Working without the trade's building is gathering by hand — it keeps a
+        // hold alive, it does not run one.
+        const WORKPLACE_FOR = { wood:'forestCamp', stone:'miningPost', fish:'fishingHut', meat:'huntingCabin' };
+        const byHand = !hasActiveBuilding(WORKPLACE_FOR[v.resKind]) ? 0.5 : 1;
         const stockKey = (v.resKind==='fish' || v.resKind==='meat') ? 'food' : v.resKind;
         const foodBoon = stockKey==='food' ? harvestBoonMul() : 1;
-        const yieldAmt = Math.max(1, Math.round((yr[0] + Math.floor(Math.random()*(yr[1]-yr[0]+1))) * seasonYieldMul() * toolsMul * foodBoon * guildMulRes(v.resKind)));
+        const yieldAmt = Math.max(1, Math.round((yr[0] + Math.floor(Math.random()*(yr[1]-yr[0]+1))) * seasonYieldMul() * toolsMul * byHand * foodBoon * guildMulRes(v.resKind)));
         t.resourceAmount -= 1;
         v.carrying = { type:stockKey, amount:yieldAmt };
         if(v.resKind==='wood') sfx('chop');
@@ -6381,7 +6429,7 @@ function renderInboxSheet(){
   sheetContent.querySelectorAll('[data-cat]').forEach(b=>b.addEventListener('click', ()=>{ inboxFilter=b.dataset.cat; renderInboxSheet(); }));
 }
 function openFestivalChoice(){
-  try{ sfx('sheet'); }catch(e){}
+  try{ sfx('open'); }catch(e){}
   toast('🎊 A new year dawns — the hold gathers for its festival!');
   sheetNav.push({ id:'festival', title:'🎊 The Year\'s Festival', render(){
     sheetContent.innerHTML = `
@@ -6467,7 +6515,11 @@ function statBar(label, val, color){
 function renderVillagerSheet(v){
   const roles = Object.keys(ROLE_DEFS).map(key=>{
     const r = ROLE_DEFS[key];
-    return { key, label:r.label, ic:r.ic, enabled: !r.needsBuilding || hasBuildingType(r.needsBuilding), needs: r.needsBuilding };
+    // Deadfall and foraging need no building — the trade is just slower by hand.
+    const byHand = (key==='lumberjack' || key==='hunter');
+    const hasPlace = !r.needsBuilding || hasBuildingType(r.needsBuilding);
+    return { key, label:r.label, ic:r.ic, enabled: hasPlace || byHand,
+             needs: r.needsBuilding, byHand: !hasPlace && byHand };
   });
   const pKey = ({ lumberjack:'lumberjack', miner:'miner', farmer:'farmer', fisher:'fisher', guard:'guard' })[v.role] || 'peasant';
   const pUri = (typeof SPRITE_URLS!=='undefined') && SPRITE_URLS['portrait_'+pKey];
@@ -6495,7 +6547,7 @@ function renderVillagerSheet(v){
     <button class="action-btn" id="find-villager-btn" style="margin:6px 0 2px;">🔍 Find on map</button>
     <div class="row">
       ${roles.map(r=>`<button class="role-btn ${v.role===r.key?'active':''}" ${r.enabled?'':'disabled'} data-role="${r.key}">
-        <span class="ic">${r.ic}</span>${r.label}${r.enabled?'':'<br><small style=\'opacity:.7\'>Needs '+BUILD_DEFS[r.needs].name+'</small>'}
+        <span class="ic">${r.ic}</span>${r.label}${r.enabled?(r.byHand?'<br><small style=\'opacity:.7\'>By hand — half yield</small>':''):'<br><small style=\'opacity:.7\'>Needs '+BUILD_DEFS[r.needs].name+'</small>'}
       </button>`).join('')}
     </div>
   `;

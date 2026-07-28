@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.78.0
+Your settlers were dropping everything they gathered. A fault buried since the
+codebase was reorganised meant that whenever a hauler had no matching workplace
+to carry a load to, the trip was silently abandoned — arms full, nothing
+delivered — and the same fault quietly switched off the road network's
+logistics bonus and interfered with settlers going to eat and sleep. All of it
+now works as it always should have. Roads pay off again.
+
+A hold can also no longer strand itself. If you spend your last timber on
+housing — which is precisely what the guide tells a new steward to do — your
+folk will now gather deadfall and forage by hand, slowly, until they have
+enough to raise a proper camp. It only happens when the hold genuinely cannot
+afford one, so a fresh hold still waits for your word, and a camp you have
+built is never left idle while your people wander off to forage instead.
+
+Small things: the year's festival opens with a sound again instead of silence,
+and the game stopped asking for a page icon it never had.
+
 ## 1.77.2
 Fishing spots look like fishing spots. Instead of a fish lying on the surface,
 you now see what you'd see from a bank: a dark shape turning slowly under the
