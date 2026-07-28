@@ -30,6 +30,7 @@ import { tileWalkable, nearestWalkable, pathFind } from './pathfind';
 import { initLives, familyTick, hasTrait, relTo, remember, bumpRel, relationsTick, releaseClaims,
   memorialSpot, agingTick, passVillager, seedRelMoments,
   AGE_YEAR, ADULT_AGE, ELDER_BEFORE, LIFESPAN_BASE } from './lives';
+import { initWork, roleNeedScores, seekWork, maybeSwitchTrade } from './work';
 import { initSkills, SKILL_TIERS, skillTier, skillMul, gainSkill, hasNearbyMentor,
   GUILD_DEFS, guildBonusVal, recomputeGuilds, guildMulRes, guildFarmMul } from './skills';
 import { initWeather, getWeather, setWeather, rollWeather, rollClimate, rollPlague, plagueTick,
@@ -1308,107 +1309,6 @@ function chron(type, a, b, n){
    at the hearth after dark, seek warmth in winter, drift toward friends, and
    the children play. Only steers idle wander targets + a mood bubble — never
    overrides assigned work. */
-/* ── WHAT THE HOLD NEEDS ── a utility score per trade, so an unemployed settler
-   can work out what is worth doing instead of waiting to be told. Scarcity
-   drives the score; existing workers divide it, so hands spread across trades
-   rather than all piling onto whatever is scarcest. Recomputed at most once a
-   second — every idle settler asks the same question. */
-let _needCache = null, _needAt = -1;
-function roleNeedScores(){
-  if(_needCache && G.worldTime - _needAt < 1) return _needCache;
-  const pop = Math.max(1, G.villagers.length);
-  const count = {};
-  for(const v of G.villagers) count[v.role] = (count[v.role]||0) + 1;
-  const frac = (k)=> (G.stockpile[k]||0) / Math.max(1, capFor(k));
-  const out = [];
-  const add = (role, workplace, score)=>{
-    if(!hasActiveBuilding(workplace)) return;      // nowhere to do the work
-    // `score` is the hold's raw appetite for this trade; `workers` lets callers
-    // reason about pressure per head. The published score is the raw need spread
-    // over the hands already on it, which is what makes hiring fan out.
-    out.push({ role, score: score / (1 + (count[role]||0)), raw: score, workers: count[role]||0 });
-  };
-  // Food is the survival pressure: weight it by how many mouths depend on it,
-  // and sharply if the stores would not last long.
-  const hungry = (1 - frac('food'))*1.6 + ((G.stockpile.food||0) < pop*3 ? 1.4 : 0);
-  add('farmer','farm', hungry);
-  add('fisher','fishingHut', riverFrozen() ? 0 : hungry*0.95);
-  add('hunter','huntingCabin', hungry*0.9);
-  add('lumberjack','forestCamp', (1 - frac('wood'))*1.25);
-  add('miner','miningPost', (1 - frac('stone'))*1.05);
-  if(currentTierIdx >= 2) add('guard','guardPost', 0.85);   // worth raiding now
-
-  /* Last resort only. If the hold has NO workplace at all, its people gather
-     deadfall and forage by hand — badly, but enough to climb back. Without this
-     a hold that spends its last timber on housing can never gather wood again,
-     has no way to raise the camp that would let it, and starves with every
-     settler standing idle: reachable in the first five minutes by doing exactly
-     what the tutorial says. It is deliberately a fallback rather than a
-     competing option, so a camp you just built never sits idle while your folk
-     forage instead — and it only wakes when the hold cannot even afford the
-     cheapest workplace, so a fresh hold still waits for the player to build
-     rather than wandering off to forage on turn one. */
-  const cheapestWorkplace = (BUILD_DEFS.forestCamp && BUILD_DEFS.forestCamp.cost.wood) || 40;
-  if(!out.length && (G.stockpile.wood||0) < cheapestWorkplace){
-    const byHand = (role, score)=> out.push({ role, score: score / (1 + (count[role]||0)), raw: score, workers: count[role]||0, byHand:true });
-    byHand('lumberjack', (1 - frac('wood'))*0.55);
-    byHand('hunter', hungry*0.5);
-  }
-  out.sort((a,b)=>b.score - a.score);
-  _needCache = out; _needAt = G.worldTime;
-  return out;
-}
-/* An unemployed adult takes up the most-needed trade — unless the hold is on
-   fire, when free hands are worth more than another woodcutter (idle adults are
-   the bucket brigade). Returns true if they took work. */
-function seekWork(v){
-  if(G.buildings.some(b=>b._fire>0)) return false;
-  const best = roleNeedScores()[0];
-  if(!best || best.score < 0.35) return false;
-  reassignRole(v, best.role);
-  v.ambientEmote = '💡';
-  return true;
-}
-/* An employed settler reconsiders their trade now and then: a hold that has run
-   its granary dry while six people fell timber should see some of them pick up
-   a scythe. The margin and the staggered cooldown exist to stop folk churning
-   between jobs every time a score wobbles — switching costs a walk, so it has to
-   be clearly worth it. Player-assigned roles are not sacred, but they are sticky:
-   nothing moves unless the need is substantially greater elsewhere. */
-function maybeSwitchTrade(v){
-  if(v.stage==='child' || v.role==='idle') return false;
-  if(v._tradeCheck === undefined) v._tradeCheck = G.worldTime + 20 + Math.random()*30;
-  if(G.worldTime < v._tradeCheck) return false;
-  v._tradeCheck = G.worldTime + 30 + Math.random()*30;
-  if(G.buildings.some(b=>b._fire>0)) return false;
-  const scores = roleNeedScores();
-  if(!scores.length) return false;
-  // Compare pressure per head, not the published score. A fixed margin against
-  // scores already divided by worker count is effectively unreachable once a few
-  // people hold a trade — the first version of this never fired once. What
-  // matters is how hard each trade is pulling per person: my trade's need shared
-  // among those doing it, against the candidate's need if I joined them.
-  const mine = scores.find(s=>s.role===v.role);
-  const minePressure = mine ? mine.raw / Math.max(1, mine.workers) : 0;
-  let pick = null, pickPressure = 0;
-  for(const cand of scores){
-    if(cand.role === v.role) continue;
-    const p = cand.raw / (cand.workers + 1);
-    if(p > pickPressure){ pick = cand; pickPressure = p; }
-  }
-  // Floor only exists to stop churn when nothing much is needed; the ratio test
-  // below is what decides "clearly stronger". Set too high (0.4) it vetoed real
-  // imbalances — a trade pulling 2.25x harder than the one being left.
-  if(!pick || pickPressure < 0.2) return false;
-  // A trade in surplus frees you outright; otherwise the pull has to be clearly
-  // stronger, since switching costs a walk across the hold.
-  const worthIt = minePressure <= 0.05 ? true : pickPressure > minePressure * 1.8;
-  if(!worthIt) return false;
-  reassignRole(v, pick.role);
-  v.ambientEmote = '🔁';
-  remember(v, 'took up '+(ROLE_DEFS[pick.role]?ROLE_DEFS[pick.role].label:pick.role));
-  return true;
-}
 function ambientIdle(v){
   // Bucket brigade: idle adults rush to the nearest fire to help fight it.
   if(v.stage!=='child'){
@@ -3179,6 +3079,7 @@ initCritters({ ctx, sprites: SPRITES, spriteScale: SPRITE_SCALE, waterDrop: WATE
    reasoned about without a DOM. */
 initWeather({ toast, chron, sfx, forceWinter: ()=>!!gameMode.forceWinter });
 initSkills({ toast, chron });
+initWork({ capFor, hasActiveBuilding, reassignRole, currentTier: ()=>currentTierIdx });
 /* Lives needs one thing back: when a settler passes, whatever the UI was
    holding them open for has to let go. */
 initLives({ toast, chron, popCapacity, spawnVillager,
