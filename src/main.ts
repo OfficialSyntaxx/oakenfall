@@ -26,6 +26,9 @@ import { DAY_LEN, NIGHT_LEN, CYCLE_LEN, SEASON_LEN, setForceWinter, seasonIndex,
 /** The iso kit cannot import a mutable, so the sun is pushed into it. */
 function updateSunShadows(){ setSunShadow(...sunShadow()); }
 import { tileAt, genMap, reindexTiles } from './mapgen';
+import { initWeather, getWeather, setWeather, rollWeather, rollClimate, rollPlague, plagueTick,
+  climateFarmMul, climateFireMul, climateHungerMul, climateFatigueMul,
+  weatherMoveMul, weatherFarmMul, weatherFatigueMul, WEATHER_DEFS, CLIMATE_DEFS } from './weather';
 import { initCritters, spawnWildlife, updateWildlife, blitCritter,
   drawDeer, drawBoar, drawRabbit, drawFish, drawFox, drawDuck, drawFlit, drawBird } from './critters';
 import { TCODE, TCODE_R, applyBrushTo, encodeLand, decodeLand } from './landcode';
@@ -434,7 +437,7 @@ window.__oakDebug = function(){
   return {
     version: GAME_VERSION,
     day: G.dayCount, time: Math.round(G.worldTime*100)/100, editing: editorOn,
-    season: seasonName(), weather: weather.type,
+    season: seasonName(), weather: getWeather().type,
     villagers: G.villagers.length, roles,
     states: (()=>{ const c={}; for(const v of G.villagers) c[v.state]=(c[v.state]||0)+1; return c; })(),
     /* Claimed work slots vs settlers actually holding one. A gap means tiles
@@ -825,101 +828,13 @@ function checkDeeds(){
     }
   }
 }
-/* ── WEATHER ── rolled each dawn, season-weighted */
-let weather = { type:'clear', label:'Clear', ic:'☀️' };
-
-const WEATHER_DEFS = [{type:'clear',label:'Clear',ic:'☀️'},{type:'rain',label:'Rain',ic:'🌧️'},{type:'storm',label:'Storm',ic:'⛈️'},{type:'snow',label:'Snowfall',ic:'🌨️'}];
-function setWeather(type){ const d = WEATHER_DEFS.find(x=>x.type===type); if(d){ weather = { type:d.type, label:d.label, ic:d.ic }; } }
-function rollWeather(){
-  const w = WEATHER_TABLE[seasonIndex()];
-  const r = Math.random();
-  let acc=0, pick=0;
-  for(let i=0;i<4;i++){ acc+=w[i]; if(r<acc){ pick=i; break; } }
-  const defs=[{type:'clear',label:'Clear',ic:'☀️'},{type:'rain',label:'Rain',ic:'🌧️'},{type:'storm',label:'Storm',ic:'⛈️'},{type:'snow',label:'Snowfall',ic:'🌨️'}];
-  const prev = weather.type;
-  weather = defs[pick];
-  if(weather.type!=='clear' && weather.type!==prev){
-    const msgs={rain:'🌧️ Rain sweeps in — crops drink deep, boots drag in the mud.',storm:'⛈️ A storm batters the hold — stay near shelter!',snow:'🌨️ Snow falls softly over Oakenfall.'};
-    toast(msgs[weather.type]);
-  }
-}
-/* ── CLIMATE SPELLS ── multi-day conditions layered over daily weather, with
-   real bite: droughts, cold snaps, and fair spells. Announced and temporary. */
-const CLIMATE_DEFS = {
-  drought:  {ic:'🏜️', name:'Drought',    farm:22.6,  fire:1.8, hunger:1.0, fatigue:1.0, morale:-4, seasons:[1,2]},
-  coldsnap: {ic:'🥶', name:'Cold Snap',   farm:0.8,  fire:0.4, hunger:1.25,fatigue:1.2, morale:-4, seasons:[2,3]},
-  fair:     {ic:'🌤️', name:'Fair Spell',  farm:1.2,  fire:0.8, hunger:1.0, fatigue:0.9, morale:5,  seasons:[0,1,2]},
-};
-function rollClimate(){
-  if(G.climate){ if(G.dayCount>=G.climate.endsDay){ toast(G.climate.ic+' The '+CLIMATE_DEFS[G.climate.type].name.toLowerCase()+' has broken.'); G.climate=null; } return; }
-  if(gameMode.forceWinter) return; // Iron Winter is its own climate
-  if(G.dayCount<=3 || Math.random()>0.16) return; // uncommon
-  const s = seasonIndex();
-  const options = Object.keys(CLIMATE_DEFS).filter(k=>CLIMATE_DEFS[k].seasons.includes(s));
-  if(!options.length) return;
-  const type = options[Math.floor(Math.random()*options.length)];
-  const d = CLIMATE_DEFS[type];
-  G.climate = { type, ic:d.ic, name:d.name, endsDay: G.dayCount + 2 + Math.floor(Math.random()*2) };
-  const blurb = {
-    drought:'🏜️ A drought settles over the valley — fields wither and timber turns tinder-dry. Mind the fire.',
-    coldsnap:'🥶 A cold snap grips the hold — folk burn through food and tire fast. Keep the stores full.',
-    fair:'🌤️ A spell of fair weather blesses the valley — crops thrive and hearts lift.',
-  }[type];
-  toast(blurb, type!=='fair');
-  if(typeof chron==='function') chron('climate', d.name);
-}
-/* ── DISASTER: BLIGHT ── a disease outbreak. Several settlers fall ill at once,
-   and it spreads between those standing close while it lasts. Herbal Lore
-   softens it; a Healer (shop/event) clears the currently sick. */
-function rollPlague(){
-  if(G.plague){
-    if(G.dayCount>=G.plague.endsDay){ G.plague=null; toast('🌿 The sickness has run its course — the hold breathes easier.'); }
-    return;
-  }
-  if(G.dayCount<=4 || G.villagers.length<5) return;
-  if(Math.random() > 0.09) return; // rare
-  G.plague = { endsDay: G.dayCount + 2 + Math.floor(Math.random()*2) };
-  const frac = G.researched.herbs ? 0.18 : 0.32;
-  const healthy = G.villagers.filter(v=>!v.sick && v.stage!=='child');
-  const target = Math.max(1, Math.round(healthy.length*frac));
-  let n=0;
-  for(let i=0;i<target && healthy.length;i++){
-    const v = healthy.splice(Math.floor(Math.random()*healthy.length),1)[0];
-    v.sick=true; v.sickTimer=(25+Math.random()*20)*(G.researched.herbs?0.6:1); n++;
-  }
-  toast('🤢 A blight sweeps the hold — '+n+' settler'+(n>1?'s':'')+' have fallen ill! Seek a healer, and keep the sick from crowding.', true);
-  if(typeof sfx==='function') sfx('blight');
-  if(typeof chron==='function') chron('plague');
-}
-function plagueTick(dt){
-  if(!G.plague) return;
-  const sick = G.villagers.filter(v=>v.sick);
-  if(!sick.length) return;
-  const spread = (G.researched.herbs ? 0.02 : 0.05) * dt;
-  for(const v of G.villagers){
-    if(v.sick || v.stage==='child') continue;
-    for(const s of sick){
-      if(dist2(v.gx,v.gy,s.gx,s.gy) < 4){
-        if(Math.random() < spread){ v.sick=true; v.sickTimer=(25+Math.random()*20)*(G.researched.herbs?0.6:1); }
-        break;
-      }
-    }
-  }
-}
-function climateFarmMul(){ return G.climate ? CLIMATE_DEFS[G.climate.type].farm : 1; }
-function climateFireMul(){ return G.climate ? CLIMATE_DEFS[G.climate.type].fire : 1; }
-function climateHungerMul(){ return G.climate ? CLIMATE_DEFS[G.climate.type].hunger : 1; }
-function climateFatigueMul(){ return G.climate ? CLIMATE_DEFS[G.climate.type].fatigue : 1; }
-function weatherMoveMul(){ return weather.type==='storm' ? 0.8 : (weather.type==='rain' ? 0.9 : 1); }
-function weatherFarmMul(){ return (weather.type==='rain' ? 1.25 : 1) * climateFarmMul(); }
-function weatherFatigueMul(){ return weather.type==='storm' ? 1.2 : 1; }
 
 let eventTimer = 140; // world-seconds until the next random event roll
 let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire roll
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.81.0';
+const GAME_VERSION = '1.82.0';
 // Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
 // only as a fallback link if the auto-file backend is unreachable. Reports now
 // POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
@@ -998,7 +913,7 @@ function buildDiagnostics(){
   const lines = [];
   lines.push('## Oakenfall Report');
   lines.push('- Version: ' + GAME_VERSION + ' · Mode: ' + gameModeId + ' · Map: ' + G.MAP_SIZE);
-  lines.push('- Day ' + G.dayCount + ' · ' + seasonName() + ' · ' + weather.label + ' · Tier: ' + HOLD_TIERS[currentTierIdx].name);
+  lines.push('- Day ' + G.dayCount + ' · ' + seasonName() + ' · ' + getWeather().label + ' · Tier: ' + HOLD_TIERS[currentTierIdx].name);
   lines.push('- Pop: ' + G.villagers.length + '/' + popCapacity() + ' · Buildings: ' + G.buildings.length + ' · Coins: ' + G.coins);
   lines.push('- Stock: ' + Object.entries(G.stockpile).map(([k,v])=>k+':'+Math.round(v)).join(' '));
   lines.push('- Researched: ' + (Object.keys(G.researched).join(', ') || 'none') + (G.activeResearch ? ' (researching: '+G.activeResearch.id+')' : ''));
@@ -1573,7 +1488,7 @@ function ambientIdle(v){
   const tav = G.buildings.find(b=>b.type==='tavern');
   const hearth = tav ? {gx:tav.gx+0.5, gy:tav.gy+1.1} : {gx:G.TC_CX, gy:G.TC_CY+1.4};
   // Foul weather drives folk to shelter — a storm clears the yards fastest.
-  const storm = weather.type==='storm', rain = weather.type==='rain' || weather.type==='snow';
+  const storm = getWeather().type==='storm', rain = getWeather().type==='rain' || getWeather().type==='snow';
   if(storm || night || (winter && (hasTrait(v,'frail') || Math.random()<0.4)) || (rain && Math.random()<0.5)){
     v.idleGX = clamp(hearth.gx + (Math.random()-0.5)*1.8, 1, G.MAP_SIZE-2);
     v.idleGY = clamp(hearth.gy + (Math.random()-0.5)*1.0, 1, G.MAP_SIZE-2);
@@ -1808,10 +1723,10 @@ function fireDrynessMul(){
   if(s===1) m *= 1.7;          // summer — dry
   else if(s===3) m *= 0.12;    // winter — snow-damped
   else if(s===2) m *= 1.15;    // autumn — dry leaves
-  if(weather.type==='rain') m *= 0.3;
-  else if(weather.type==='storm') m *= 0.5;
-  else if(weather.type==='snow') m *= 0.2;
-  else if(weather.type==='clear') m *= 1.2;
+  if(getWeather().type==='rain') m *= 0.3;
+  else if(getWeather().type==='storm') m *= 0.5;
+  else if(getWeather().type==='snow') m *= 0.2;
+  else if(getWeather().type==='clear') m *= 1.2;
   m *= climateFireMul();   // drought dries the timber; a cold snap damps it
   return m;
 }
@@ -1845,7 +1760,7 @@ function fireTick(dt){
   }
   const burning = G.buildings.filter(b=>b._fire);
   if(!burning.length) return;
-  const ambientDouse = weather.type==='storm'?11:weather.type==='rain'?8:weather.type==='snow'?6:0;
+  const ambientDouse = getWeather().type==='storm'?11:getWeather().type==='rain'?8:getWeather().type==='snow'?6:0;
   for(const b of burning){
     const c = buildingCenter(b);
     const near = G.villagers.filter(v=>v.stage!=='child' && dist2(v.gx,v.gy,c.gx,c.gy) < 9).length;
@@ -2708,7 +2623,7 @@ function updateVillager(v, dt){
   if(v.hunger>75) mTarget -= 20;
   if(v.sick) mTarget -= 18;
   if(seasonIndex()===3) mTarget -= 8;                   // winter gloom
-  if(weather.type==='storm') mTarget -= 10;
+  if(getWeather().type==='storm') mTarget -= 10;
   if(G.researched.hearth) mTarget += 8;
   if(activeEvent && activeEvent.type==='festival') mTarget += 20;
   if(G.festivalBoon==='courage') mTarget += 8;            // Rite of Courage boon
@@ -3516,6 +3431,11 @@ const EDGE_DROP = 14;  // map-edge cliff height
    dead zone, which is a runtime throw the frame loop would then swallow. */
 initCritters({ ctx, sprites: SPRITES, spriteScale: SPRITE_SCALE, waterDrop: WATER_DROP, tileWalkable });
 
+/* Weather reports what it did rather than reaching for main.ts's toast and
+   chronicle directly — the module stays pure simulation that way, and can be
+   reasoned about without a DOM. */
+initWeather({ toast, chron, sfx, forceWinter: ()=>!!gameMode.forceWinter });
+
 const TILE_COLORS = {
   grass: ['#2f4528','#33492c','#2a3f25','#304826'],
   dirt:  ['#4a3a26','#473722','#4d3d29','#453821'],
@@ -3534,9 +3454,9 @@ const TILE_COLORS = {
    phase advances faster when it blows harder. */
 let windPhase = 0, windGust = 0.22;
 function updateWind(dt){
-  const base = weather.type==='storm' ? 1.0
-             : weather.type==='rain'  ? 0.55
-             : weather.type==='snow'  ? 0.40 : 0.22;
+  const base = getWeather().type==='storm' ? 1.0
+             : getWeather().type==='rain'  ? 0.55
+             : getWeather().type==='snow'  ? 0.40 : 0.22;
   const target = base * (0.75 + 0.25*Math.sin(G.worldTime*0.37));
   windGust += (target - windGust) * Math.min(1, dt*0.5);
   windPhase += dt * (0.6 + windGust*0.9);
@@ -3547,8 +3467,8 @@ function windAt(gx, gy){ return Math.sin(windPhase*1.6 + (gx+gy)*0.55) * windGus
 
 let groundWet = 0, groundSnow = 0;
 function updateGroundCover(dt){
-  const raining = weather.type==='rain' || weather.type==='storm';
-  const snowing = weather.type==='snow';
+  const raining = getWeather().type==='rain' || getWeather().type==='storm';
+  const snowing = getWeather().type==='snow';
   const winter = seasonIndex()===3;
   const wetTarget  = raining ? 1 : 0;
   const snowTarget = snowing ? 1 : (winter ? 0.5 : 0);
@@ -5315,7 +5235,7 @@ function render(){
 /* Soft clouds drifting over the hold — pure atmosphere, parallax with pan */
 let cloudState = null;
 function renderClouds(){
-  if(weather.type==='storm') return; // storm layer owns the sky
+  if(getWeather().type==='storm') return; // storm layer owns the sky
   if(!decorImg('clouds',0)) return;
   if(!cloudState){
     cloudState = [];
@@ -5376,7 +5296,7 @@ function drawDebugOverlay(){
   const lines = [
     'FPS '+_dbgFps.toFixed(0)+'  speed '+speedMode+'x',
     'Day '+G.dayCount+'  '+seasonName()+'  '+phase,
-    'Weather '+weather.label+(G.climate?'  Climate '+(G.climate.name||G.climate.ic):''),
+    'Weather '+getWeather().label+(G.climate?'  Climate '+(G.climate.name||G.climate.ic):''),
     'Settlers '+G.villagers.length+' ('+idle+' idle)  Buildings '+G.buildings.filter(b=>b.type!=='road').length,
     'Raiders '+G.raiders.length+'  Fires '+G.buildings.filter(b=>b._fire>0).length,
     'Coins '+Math.floor(G.coins)+'  Tier '+HOLD_TIERS[currentTierIdx].name,
@@ -5393,12 +5313,12 @@ function drawDebugOverlay(){
 /* ── WEATHER PARTICLES ── screen-space rain streaks / snowflakes / lightning */
 let _lightningT = 0;
 function renderWeather(){
-  if(weather.type==='clear') return;
+  if(getWeather().type==='clear') return;
   ctx.save();
   ctx.setTransform(canvasDPR,0,0,canvasDPR,0,0);
   const t = G.worldTime;
-  if(weather.type==='rain' || weather.type==='storm'){
-    const n = weather.type==='storm' ? 90 : 55;
+  if(getWeather().type==='rain' || getWeather().type==='storm'){
+    const n = getWeather().type==='storm' ? 90 : 55;
     ctx.strokeStyle='rgba(170,200,220,0.30)'; ctx.lineWidth=1;
     ctx.beginPath();
     for(let i=0;i<n;i++){
@@ -5407,7 +5327,7 @@ function renderWeather(){
       ctx.moveTo(x, y); ctx.lineTo(x-3, y+11);
     }
     ctx.stroke();
-    if(weather.type==='storm'){
+    if(getWeather().type==='storm'){
       _lightningT -= 1/60;
       if(_lightningT<=0 && Math.random()<0.004){ _lightningT = 0.14; }
       if(_lightningT>0){
@@ -5415,7 +5335,7 @@ function renderWeather(){
         ctx.fillRect(0,0,cssW,cssH);
       }
     }
-  } else if(weather.type==='snow'){
+  } else if(getWeather().type==='snow'){
     ctx.fillStyle='rgba(230,240,248,0.55)';
     for(let i=0;i<60;i++){
       const x = ((i*83.1 + Math.sin(t*0.8+i)*30 + t*18)% (cssW+20)) - 10;
@@ -5489,7 +5409,7 @@ function updateDayTint(){
   }
   daytintEl.style.backgroundColor = color;
   phaseLabelEl.textContent = label;
-  clockDayEl.childNodes[0].nodeValue = (G.holdName && G.holdName!=='Oakenfall' ? G.holdName+' · ' : '')+(gameModeId!=='settler' ? GAME_MODES[gameModeId].name+' · ' : '')+HOLD_TIERS[currentTierIdx].ic+' '+HOLD_TIERS[currentTierIdx].name+' · Day '+G.dayCount+' · '+seasonName()+' '+weather.ic+(G.climate?' '+G.climate.ic:'')+' · ';
+  clockDayEl.childNodes[0].nodeValue = (G.holdName && G.holdName!=='Oakenfall' ? G.holdName+' · ' : '')+(gameModeId!=='settler' ? GAME_MODES[gameModeId].name+' · ' : '')+HOLD_TIERS[currentTierIdx].ic+' '+HOLD_TIERS[currentTierIdx].name+' · Day '+G.dayCount+' · '+seasonName()+' '+getWeather().ic+(G.climate?' '+G.climate.ic:'')+' · ';
   const qd = questsDoneCount();
   document.getElementById('quest-dot').classList.toggle('hidden', qd>=lastSeenQuestCount);
 }
@@ -7342,7 +7262,7 @@ function resetHoldState(){
   G.questsCompleted={}; lastSeenQuestCount=0;
   G.totals={wood:0,stone:0,food:0};
   window.__capWarned={wood:false,stone:false,food:false,planks:false,flour:false,bread:false};
-  G.researched={}; G.activeResearch=null; currentTierIdx=0; weather={type:'clear',label:'Clear',ic:'☀️'};
+  G.researched={}; G.activeResearch=null; currentTierIdx=0; setWeather('clear');
   G.coins=0; G.bannerIdx=G.crestChoice; G.onboardDone=false; G.decrees={curfew:false,tithe:false,openGates:false,rationing:false}; decisionTimer=3.2; _lastDecision=''; G.ledger={in:{bounties:0,deeds:0,routes:0,quests:0,tithe:0},out:{shop:0}}; rollDailyBounties();
   applyDifficulty(readDifficultyConfig());
 }

@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.82.0
+Droughts are a hardship again. For the last five versions a drought has been
+multiplying your farm yield by twenty-two — the single most punishing weather
+in the game was quietly the most generous thing that could happen to a hold.
+A stray edit had turned 0.6 into 22.6 in a release that was about something
+else entirely. Fields wither in a drought now, as the warning always said
+they would.
+
 ## 1.81.0
 Oakenfall now asks nothing of anyone else. The opening valley was borrowing its
 scenery code and its lettering from two other companies' servers — the last
