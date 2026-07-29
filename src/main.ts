@@ -30,6 +30,8 @@ import { tileAt, genMap, reindexTiles } from './mapgen';
 import { tileWalkable, nearestWalkable, pathFind } from './pathfind';
 import { initVillagers, moveToward, effMultiplier, findResourceTarget, updateVillager,
   resetFrozenFisherNotice } from './villager';
+import { initSprites, SPRITES, VANIM, DECOR, SPRITE_SCALE, SPRITE_ANCHOR_Y,
+  preloadSprites, loadVillagerAnims, villagerAnimFor, blitSprite, loadDecor, } from './sprites';
 import { initMinimap, drawMinimap } from './minimap';
 import { initLighting, renderClouds, renderVignette, renderWeather, renderLighting } from './lighting';
 import { initVillagerRender, drawVillager, drawStatusBubble, drawWorkerBadge, drawRoad } from './villagerrender';
@@ -88,116 +90,6 @@ import { SPRITE_URLS, VANIM_B64, DECOR_B64, TERRAIN_B64 } from './assets';   // 
 // service worker, so offline play is unaffected. Procedural fallbacks still
 // cover a failed or slow load.
 
-const SPRITES = {};
-let spritesLoaded = 0, spritesTotal = 0;
-function preloadSprites(){
-  const entries = Object.entries(SPRITE_URLS);
-  spritesTotal = entries.length;
-  for(const [key, url] of entries){
-    loadSprite(key, url, 0);
-  }
-}
-function loadSprite(key, url, attempt){
-  const img = new Image();
-  // IMPORTANT: do NOT set img.crossOrigin here. This game only ever calls
-  // ctx.drawImage() to display sprites — it never reads pixel data back via
-  // getImageData/toDataURL — so CORS is unnecessary. Requesting anonymous CORS
-  // without the CDN sending Access-Control-Allow-Origin makes the browser
-  // refuse the image entirely (onerror fires for every sprite), which silently
-  // forces every building back to its canvas fallback art. Loading without
-  // crossOrigin always succeeds for display purposes.
-  img.onload  = ()=>{ SPRITES[key]=img; spritesLoaded++; };
-  img.onerror = ()=>{
-    if(attempt<2){
-      // Transient network hiccups happen — retry once before giving up.
-      setTimeout(()=>loadSprite(key,url,attempt+1), 600*(attempt+1));
-    } else {
-      spritesLoaded++;
-      console.warn('Oakenfall: sprite failed to load after retries, using canvas fallback:', key);
-    }
-  };
-  img.src = url;
-}
-// Scale factors for each building type (world-pixel width of sprite)
-
-/* ── ANIMATED VILLAGERS ── Tiny Swords Pawn frames (graded), loaded at boot.
-   Frame sheets keyed by animation; drawVillager picks by state+role. */
-// Asset URLs (files, not inlined base64) — bundled locally, cached by the
-// service worker, so offline play is unaffected. Procedural fallbacks still
-// cover a failed or slow load.
-
-const VANIM = {};
-let vanimReady = false;
-function loadVillagerAnims(){
-  let pending = 0;
-  for(const [key, list] of Object.entries(VANIM_B64)){
-    VANIM[key] = [];
-    for(let i=0;i<list.length;i++){
-      const img = new Image(); pending++;
-      img.onload = ()=>{ if(--pending===0) vanimReady = true; };
-      img.onerror = ()=>{ if(--pending===0) vanimReady = Object.keys(VANIM).length>0; };
-      img.src = list[i];
-      VANIM[key].push(img);
-    }
-  }
-}
-function villagerAnimFor(v){
-  if(!vanimReady) return null;
-  const moving = ['walkingToResource','walkingToDropoff','walkingToFarm','seekingFood','seekingSleep'].includes(v.state);
-  if(v.role==='guard'){
-    // Guards are soldiers — Lancer sprites, standing vigil or marching to post
-    if(moving && VANIM.guard_run) return VANIM.guard_run;
-    return VANIM.guard_idle || VANIM.idle;
-  }
-  if(v.state==='working' || v.state==='farming'){
-    if(v.role==='lumberjack') return VANIM.work_axe;
-    if(v.role==='miner') return VANIM.work_pickaxe;
-    return VANIM.work_knife; // farmer / fisher / hunter share the harvest anim
-  }
-  if(moving){
-    if(v.carrying==='wood') return VANIM.run_wood;
-    if(v.carrying==='food' && v.role==='hunter' && VANIM.run_meat) return VANIM.run_meat;
-    return VANIM.run;
-  }
-  return VANIM.idle;
-}
-
-const SPRITE_SCALE = {
-  townCenter:150, house:74, manor:96, guardPost:84, bakery:82, forestCamp:82, miningPost:82, fishingHut:80,
-  huntingCabin:82, farm:90, granary:84, tradingPost:88, watchtower:78, tavern:86, sawmill:90, windmill:84,
-  palisade:78, well:60, lampPost:26, pasture:94, forester:90, bridge:80,
-  deer:34, boar:30, rabbit:18, fox:26, duck:20, sheep:26,
-  villager_idle:40, villager_lumberjack:40, villager_miner:40,
-  villager_farmer:40, villager_fisher:40, villager_hunter:40,
-  tree_pine:72, rock_outcrop:62,
-};
-// Per-type vertical anchor: how far the sprite's bottom edge sits below the
-// tile's front vertex (baseY). The small Tiny Swords icons were tuned to +12;
-// full isometric building sprites (AI-generated) have their base at the very
-// bottom of the frame and need to sit lower so the footing meets the ground.
-const SPRITE_ANCHOR_Y = { house: 24, tavern: 24, sawmill: 24, windmill: 26, bakery: 24, granary: 24, tradingPost: 24, watchtower: 28,
-  forestCamp: 22, miningPost: 22, palisade: 20, well: 20, lampPost: 10, pasture: 26, forester: 26, bridge: 22 };
-function blitSprite(type, cx, baseY){
-  const img = SPRITES[type];
-  if(!img || !img.complete || img.naturalWidth===0) return false;
-  try {
-    const w = SPRITE_SCALE[type]||80;
-    const h = w * (img.naturalHeight/img.naturalWidth);
-    const anchor = SPRITE_ANCHOR_Y[type] !== undefined ? SPRITE_ANCHOR_Y[type] : 12;
-    ctx.drawImage(img, cx - w/2, baseY - h + anchor, w, h);
-    return true;
-  } catch(e){
-    delete SPRITES[type]; // prevent repeated taint errors
-    return false;
-  }
-}
-
-// GAME_MODES now arrives as a module import, so it is initialised before any of
-// this file runs — the old ordering hazard (it used to be declared far below,
-// making a boot-time call throw) no longer exists.
-// Historic note: references GAME_MODES/gameMode declared later in the script. Safe because
-// this is only ever called from user-gesture handlers (New Game / Continue), which
-// run after full script evaluation. Do NOT call this at top level during boot.
 function applyDifficulty(cfg){
   gameModeId = cfg.modeId || 'settler';
   gameMode = GAME_MODES[gameModeId] || GAME_MODES.settler;
@@ -598,7 +490,7 @@ function drawRaider(r){
   // torch
   const tx=cx+r.facing*7;
   ctx.strokeStyle='#241505'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(tx, cy-4); ctx.lineTo(tx, cy-16); ctx.stroke();
-  const fimg = decorImg('fire', G.worldTime*9 + r.gx);
+  const fimg = ('fire', G.worldTime*9 + r.gx);
   if(fimg && fimg.complete && fimg.naturalWidth>0){ const w=9,h=w*(fimg.naturalHeight/fimg.naturalWidth); try{ ctx.drawImage(fimg, tx-w/2, cy-16-h, w, h); }catch(e){} }
   else { ctx.fillStyle='#e8782c'; ctx.beginPath(); ctx.ellipse(tx, cy-17, 3, 5, 0, 0, 7); ctx.fill(); }
   ctx.restore();
@@ -1200,7 +1092,7 @@ function drawBuildingFire(b){
   const n = b._fire>60 ? 3 : (b._fire>30 ? 2 : 1);
   for(let i=0;i<n;i++){
     const ox = (i-(n-1)/2) * 12;
-    const img = decorImg('fire', G.worldTime*9 + b.gx*3.1 + i*7);
+    const img = ('fire', G.worldTime*9 + b.gx*3.1 + i*7);
     if(img && img.complete && img.naturalWidth>0){
       const w = 16 + b._fire*0.12, hgt = w*(img.naturalHeight/img.naturalWidth);
       try{ ctx.drawImage(img, p.x+ox-w/2, baseY-hgt-6, w, hgt); }catch(e){}
@@ -1567,30 +1459,26 @@ function update(rawDt){
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 initIsoKit(ctx);   // the iso drawing kit shares this one context
+initSprites({ ctx });
 /* The FX layer gets the same context, plus live readings of the viewport and
    the camera — both change constantly, so it reads them rather than being
    handed a copy. `camera` is a const object with mutable contents, so passing
    the reference is enough. */
-initFX({ ctx, decorImg, camera, viewport: ()=>({ w: cssW, h: cssH, dpr: canvasDPR }) });
-initScenery({ ctx, decorImg, sprites: SPRITES, spriteScale: SPRITE_SCALE, windAt });
+initFX({ ctx, camera, viewport: ()=>({ w: cssW, h: cssH, dpr: canvasDPR }) });
+initScenery({ ctx, windAt });
 initMinimap({ camera, panCameraTo, viewport: ()=>({ w: cssW, h: cssH }) });
-initLighting({ ctx, canvas, decorImg, camera, worldToScreen,
+initLighting({ ctx, canvas, camera, worldToScreen,
   viewport: ()=>({ w: cssW, h: cssH, dpr: canvasDPR }) });
-initVillagerRender({ ctx, decorImg, sprites: SPRITES, spriteScale: SPRITE_SCALE,
-  vanim: VANIM, villagerAnimFor,
-  isSelected: (v)=>!!(selection && selection.type==='villager' && selection.ref===v),
-  roadTile: ()=>(DECOR.roadTile && DECOR.roadTile[0]) || null });
-initBuildingRender({ ctx, decorImg, sprites: SPRITES, spriteScale: SPRITE_SCALE,
-  spriteAnchorY: SPRITE_ANCHOR_Y, blitSprite, windAt, drawRoad,
+initVillagerRender({ ctx, isSelected: (v)=>!!(selection && selection.type==='villager' && selection.ref===v) });
+initBuildingRender({ ctx, windAt, drawRoad,
   bannerColor: ()=>bannerPalette[G.bannerIdx]||BANNER_COLORS[0] });
-initTerrain({ ctx, camera, viewport: ()=>({ w: cssW, h: cssH }),
-  decorImg, decorReady: ()=>decorReady, roadTile: ()=>(DECOR.roadTile && DECOR.roadTile[0]) || null });
+initTerrain({ ctx, camera, viewport: ()=>({ w: cssW, h: cssH }) });
 
 /* Every module that draws or reports gets its dependencies here, in one place.
    This block used to be scattered through main.ts, each call sited next to
    whatever const it happened to read — which is how a cut of the terrain code
    swept the wiring up with it. */
-initCritters({ ctx, sprites: SPRITES, spriteScale: SPRITE_SCALE, waterDrop: WATER_DROP });
+initCritters({ ctx });
 
 /* Weather reports what it did rather than reaching for main.ts's toast and
    chronicle directly — the module stays pure simulation that way, and can be
@@ -1717,31 +1605,6 @@ function visibleTileRange(){
 // service worker, so offline play is unaffected. Procedural fallbacks still
 // cover a failed or slow load.
 
-const DECOR = {};
-let decorReady = false;
-function loadDecor(){
-  let pending = 0;
-  for(const [key,val] of Object.entries(DECOR_B64)){
-    const list = Array.isArray(val) ? val : [val];
-    DECOR[key] = [];
-    for(const b of list){
-      const img = new Image(); pending++;
-      img.onload = ()=>{ if(--pending===0) decorReady = true; };
-      img.onerror = ()=>{ if(--pending===0) decorReady = true; };
-      img.src = b;
-      DECOR[key].push(img);
-    }
-  }
-}
-/* What stands where. Cattails want a waterside tile, so grass keeps them only
-   when the tile actually touches water — checked at draw time below. */
-function decorImg(key, idx){
-  const pool = DECOR[key];
-  if(!pool || !pool.length) return null;
-  const img = pool[Math.floor(idx) % pool.length];
-  return (img.complete && img.naturalWidth>0) ? img : null;
-}
-/* Resource-fly-to-HUD: a little icon arcs from the drop-off point to its HUD pill */
 function drawGhost(){
   if(!buildMode.active) return;
   const wp = screenToWorldPixel(cssW/2, cssH/2);

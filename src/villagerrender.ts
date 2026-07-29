@@ -6,6 +6,7 @@
  * stands on them, which makes them part of this pass rather than the buildings.
  */
 import { G } from './state';
+import { SPRITES, SPRITE_SCALE, VANIM, villagerAnimFor, decorImg, roadTileStamp } from './sprites';
 import { buildingCenter } from './buildings';
 import { clamp, dist2, hash2, hashStr, project, TILE_W, TILE_H } from './math';
 import { ROLE_DEFS, VILLAGER_TINTS } from './defs';
@@ -15,22 +16,10 @@ import { shade, shadeColor, drawShadow, roundRect, tileDiamond, tintedFrame } fr
 
 type Deps = {
   ctx: any;
-  decorImg: (key: string, idx: number) => any;
-  /** The villager animation table and the frame chooser for a settler's state. */
-  vanim: any;
-  villagerAnimFor: (v: any) => any;
   /** Is this settler the one the player has open? Drawn with a ring. */
   isSelected: (v: any) => boolean;
-  /** The road tile stamp, when one has decoded — the hand-drawn path is only
-   *  needed where the terrain layer has not already stamped stone. */
-  roadTile: () => any;
-  sprites: any;
-  spriteScale: any;
 };
-let dep: Deps = {
-  ctx: null, decorImg: () => null, vanim: {}, villagerAnimFor: () => null,
-  isSelected: () => false, roadTile: () => null, sprites: {}, spriteScale: {},
-};
+let dep: Deps = { ctx: null, isSelected: () => false };
 export function initVillagerRender(deps: Deps): void { dep = deps; }
 function villagerTint(v){
   if(v._tint !== undefined) return v._tint;
@@ -79,7 +68,7 @@ export function drawVillager(v){
 
   // Animated sprite path (Tiny Swords Pawn) — falls through to canvas art if not loaded
   if(v.state!=='spawning'){
-    const anim = dep.villagerAnimFor(v);
+    const anim = villagerAnimFor(v);
     if(anim && anim.length && anim[0].complete && anim[0].naturalWidth>0){
       const fi = Math.floor(G.worldTime*5 + (hashStr(v.id)%7)) % anim.length;
       const frame = anim[fi];
@@ -93,7 +82,7 @@ export function drawVillager(v){
       try { dep.ctx.drawImage(img, cx - w/2, cy - hgt + 7, w, hgt); } catch(e){}
       dep.ctx.restore();
       if(v.role==='fisher' && v.state==='working'){
-        const spImg = dep.decorImg('splash', G.worldTime*7 + hashStr(v.id)%5);
+        const spImg = decorImg('splash', G.worldTime*7 + hashStr(v.id)%5);
         if(spImg){
           const sw = 22, sh = sw*(spImg.naturalHeight/spImg.naturalWidth);
           try { dep.ctx.drawImage(spImg, cx + 8, cy - sh + 12, sw, sh); } catch(e){}
@@ -129,20 +118,20 @@ export function drawVillager(v){
 
   // Try AI villager sprite
   const spriteKey = 'villager_'+(v.role==='idle'?'idle':v.role);
-  const img = dep.sprites[spriteKey];
+  const img = SPRITES[spriteKey];
   const spawnAlpha = v.state==='spawning' ? clamp(1-(v.spawnTimer/1.1), 0.15, 1) : 1;
   dep.ctx.save();
   dep.ctx.globalAlpha = spawnAlpha;
   if(img && img.complete && img.naturalWidth>0){
     try {
-      const w = (dep.spriteScale[spriteKey]||40)*csc;
+      const w = (SPRITE_SCALE[spriteKey]||40)*csc;
       const h = w*(img.naturalHeight/img.naturalWidth);
       // Mirror if facing left
       dep.ctx.save();
       if(v.facing===-1){ dep.ctx.translate(cx*2,0); dep.ctx.scale(-1,1); }
       dep.ctx.drawImage(img, cx-w/2, cy-h+6, w, h);
       dep.ctx.restore();
-    } catch(e){ delete dep.sprites[spriteKey]; }
+    } catch(e){ delete SPRITES[spriteKey]; }
   } else {
     // Canvas fallback character
     const seed = v.__seed || (v.__seed = hashStr(v.id));
@@ -217,7 +206,7 @@ export function drawWorkerBadge(b){
 
 export function drawRoad(gx,gy){
   // The terrain layer already stamps the Kenney stone path under road tiles.
-  const stamp = dep.roadTile();
+  const stamp = roadTileStamp();
   if(stamp && stamp.complete && stamp.naturalWidth>0) return;
   const p = project(gx,gy);
   dep.ctx.fillStyle='#3a3226';

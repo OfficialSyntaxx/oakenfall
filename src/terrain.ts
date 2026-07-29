@@ -11,6 +11,7 @@
  * weather leaves the world changed for a while after it passes.
  */
 import { G } from './state';
+import { decorImg, isDecorReady, roadTileStamp } from './sprites';
 import { clamp, hash2, project } from './math';
 import { WATER_DROP, EDGE_DROP } from './defs';
 import { seasonIndex } from './time';
@@ -25,16 +26,8 @@ type Deps = {
   /** Live view metrics and camera, for culling what is off screen. */
   viewport: () => { w: number; h: number };
   camera: { panX: number; panY: number; scale: number };
-  /** A frame of a decor sprite sheet, or null if it has not decoded. */
-  decorImg: (key: string, idx: number) => any;
-  /** Have the decor sheets finished loading? Scenery is skipped until they have. */
-  decorReady: () => boolean;
-  /** The road tile stamp, when one has decoded — roads replace the ground
-   *  beneath them rather than being drawn over it. */
-  roadTile: () => any;
 };
-let dep: Deps = { ctx: null, viewport: () => ({ w: 0, h: 0 }), camera: { panX: 0, panY: 0, scale: 1 },
-  decorImg: () => null, decorReady: () => false, roadTile: () => null };
+let dep: Deps = { ctx: null, viewport: () => ({ w: 0, h: 0 }), camera: { panX: 0, panY: 0, scale: 1 } };
 export function initTerrain(deps: Deps): void { dep = deps; }
 
 /* What grows or lies on each kind of ground, and how wide to draw it. */
@@ -74,7 +67,7 @@ export function terrainStampFor(t, gx, gy){
   if(!terrainReady) return null;
   let pool;
   if(t.building && t.building.type==='road'){
-    const r = dep.roadTile();
+    const r = roadTileStamp();
     if(r && r.complete && r.naturalWidth>0) return r;
   }
   if(t.type==='water') pool = TERRAIN_IMGS.water;
@@ -301,7 +294,7 @@ export function drawTerrain(range){
           }
         }
         if(h2 > 0.88){
-          const wrImg = dep.decorImg('waterRocks', hash2(gx*3.3,gy*1.9)*4);
+          const wrImg = decorImg('waterRocks', hash2(gx*3.3,gy*1.9)*4);
           if(wrImg){
             const ww = 26, wh = ww*(wrImg.naturalHeight/wrImg.naturalWidth);
             const bobW = Math.sin(G.worldTime*1.6+gx+gy)*1.2;
@@ -329,7 +322,7 @@ export function drawTerrain(range){
          mushrooms and fallen logs under the trees, cattails where the grass
          meets water, standing stones on bare rock. Its own hash, so it doesn't
          land on the same tiles as the bushes below. */
-      if(dep.decorReady() && !t.building){
+      if(isDecorReady() && !t.building){
         const sh = hash2(gx*7.7, gy*3.3);
         if(sh > 0.955){
           // Reeds only where the ground actually meets the water.
@@ -341,7 +334,7 @@ export function drawTerrain(range){
           }
           if(pool && pool.length){
             const key = pool[Math.floor(hash2(gx*2.3, gy*5.1) * pool.length) % pool.length];
-            const simg = dep.decorImg(key, 0);
+            const simg = decorImg(key, 0);
             if(simg){
               const sw = SCENERY_W[key] || 30;
               const shh = sw * (simg.naturalHeight/simg.naturalWidth);
@@ -351,9 +344,9 @@ export function drawTerrain(range){
           }
         }
       }
-      if(t.type==='grass' && h2 > 0.93 && dep.decorReady()){
+      if(t.type==='grass' && h2 > 0.93 && isDecorReady()){
         const pool = hash2(gx*5,gy*7) > 0.5 ? 'bush1' : 'bush3';
-        const bimg = dep.decorImg(pool, G.worldTime*3 + gx + gy);
+        const bimg = decorImg(pool, G.worldTime*3 + gx + gy);
         if(bimg){
           const bw = 34, bh = bw*(bimg.naturalHeight/bimg.naturalWidth);
           dep.ctx.drawImage(bimg, p.x - bw/2 + (hash2(gx*2,gy*9)-0.5)*16, yTop - bh + 6, bw, bh);

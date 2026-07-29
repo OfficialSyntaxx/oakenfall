@@ -7,6 +7,7 @@
  * is most of the difference between smooth and not on a phone.
  */
 import { G } from './state';
+import { SPRITES, SPRITE_SCALE, decorImg } from './sprites';
 import { clamp, hash2, project, TILE_W, TILE_H } from './math';
 import { WATER_DROP } from './defs';
 import { seasonIndex, riverFrozen } from './time';
@@ -15,15 +16,11 @@ import { shade, shadeColor, drawShadow, tileDiamond } from './isokit';
 
 type Deps = {
   ctx: any;
-  decorImg: (key: string, idx: number) => any;
-  /** Sprite table and per-type draw widths, shared with the other renderers. */
-  sprites: any;
-  spriteScale: any;
   /** Wind lean at a tile, so scenery sways with the same gust as the grass. */
   windAt: (gx: number, gy: number) => number;
 };
 let dep: Deps = {
-  ctx: null, decorImg: () => null, sprites: {}, spriteScale: {}, windAt: () => 0,
+  ctx: null, windAt: () => 0,
 };
 export function initScenery(deps: Deps): void { dep = deps; }
 
@@ -111,20 +108,20 @@ export function drawTree(gx,gy){
   dep.ctx.fillStyle='rgba(0,0,0,0.28)';
   dep.ctx.beginPath(); dep.ctx.ellipse(cx, baseY+2, 16*s, 7*s, 0, 0, Math.PI*2); dep.ctx.fill();
   // Try AI sprite
-  const img = dep.sprites['tree_pine'];
+  const img = SPRITES['tree_pine'];
   if(img && img.complete && img.naturalWidth>0){
     try {
-      const w = dep.spriteScale.tree_pine * s;
+      const w = SPRITE_SCALE.tree_pine * s;
       const h = w * (img.naturalHeight/img.naturalWidth);
       dep.ctx.drawImage(img, cx-w/2, baseY-h+6, w, h);
       if(isWinter){ dep.ctx.fillStyle='rgba(220,235,245,0.22)'; dep.ctx.beginPath(); dep.ctx.ellipse(cx,baseY-h*0.6,w*0.3,h*0.15,0,0,Math.PI*2); dep.ctx.fill(); }
       return;
-    } catch(e){ delete dep.sprites['tree_pine']; }
+    } catch(e){ delete SPRITES['tree_pine']; }
   }
   // Dense pines are the forest's soul; a rare ancient oak stands among them
   // (~1 in 8 tiles, summer only). Sway is a smooth skew transform — frame-free.
   if(!isWinter && hash2(gx*3.7, gy*5.1) > 0.875){
-    const oakImg = dep.decorImg('oak', 0);
+    const oakImg = decorImg('oak', 0);
     if(oakImg){
       const hh = 82*s, w = hh*(oakImg.naturalWidth/oakImg.naturalHeight);
       const sway = Math.sin(G.worldTime*1.1 + gx*0.8 + gy*0.5) * 0.022;
@@ -153,17 +150,17 @@ export function drawRock(gx,gy){
   dep.ctx.fillStyle='rgba(0,0,0,0.28)';
   dep.ctx.beginPath(); dep.ctx.ellipse(cx, cy+6*s, 14*s, 6*s, 0, 0, Math.PI*2); dep.ctx.fill();
   // Try AI sprite
-  const img = dep.sprites['rock_outcrop'];
+  const img = SPRITES['rock_outcrop'];
   if(img && img.complete && img.naturalWidth>0){
     try {
-      const w = dep.spriteScale.rock_outcrop * s;
+      const w = SPRITE_SCALE.rock_outcrop * s;
       const h = w * (img.naturalHeight/img.naturalWidth);
       dep.ctx.drawImage(img, cx-w/2, cy-h+8, w, h);
       return;
-    } catch(e){ delete dep.sprites['rock_outcrop']; }
+    } catch(e){ delete SPRITES['rock_outcrop']; }
   }
   // Baked rock sprites take priority; procedural atlas as fallback
-  const rockImg = dep.decorImg('rocks', hash2(gx*1.7,gy*2.9)*4);
+  const rockImg = decorImg('rocks', hash2(gx*1.7,gy*2.9)*4);
   if(rockImg){
     const w = 46*s, hh = w*(rockImg.naturalHeight/rockImg.naturalWidth);
     dep.ctx.drawImage(rockImg, cx-w/2, cy-hh+10, w, hh);

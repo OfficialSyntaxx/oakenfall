@@ -11,11 +11,10 @@
  * live view metrics come in through initFX().
  */
 import { project } from './math';
+import { decorImg } from './sprites';
 
 type Deps = {
   ctx: any;
-  /** A frame of a decor sprite sheet, or null if it has not decoded. */
-  decorImg: (key: string, idx: number) => any;
   /** Live canvas metrics — these change on every resize, so read, not copied. */
   viewport: () => { w: number; h: number; dpr: number };
   /** The camera object itself: const binding, mutable contents, so the live
@@ -23,8 +22,7 @@ type Deps = {
   camera: { panX: number; panY: number; scale: number };
 };
 let dep: Deps = {
-  ctx: null, decorImg: () => null,
-  viewport: () => ({ w: 0, h: 0, dpr: 1 }),
+  ctx: null, viewport: () => ({ w: 0, h: 0, dpr: 1 }),
   camera: { panX: 0, panY: 0, scale: 1 },
 };
 export function initFX(deps: Deps): void { dep = deps; }
@@ -111,7 +109,7 @@ function renderBurst(list: any[], dt: number, opts: {
     f.t += dt;
     if (f.t > opts.life) { list.splice(i, 1); continue; }
     const k = f.t / opts.life;
-    const img = dep.decorImg(opts.key, k * opts.frames);
+    const img = decorImg(opts.key, k * opts.frames);
     if (!img) continue;
     const p = project(f.gx, f.gy);
     const s = opts.size + f.t * opts.grow;

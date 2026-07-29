@@ -10,6 +10,7 @@
  * bonus, which is meant to be readable at a glance rather than only in a sheet.
  */
 import { G } from './state';
+import { SPRITES, SPRITE_SCALE, SPRITE_ANCHOR_Y, decorImg, blitSprite } from './sprites';
 import { buildingCenter } from './buildings';
 import { clamp, dist2, hash2, hashStr, project, TILE_W, TILE_H } from './math';
 import { BUILD_DEFS, WATER_DROP, VILLAGER_TINTS } from './defs';
@@ -22,12 +23,6 @@ import {
 
 type Deps = {
   ctx: any;
-  decorImg: (key: string, idx: number) => any;
-  sprites: any;
-  spriteScale: any;
-  spriteAnchorY: any;
-  /** Draw a sprite for this building type, or false if it has not decoded. */
-  blitSprite: (type: string, cx: number, baseY: number) => boolean;
   /** Wind lean, so banners and smoke move with the same gust as the grass. */
   windAt: (gx: number, gy: number) => number;
   /** The hold's current banner colour. */
@@ -36,14 +31,13 @@ type Deps = {
   drawRoad: (gx: number, gy: number) => void;
 };
 let dep: Deps = {
-  ctx: null, decorImg: () => null, sprites: {}, spriteScale: {}, spriteAnchorY: {},
-  blitSprite: () => false, windAt: () => 0, bannerColor: () => '#a4402c', drawRoad: () => {},
+  ctx: null, windAt: () => 0, bannerColor: () => '#a4402c', drawRoad: () => {},
 };
 export function initBuildingRender(deps: Deps): void { dep = deps; }
 
 export function drawHerd(b, cx, baseY){
   const n = Math.min(4, Math.max(0, Math.round(b.herd || 0)));
-  const img = dep.sprites.sheep;
+  const img = SPRITES.sheep;
   for(let i=0;i<n;i++){
     const ox = (hash2(b.gx*3.1+i, b.gy*2.7)-0.5) * 44;
     const oy = (hash2(b.gx*1.9, b.gy*4.3+i)-0.5) * 16;
@@ -51,7 +45,7 @@ export function drawHerd(b, cx, baseY){
     const x = cx + ox, y = baseY + oy - 6 + bob;
     try{ drawShadow(x, y+2, 5); }catch(e){}
     if(img && img.complete && img.naturalWidth>0){
-      const w = dep.spriteScale.sheep || 26, h = w * (img.naturalHeight/img.naturalWidth);
+      const w = SPRITE_SCALE.sheep || 26, h = w * (img.naturalHeight/img.naturalWidth);
       try{ dep.ctx.drawImage(img, x - w/2, y - h + 3, w, h); continue; }catch(e){}
     }
     // Hand-drawn floor: a sprite that fails to load must still leave a flock.
@@ -70,9 +64,9 @@ export function drawBuilding(b){
   const shadowR = b.type==='townCenter' ? 52 : (b.w>1||b.h>1 ? 30 : 22);
   drawShadow(p.x, baseY + (b.type==='townCenter' ? 12 : 8), shadowR);
   const cx = p.x;
-  if(dep.blitSprite(b.type, cx, baseY)){
+  if(blitSprite(b.type, cx, baseY)){
     // Living details layered over sprite buildings
-    if(b.type==='tavern' || b.type==='bakery' || b.type==='house' || b.type==='manor') chimneySmoke(cx + 10, baseY - (dep.spriteScale[b.type]||80)*0.72);
+    if(b.type==='tavern' || b.type==='bakery' || b.type==='house' || b.type==='manor') chimneySmoke(cx + 10, baseY - (SPRITE_SCALE[b.type]||80)*0.72);
     if(b.type==='pasture') drawHerd(b, cx, baseY);
     if(b.procFlash){ dep.ctx.fillStyle=`rgba(255,220,140,${b.procFlash*0.4})`; dep.ctx.beginPath(); dep.ctx.arc(cx, baseY-18, 16, 0, 7); dep.ctx.fill(); }
     return;
@@ -205,21 +199,21 @@ export function drawBuilding(b){
     dep.ctx.moveTo(cx+16, baseY-16); dep.ctx.lineTo(cx+24, baseY-16); dep.ctx.lineTo(cx+23, baseY-6); dep.ctx.lineTo(cx+17, baseY-6);
     dep.ctx.closePath(); dep.ctx.fill();
   }
-  else if(b.type==='farm' && dep.decorImg('farmland',0)){
-    const fl = dep.decorImg('farmland',0);
+  else if(b.type==='farm' && decorImg('farmland',0)){
+    const fl = decorImg('farmland',0);
     const fw = TILE_W, fh = fw*(fl.naturalHeight/fl.naturalWidth);
     dep.ctx.drawImage(fl, p.x - fw/2, p.y - TILE_H/2, fw, fh);
     const si = seasonIndex();
     const cropKey = si===3 ? null : (si===0 ? 'cornYoung' : 'corn');
     if(cropKey){
-      const c1 = dep.decorImg(cropKey, 0);
+      const c1 = decorImg(cropKey, 0);
       if(c1){
         const cw = 30, chh = cw*(c1.naturalHeight/c1.naturalWidth);
         dep.ctx.drawImage(c1, p.x - cw - 2, p.y - chh + 4, cw, chh);
         dep.ctx.drawImage(c1, p.x + 2, p.y - chh + 8, cw, chh);
       }
     }
-    const fenceImg = dep.decorImg('fence',0);
+    const fenceImg = decorImg('fence',0);
     if(fenceImg){
       const fw2 = 34, fh2 = fw2*(fenceImg.naturalHeight/fenceImg.naturalWidth);
       try {
@@ -227,7 +221,7 @@ export function drawBuilding(b){
         dep.ctx.drawImage(fenceImg, p.x + TILE_W/2 - fw2 - 2, p.y - fh2 + 6, fw2, fh2);
       } catch(e){}
     }
-    const hayImg = dep.decorImg('hayStack',0) || dep.decorImg('hay',0);
+    const hayImg = decorImg('hayStack',0) || decorImg('hay',0);
     if(hayImg && hash2(b.gx,b.gy) > 0.5){
       const hw = 20, hh2 = hw*(hayImg.naturalHeight/hayImg.naturalWidth);
       dep.ctx.drawImage(hayImg, p.x + 12, p.y - hh2 + 2, hw, hh2);
@@ -281,7 +275,7 @@ export function drawBuilding(b){
     dep.ctx.beginPath(); dep.ctx.moveTo(cx, baseY-44); dep.ctx.lineTo(cx+19, baseY-25); dep.ctx.lineTo(cx+8, baseY-25); dep.ctx.closePath(); dep.ctx.fill();
     dep.ctx.strokeStyle='rgba(0,0,0,0.22)'; dep.ctx.lineWidth=0.8;
     for(let i=1;i<4;i++){ const y=baseY-25-(19*i/4); const w=19*(1-i/4); dep.ctx.beginPath(); dep.ctx.moveTo(cx-w,y+ (19-19*(1-i/4))*0 ); dep.ctx.lineTo(cx+w, y); dep.ctx.stroke(); }
-    const sackImg = dep.decorImg('sack',0);
+    const sackImg = decorImg('sack',0);
     if(sackImg){
       const sw2 = 16, sh2 = sw2*(sackImg.naturalHeight/sackImg.naturalWidth);
       try { dep.ctx.drawImage(sackImg, cx+14, baseY-sh2+2, sw2, sh2); } catch(e){}
@@ -313,7 +307,7 @@ export function drawBuilding(b){
       dep.ctx.lineTo(cx-27+ (i*2+2)*50/6, topY-28+ (i*2+2)*2/6);
       dep.ctx.closePath(); dep.ctx.fill();
     }
-    const crateImg = dep.decorImg('sacksCrate',0);
+    const crateImg = decorImg('sacksCrate',0);
     if(crateImg){
       const cw2 = 24, ch2 = cw2*(crateImg.naturalHeight/crateImg.naturalWidth);
       try { dep.ctx.drawImage(crateImg, cx-30, baseY-ch2+2, cw2, ch2); } catch(e){}
@@ -402,7 +396,7 @@ export function drawBuilding(b){
     for(let i=0;i<8;i++){ const a=spin+i*Math.PI/4; dep.ctx.beginPath(); dep.ctx.moveTo(Math.cos(a)*5,Math.sin(a)*5); dep.ctx.lineTo(Math.cos(a)*8.5,Math.sin(a)*8.5); dep.ctx.stroke(); }
     dep.ctx.restore();
     // plank stack (sprite with drawn fallback)
-    const psImg = dep.decorImg('plankStack',0);
+    const psImg = decorImg('plankStack',0);
     if(psImg){
       const pw = 26, ph2 = pw*(psImg.naturalHeight/psImg.naturalWidth);
       try { dep.ctx.drawImage(psImg, cx-34, baseY-ph2+2, pw, ph2); } catch(e){}
@@ -645,7 +639,7 @@ export function drawBuilding(b){
 }
 
 export function drawTorch(x,y){
-  const fireImg = dep.decorImg('fire', G.worldTime*9 + x*0.13);
+  const fireImg = decorImg('fire', G.worldTime*9 + x*0.13);
   if(fireImg){
     dep.ctx.strokeStyle='#241505'; dep.ctx.lineWidth=2;
     dep.ctx.beginPath(); dep.ctx.moveTo(x, y+10); dep.ctx.lineTo(x, y-2); dep.ctx.stroke();

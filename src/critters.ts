@@ -6,16 +6,18 @@
  * because the population thins in winter.
  *
  * First drawing code to leave main.ts. Canvas code cannot import `ctx` and
- * expect to write to it — ES module bindings are read-only to importers — so
- * the canvas and the sprite tables are pushed in by initCritters(), exactly as
- * the iso kit takes its context. Pathfinding is an ordinary import — it moved
- * to src/pathfind.ts and needs nothing pushed in.
+ * expect to write through it — ES module bindings are read-only to importers —
+ * so the context is pushed in by initCritters(). Everything else it needs is an
+ * ordinary import; this module started with five injected dependencies and is
+ * down to the one that genuinely cannot be an import.
  *
  * Every critter has a hand-drawn fallback and always will: blitCritter tries
  * the sprite and returns false if it has not decoded, and the procedural
  * drawing runs instead. That is not a placeholder, it is the contract.
  */
 import { G } from './state';
+import { WATER_DROP } from './defs';
+import { SPRITES, SPRITE_SCALE } from './sprites';
 import { clamp, dist2, project } from './math';
 import { drawShadow } from './isokit';
 import { tileAt } from './mapgen';
@@ -32,19 +34,12 @@ const CRITTER_KINDS: Record<string, { flee: number; speed: number; graze: number
 };
 
 let ctx: any = null;
-let SPRITES: any = {};
-let SPRITE_SCALE: any = {};
-let WATER_DROP = 6;
 
-/** Hand the module the canvas and the few tables it draws from. Called once,
- *  from main.ts, after the context and sprite tables exist. */
-export function initCritters(deps: {
-  ctx: any; sprites: any; spriteScale: any; waterDrop: number;
-}): void {
+/** Hand the module the canvas. Everything else it draws from is an ordinary
+ *  import now — only the context still has to be pushed in, because a module
+ *  cannot import a binding and write through it. */
+export function initCritters(deps: { ctx: any }): void {
   ctx = deps.ctx;
-  SPRITES = deps.sprites;
-  SPRITE_SCALE = deps.spriteScale;
-  WATER_DROP = deps.waterDrop;
 }
 
 export function spawnWildlife(){

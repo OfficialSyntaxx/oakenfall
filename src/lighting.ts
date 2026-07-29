@@ -7,6 +7,7 @@
  * genuinely carves a pool in the dark instead of being painted brighter.
  */
 import { G } from './state';
+import { decorImg } from './sprites';
 import { clamp, project, TILE_W, TILE_H } from './math';
 import { seasonIndex, darknessFactor } from './time';
 import { getWeather } from './weather';
@@ -20,14 +21,12 @@ type Deps = {
   camera: { panX: number; panY: number; scale: number };
   /** World point to screen point, for placing light sources. */
   worldToScreen: (x: number, y: number) => { x: number; y: number };
-  /** Cloud sprites; the sky is skipped until they decode. */
-  decorImg: (key: string, idx: number) => any;
 };
 let dep: Deps = {
   ctx: null, canvas: null,
   viewport: () => ({ w: 0, h: 0, dpr: 1 }),
   camera: { panX: 0, panY: 0, scale: 1 },
-  worldToScreen: (x, y) => ({ x, y }), decorImg: () => null,
+  worldToScreen: (x, y) => ({ x, y }),
 };
 export function initLighting(deps: Deps): void { dep = deps; }
 
@@ -35,7 +34,7 @@ export function initLighting(deps: Deps): void { dep = deps; }
 let cloudState = null;
 export function renderClouds(){
   if(getWeather().type==='storm') return; // storm layer owns the sky
-  if(!dep.decorImg('clouds',0)) return;
+  if(!decorImg('clouds',0)) return;
   if(!cloudState){
     cloudState = [];
     for(let i=0;i<7;i++){
@@ -49,7 +48,7 @@ export function renderClouds(){
   for(const c of cloudState){
     c.wx += c.v * (1/60);
     if(c.wx > halfW + 200){ c.wx = -halfW - 200; c.wy = Math.random()*G.MAP_SIZE*TILE_H; }
-    const img = dep.decorImg('clouds', c.ci);
+    const img = decorImg('clouds', c.ci);
     if(!img) continue;
     // world → screen with a slight parallax lift (clouds pan a bit slower)
     const sx = dep.viewport().w/2 + dep.camera.panX*0.85 + c.wx*dep.camera.scale;
