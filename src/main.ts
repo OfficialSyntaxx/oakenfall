@@ -30,6 +30,8 @@ import { tileAt, genMap, reindexTiles } from './mapgen';
 import { tileWalkable, nearestWalkable, pathFind } from './pathfind';
 import { initVillagers, moveToward, effMultiplier, findResourceTarget, updateVillager,
   resetFrozenFisherNotice } from './villager';
+import { initEconomy, BASE_CAP, capFor, foodSafeCap, foodSpoilTick, gainResource,
+  harvestBoonMul, logCoinIn, logCoinOut, resetCapWarnings } from './economy';
 import { initSteward, stewardOrders, clearStewardOrders, stewardCommand,
   processStewardOrders, updateStewardStatus, stewardOrderLine } from './steward';
 import { initBuildings, BUILD_NEEDS_ADJ, findTC, addBuilding, removeBuilding, buildingCenter, popCapacity,
@@ -232,57 +234,6 @@ function rollName(){
    every invocation since the Vite migration. Because the frame loop catches and
    throttles exceptions, it never surfaced as a crash: settlers simply walked to
    the trees, filled their arms, dropped nothing, and went back for more. */
-const BASE_CAP = { wood:200, stone:160, food:180, planks:80, flour:60, bread:60 };
-function capFor(type){
-  let cap = BASE_CAP[type];
-  for(const b of G.buildings) if(b.type==='granary' && (b.condition===undefined||b.condition>=35)) cap += 90;
-  if(typeof G.researched!=='undefined' && G.researched.cellars) cap += 60; // Deep Cellars
-  return cap;
-}
-// Safe amount of raw food that won't spoil: a small pantry baseline plus each
-// Granary and the Deep Cellars research. Food above this slowly spoils.
-function foodSafeCap(){
-  let safe = 45;
-  for(const b of G.buildings) if(b.type==='granary' && (b.condition===undefined||b.condition>=35)) safe += 70;
-  if(typeof G.researched!=='undefined' && G.researched.cellars) safe += 50;
-  return safe;
-}
-let _spoilAcc = 0, _spoilDay = 0;
-function foodSpoilTick(dt){
-  const mul = (gameMode && gameMode.decayMul!==undefined) ? gameMode.decayMul : 1;
-  if(mul<=0) return; // Peaceful: nothing spoils
-  const excess = (G.stockpile.food||0) - foodSafeCap();
-  if(excess <= 0) return;
-  const lost = excess * (0.14/CYCLE_LEN) * mul * dt * (G.researched.coldstore?0.5:1); // ~14%/day of the excess
-  G.stockpile.food = Math.max(0, G.stockpile.food - lost);
-  _spoilAcc += lost;
-  // Nudge the player about once a day if spoilage is adding up.
-  if(G.dayCount!==_spoilDay && _spoilAcc >= 5){
-    _spoilDay = G.dayCount;
-    toast('🐀 '+Math.round(_spoilAcc)+' food has spoiled for want of storage — raise a Granary.', true);
-    _spoilAcc = 0;
-  }
-}
-function gainResource(type, amount){
-  const cap = capFor(type);
-  const before = G.stockpile[type];
-  G.stockpile[type] = clamp(G.stockpile[type]+amount, 0, cap);
-  const actuallyGained = G.stockpile[type]-before;
-  if(actuallyGained>0){
-    G.totals[type] = (G.totals[type]||0) + actuallyGained;   // planks/flour/bread were NaN before
-    if(typeof G.dailyProgress==='object' && G.dailyProgress[type]!==undefined) G.dailyProgress[type] += actuallyGained;
-  }
-  if(G.stockpile[type]>=cap && amount>0){
-    if(!window.__capWarned[type]){ window.__capWarned[type]=true; toast((type[0].toUpperCase()+type.slice(1))+' storage is full! Build a Granary.', true); }
-  } else if(window.__capWarned){
-    window.__capWarned[type]=false;
-  }
-  return actuallyGained;
-}
-window.__capWarned = {wood:false,stone:false,food:false,planks:false,flour:false,bread:false};
-
-
-
 let speedMode = 1; // 1, 2, 0(paused)
 let spawnTimer = 18;
 let wolfTimer = 60;
@@ -353,7 +304,6 @@ const FESTIVAL_BOONS = [
   {id:'courage', ic:'🛡️', name:'Rite of Courage', desc:'Spirits stay higher (+8 morale) and raids sting less.'},
   {id:'craft',   ic:'🔨', name:'Craftsmen\'s Fair', desc:'Every settler works +15% faster for the year.'},
 ];
-function harvestBoonMul(){ return G.festivalBoon==='harvest' ? 1.2 : 1; }
 /* ── UNLOCKS / REDEEM ── cosmetic packs bought on the website redeem here via
    a signed code, verified OFFLINE against this embedded public key (the game
    never makes a network request). The private signing key lives only in the
@@ -1035,8 +985,6 @@ function renderFeedbackSheet(kind){
 }
 
 // Trader's ledger — cumulative coin flow by category, for the economy view.
-function logCoinIn(cat, amt){ if(!G.ledger.in[cat]) G.ledger.in[cat]=0; G.ledger.in[cat]+=amt; }
-function logCoinOut(cat, amt){ if(!G.ledger.out[cat]) G.ledger.out[cat]=0; G.ledger.out[cat]+=amt; }
 const BOUNTY_POOL = [
   { id:'bwood',  key:'wood',  min:30, max:60, ic:'🪵', name:'Timber Drive',   d:n=>'Gather '+n+' wood today' },
   { id:'bstone', key:'stone', min:20, max:45, ic:'🪨', name:'Quarry Push',    d:n=>'Gather '+n+' stone today' },
@@ -2249,10 +2197,11 @@ initCritters({ ctx, sprites: SPRITES, spriteScale: SPRITE_SCALE, waterDrop: WATE
    reasoned about without a DOM. */
 initWeather({ toast, chron, sfx, forceWinter: ()=>!!gameMode.forceWinter });
 initSkills({ toast, chron });
-initWork({ capFor, hasActiveBuilding, reassignRole, currentTier: ()=>currentTierIdx });
+initWork({ hasActiveBuilding, reassignRole, currentTier: ()=>currentTierIdx });
 initBuildings({ onRemoved: (b)=>{ if(selection && selection.ref===b) deselectAll(); } });
+initEconomy({ toast, decayMul: ()=>(gameMode && gameMode.decayMul!==undefined) ? gameMode.decayMul : 1 });
 initSteward({ toast, reassignRole, startResearch, demolishBuilding, spawnDust });
-initVillagers({ toast, gainResource, spawnFly, harvestBoonMul, decreeHungerMul, decreeWorkMul,
+initVillagers({ toast, spawnFly, decreeHungerMul, decreeWorkMul,
   eventSpeedBonus, festivalOn: ()=>!!(activeEvent && activeEvent.type==='festival') });
 /* Lives needs one thing back: when a settler passes, whatever the UI was
    holding them open for has to let go. */
@@ -6072,7 +6021,7 @@ function resetHoldState(){
   spawnTimer=18; G.idleSlotCounter=0; G.usedNames=[];
   G.questsCompleted={}; lastSeenQuestCount=0;
   G.totals={wood:0,stone:0,food:0};
-  window.__capWarned={wood:false,stone:false,food:false,planks:false,flour:false,bread:false};
+  resetCapWarnings();
   G.researched={}; G.activeResearch=null; currentTierIdx=0; setWeather('clear');
   G.coins=0; G.bannerIdx=G.crestChoice; G.onboardDone=false; G.decrees={curfew:false,tithe:false,openGates:false,rationing:false}; decisionTimer=3.2; _lastDecision=''; G.ledger={in:{bounties:0,deeds:0,routes:0,quests:0,tithe:0},out:{shop:0}}; rollDailyBounties();
   applyDifficulty(readDifficultyConfig());

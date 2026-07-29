@@ -9,6 +9,7 @@
 import { G } from './state';
 import { BUILD_DEFS, ROLE_DEFS } from './defs';
 import { riverFrozen } from './time';
+import { capFor } from './economy';
 import { remember } from './lives';
 
 export interface RoleNeed {
@@ -22,8 +23,6 @@ export interface RoleNeed {
 }
 
 type Deps = {
-  /** Storage cap for a resource, so need can be read as a fraction of full. */
-  capFor: (k: string) => number;
   /** Is there a working building of this type — not just a ruin? */
   hasActiveBuilding: (type: string) => boolean;
   /** Hold tier; guards are only worth posting once there is something to raid. */
@@ -32,7 +31,7 @@ type Deps = {
   reassignRole: (v: any, role: string) => void;
 };
 let dep: Deps = {
-  capFor: () => 1, hasActiveBuilding: () => false, currentTier: () => 0, reassignRole: () => {},
+  hasActiveBuilding: () => false, currentTier: () => 0, reassignRole: () => {},
 };
 export function initWork(deps: Deps): void { dep = deps; }
 
@@ -47,7 +46,7 @@ export function roleNeedScores(): RoleNeed[] {
   const pop = Math.max(1, G.villagers.length);
   const count: Record<string, number> = {};
   for (const v of G.villagers) count[v.role] = (count[v.role] || 0) + 1;
-  const frac = (k: string) => (G.stockpile[k] || 0) / Math.max(1, dep.capFor(k));
+  const frac = (k: string) => (G.stockpile[k] || 0) / Math.max(1, capFor(k));
 
   const out: RoleNeed[] = [];
   const add = (role: string, workplace: string, score: number) => {

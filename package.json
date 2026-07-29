@@ -12,14 +12,16 @@
     "build:site": "node site/build.js",
     "typecheck": "tsc --noEmit",
     "gameplay": "npm run build && node tools/gameplay-test.mjs",
-    "verify": "npm run build && node tools/smoke-test.mjs && node tools/gameplay-test.mjs && node tools/scenario-test.mjs && node tools/editor-test.mjs && node tools/slots-test.mjs && node tools/steward-test.mjs && node tools/health-check.mjs && node tools/systems-audit.mjs && node tools/site-audit.mjs",
+    "verify": "npm run verify:sim && npm run verify:hold",
     "editor": "npm run build && node tools/editor-test.mjs && node tools/slots-test.mjs && node tools/steward-test.mjs && node tools/health-check.mjs && node tools/systems-audit.mjs",
     "scenario": "npm run build && node tools/scenario-test.mjs",
     "cap:sync": "npm run build && node tools/sync-native-version.mjs && cap sync",
     "android": "npm run cap:sync && cap open android",
     "ios": "npm run cap:sync && cap open ios",
     "vendor": "node tools/vendor-sync.mjs",
-    "site": "npm run build:site && node tools/site-audit.mjs"
+    "site": "npm run build:site && node tools/site-audit.mjs",
+    "verify:sim": "npm run build && node tools/smoke-test.mjs && node tools/gameplay-test.mjs && node tools/scenario-test.mjs && node tools/editor-test.mjs",
+    "verify:hold": "node tools/slots-test.mjs && node tools/steward-test.mjs && node tools/health-check.mjs && node tools/systems-audit.mjs && node tools/site-audit.mjs"
   },
   "devDependencies": {
     "@capacitor/android": "^8.4.2",

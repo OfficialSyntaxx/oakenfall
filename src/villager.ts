@@ -26,15 +26,13 @@ import { tileAt } from './mapgen';
 import { findTC, buildingCenter, hasActiveBuilding, hasBuildingType,
   nearestBuildingOfTypes, popCapacity } from './buildings';
 import { sfx } from './audio';
+import { gainResource, harvestBoonMul } from './economy';
 
 type Deps = {
   toast: (msg: string, urgent?: boolean) => void;
-  /** Add to the stores, respecting caps. */
-  gainResource: (type: string, amount: number) => void;
   /** The flying resource icon from the world to the HUD. */
   spawnFly: (gx: number, gy: number, type: string) => void;
   /** Multipliers owned by systems that have not moved out of main.ts yet. */
-  harvestBoonMul: () => number;
   decreeHungerMul: () => number;
   decreeWorkMul: () => number;
   eventSpeedBonus: () => number;
@@ -42,8 +40,8 @@ type Deps = {
   festivalOn: () => boolean;
 };
 let dep: Deps = {
-  toast: () => {}, gainResource: () => {}, spawnFly: () => {},
-  harvestBoonMul: () => 1, decreeHungerMul: () => 1, decreeWorkMul: () => 1, eventSpeedBonus: () => 1, festivalOn: () => false,
+  toast: () => {}, spawnFly: () => {},
+  decreeHungerMul: () => 1, decreeWorkMul: () => 1, eventSpeedBonus: () => 1, festivalOn: () => false,
 };
 export function initVillagers(deps: Deps): void { dep = deps; }
 
@@ -293,7 +291,7 @@ export function updateVillager(v, dt){
         const WORKPLACE_FOR = { wood:'forestCamp', stone:'miningPost', fish:'fishingHut', meat:'huntingCabin' };
         const byHand = !hasActiveBuilding(WORKPLACE_FOR[v.resKind]) ? 0.5 : 1;
         const stockKey = (v.resKind==='fish' || v.resKind==='meat') ? 'food' : v.resKind;
-        const foodBoon = stockKey==='food' ? dep.harvestBoonMul() : 1;
+        const foodBoon = stockKey==='food' ? harvestBoonMul() : 1;
         const yieldAmt = Math.max(1, Math.round((yr[0] + Math.floor(Math.random()*(yr[1]-yr[0]+1))) * seasonYieldMul() * toolsMul * byHand * foodBoon * guildMulRes(v.resKind)));
         t.resourceAmount -= 1;
         v.carrying = { type:stockKey, amount:yieldAmt };
@@ -324,7 +322,7 @@ export function updateVillager(v, dt){
       const o = RING[hashStr(v.id) % RING.length];
       const arrived = moveToward(v, c.gx+o[0], c.gy+o[1], dt, 1);
       if(arrived){
-        if(v.carrying){ dep.gainResource(v.carrying.type, v.carrying.amount); dep.spawnFly(v.gx, v.gy, v.carrying.type); v.carrying=null; }
+        if(v.carrying){ gainResource(v.carrying.type, v.carrying.amount); dep.spawnFly(v.gx, v.gy, v.carrying.type); v.carrying=null; }
         v.targetBuilding = null;
         v.state='idle';
       }
@@ -350,7 +348,7 @@ export function updateVillager(v, dt){
           if(nt && nt.type==='water'){ irr = 1.15; break; }
         }
         const terrace = G.researched.terracing ? 1.15 : 1;
-        dep.gainResource('food', Math.max(1, Math.round((6+Math.floor(Math.random()*4)) * seasonYieldMul() * weatherFarmMul() * (G.researched.crops?1.2:1) * irr * terrace * dep.harvestBoonMul() * guildFarmMul())));
+        gainResource('food', Math.max(1, Math.round((6+Math.floor(Math.random()*4)) * seasonYieldMul() * weatherFarmMul() * (G.researched.crops?1.2:1) * irr * terrace * harvestBoonMul() * guildFarmMul())));
         v.workTimer = 5.5/effMultiplier(v);
       }
       break;

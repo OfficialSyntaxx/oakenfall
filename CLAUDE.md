@@ -98,6 +98,10 @@ modules, (3) Capacitor wrap + native storage.
   an APK needs the Android SDK.
 
 ## Verification
+- `npm run verify` — everything, in two halves. It now takes over ten minutes,
+  so `npm run verify:sim` (build + smoke + gameplay + scenario + editor) and
+  `npm run verify:hold` (slots + steward + health + systems + site) can be run
+  separately when a tool or shell caps out at ten.
 - `npm run smoke` — builds, serves `_site`, boots the real game in Chromium at
   phone/landscape/desktop and asserts the world renders, assets load, the canvas
   is sized, the HUD does not collide, and no console/request errors occur.
