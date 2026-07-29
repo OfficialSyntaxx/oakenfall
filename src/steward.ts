@@ -24,6 +24,7 @@ import { roleNeedScores } from './work';
 import { releaseClaims } from './lives';
 import { skillTier } from './skills';
 import { sfx } from './audio';
+import { spawnDust } from './fx';
 
 type Deps = {
   toast: (msg: string, urgent?: boolean) => void;
@@ -33,12 +34,10 @@ type Deps = {
   startResearch: (id: string) => void;
   /** Tear a building down, refunding half its timber. */
   demolishBuilding: (b: any) => void;
-  /** Puff of dust where something was raised or pulled down. */
-  spawnDust: (gx: number, gy: number) => void;
 };
 let dep: Deps = {
   toast: () => {}, reassignRole: () => {},
-  startResearch: () => {}, demolishBuilding: () => {}, spawnDust: () => {},
+  startResearch: () => {}, demolishBuilding: () => {},
 };
 export function initSteward(deps: Deps): void { dep = deps; }
 
@@ -233,7 +232,7 @@ export function processStewardOrders(dt){
       if(!spot){ dep.toast('📜 There is no room to raise the '+o.label+' near the hold.', true); stewardOrders.shift(); return; }
       const def: any = BUILD_DEFS[o.bkey];
       for(const [k, amt] of Object.entries(def.cost) as [string, number][]){ if(amt>0) G.stockpile[k]-=amt; }
-      addBuilding(o.bkey, spot.gx, spot.gy); dep.spawnDust(spot.gx+0.5, spot.gy+0.5); sfx('build');
+      addBuilding(o.bkey, spot.gx, spot.gy); spawnDust(spot.gx+0.5, spot.gy+0.5); sfx('build');
       o.placed++; o.stall = 0;
       if(o.placed>=o.count){ dep.toast('📜 The '+o.count+' '+o.label+' '+(o.count>1?'stand':'stands')+' raised, as you ordered.'); stewardOrders.shift(); }
     } else {

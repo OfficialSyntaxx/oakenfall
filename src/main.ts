@@ -30,6 +30,7 @@ import { tileAt, genMap, reindexTiles } from './mapgen';
 import { tileWalkable, nearestWalkable, pathFind } from './pathfind';
 import { initVillagers, moveToward, effMultiplier, findResourceTarget, updateVillager,
   resetFrozenFisherNotice } from './villager';
+import { initFX, spawnFly, spawnDust, spawnBoom, renderFlyFX, renderDustFX, renderBoomFX, fxSpawned } from './fx';
 import { initContracts, rollDailyBounties, checkBounties, makeRouteOffer, refreshRouteOffers,
   acceptRoute, cancelRoute, processTradeRoutes, routeGoodLabel } from './contracts';
 import { initRaiders, raidEntryPoint, launchRaid, raiderTick, wolfTick, banditTick,
@@ -421,6 +422,7 @@ window.__oakDebug = function(){
     buildings: G.buildings.filter(b=>b.type!=='road').map(b=>b.type),
     placements: G.buildings.filter(b=>b.type!=='road').map(b=>({t:b.type, gx:b.gx, gy:b.gy})),
     worn: G.buildings.filter(b=>b.condition!==undefined && b.condition<70).length,
+    fx: fxSpawned(),
     guilds: Object.keys(G.guilds).filter(r=>G.guilds[r]),
     masters: G.villagers.filter(v=>v.role && v.role!=='idle' && skillTier(v,v.role).label==='Master').length,
     onFire: G.buildings.filter(b=>b._fire>0).length,
@@ -1557,6 +1559,11 @@ function update(rawDt){
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 initIsoKit(ctx);   // the iso drawing kit shares this one context
+/* The FX layer gets the same context, plus live readings of the viewport and
+   the camera — both change constantly, so it reads them rather than being
+   handed a copy. `camera` is a const object with mutable contents, so passing
+   the reference is enough. */
+initFX({ ctx, decorImg, camera, viewport: ()=>({ w: cssW, h: cssH, dpr: canvasDPR }) });
 
 let canvasDPR = 1;
 let _resizePending = false;
@@ -1695,79 +1702,6 @@ function decorImg(key, idx){
   return (img.complete && img.naturalWidth>0) ? img : null;
 }
 /* Resource-fly-to-HUD: a little icon arcs from the drop-off point to its HUD pill */
-const flyFX = [];
-const FLY_ICON = { wood:'🪵', stone:'🪨', food:'🌾', planks:'🪚', bread:'🍞', flour:'🌾' };
-function spawnFly(gx, gy, resType){
-  if(flyFX.length > 14) return; // cap
-  const el = document.getElementById('res-'+(resType==='flour'?'food':resType)) || document.getElementById('res-wood');
-  if(!el) return;
-  const r = el.getBoundingClientRect();
-  const p = project(gx, gy);
-  flyFX.push({
-    sx: cssW/2 + camera.panX + p.x*camera.scale,
-    sy: cssH/2 + camera.panY + p.y*camera.scale,
-    tx: r.left + r.width/2, ty: r.top + r.height/2,
-    ic: FLY_ICON[resType]||'✨', t: 0,
-  });
-}
-function renderFlyFX(dt){
-  if(!flyFX.length) return;
-  ctx.save();
-  ctx.setTransform(canvasDPR,0,0,canvasDPR,0,0);
-  ctx.font='16px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  for(let i=flyFX.length-1;i>=0;i--){
-    const f = flyFX[i];
-    f.t += dt*1.7;
-    if(f.t >= 1){ flyFX.splice(i,1); continue; }
-    const e = f.t*f.t*(3-2*f.t); // smoothstep
-    const mx = (f.sx+f.tx)/2, my = Math.min(f.sy,f.ty) - 70; // arc peak
-    const x = (1-e)*(1-e)*f.sx + 2*(1-e)*e*mx + e*e*f.tx;
-    const y = (1-e)*(1-e)*f.sy + 2*(1-e)*e*my + e*e*f.ty;
-    ctx.globalAlpha = 1 - e*0.3;
-    ctx.fillText(f.ic, x, y);
-  }
-  ctx.globalAlpha = 1;
-  ctx.restore();
-}
-
-/* Construction dust bursts + raid explosions (shared world-FX list) */
-const dustFX = [];
-const boomFX = [];
-function spawnBoom(gx, gy){ boomFX.push({gx, gy, t:0}); }
-function renderBoomFX(dt){
-  for(let i=boomFX.length-1;i>=0;i--){
-    const f = boomFX[i];
-    f.t += dt;
-    if(f.t > 0.6){ boomFX.splice(i,1); continue; }
-    const img = decorImg('explosion', f.t/0.6*4);
-    if(img){
-      const p = project(f.gx, f.gy);
-      const s = 54 + f.t*40;
-      ctx.globalAlpha = 1 - (f.t/0.6)*0.5;
-      try { ctx.drawImage(img, p.x - s/2, p.y - s + 6, s, s*(img.naturalHeight/img.naturalWidth)); } catch(e){}
-      ctx.globalAlpha = 1;
-    }
-  }
-}
-function spawnDust(gx, gy){
-  dustFX.push({gx, gy, t:0});
-}
-function renderDustFX(dt){
-  for(let i=dustFX.length-1;i>=0;i--){
-    const f = dustFX[i];
-    f.t += dt;
-    if(f.t > 0.55){ dustFX.splice(i,1); continue; }
-    const img = decorImg('dust', f.t/0.55*6);
-    if(img){
-      const p = project(f.gx, f.gy);
-      const s = 44 + f.t*30;
-      ctx.globalAlpha = 1 - f.t/0.55;
-      ctx.drawImage(img, p.x - s/2, p.y - s/2 - 8, s, s*(img.naturalHeight/img.naturalWidth));
-      ctx.globalAlpha = 1;
-    }
-  }
-}
-
 /* ── TERRAIN TILE STAMPS ── Kenney Isometric Landscape (CC0), color-graded to
    Oakenfall's palette at bake time and embedded as base64. Stamped tiles have
    built-in depth skirts, replacing the procedural diamond fill + bank faces. */
@@ -1823,13 +1757,13 @@ initBuildings({ toast, chron, decayMul: ()=>gameMode.decayMul,
 initProgress({ toast });
 initContracts({ toast, bountyCoinMul: ()=>(gameMode.bountyCoinMul||1),
   refreshRoutesSheet: ()=>renderTradeRoutesSheet() });
-initRaiders({ toast, spawnBoom, raidsEnabled: ()=>gameMode.banditsEnabled!==false,
+initRaiders({ toast, raidsEnabled: ()=>gameMode.banditsEnabled!==false,
   decreeRaidMul });
 initFire({ toast, chron, hazardsEnabled: ()=>gameMode.banditsEnabled!==false,
   decayMul: ()=>(gameMode.decayMul||1) });
 initEconomy({ toast, decayMul: ()=>(gameMode && gameMode.decayMul!==undefined) ? gameMode.decayMul : 1 });
-initSteward({ toast, reassignRole, startResearch, demolishBuilding, spawnDust });
-initVillagers({ toast, spawnFly, decreeHungerMul, decreeWorkMul,
+initSteward({ toast, reassignRole, startResearch, demolishBuilding });
+initVillagers({ toast, decreeHungerMul, decreeWorkMul,
   eventSpeedBonus, festivalOn: ()=>!!(activeEvent && activeEvent.type==='festival') });
 /* Lives needs one thing back: when a settler passes, whatever the UI was
    holding them open for has to let go. */

@@ -108,6 +108,10 @@ check('more than one trade is worked', tradesEverWorked.size > 1,
   `over ${DAYS} days: ${[...tradesEverWorked].join(', ')} — now ${JSON.stringify(last.roles)}`);
 check('buildings still standing', last.buildings.length > 1, `${last.buildings.length}`);
 check('wildlife still alive', last.critters > 0, `${last.critters} critters`);
+/* The resource-fly effect is the only thing tying a gathered load to its HUD
+   counter, and it lives for under a second — no screenshot catches it. Forty
+   days of ordinary work is the surest place to ask whether it still fires. */
+check('gathered loads still fly to the HUD', last.fx.fly > 0, `${last.fx.fly} fly effects`);
 
 // Food economy: a hold with farms should not be starving after 40 days.
 check('the hold is fed', last.stockpile.food > 0 || last.stockpile.bread > 0,

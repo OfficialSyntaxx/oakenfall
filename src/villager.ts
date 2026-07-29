@@ -27,11 +27,10 @@ import { findTC, buildingCenter, hasActiveBuilding, hasBuildingType,
   nearestBuildingOfTypes, popCapacity } from './buildings';
 import { sfx } from './audio';
 import { gainResource, harvestBoonMul } from './economy';
+import { spawnFly } from './fx';
 
 type Deps = {
   toast: (msg: string, urgent?: boolean) => void;
-  /** The flying resource icon from the world to the HUD. */
-  spawnFly: (gx: number, gy: number, type: string) => void;
   /** Multipliers owned by systems that have not moved out of main.ts yet. */
   decreeHungerMul: () => number;
   decreeWorkMul: () => number;
@@ -40,7 +39,7 @@ type Deps = {
   festivalOn: () => boolean;
 };
 let dep: Deps = {
-  toast: () => {}, spawnFly: () => {},
+  toast: () => {},
   decreeHungerMul: () => 1, decreeWorkMul: () => 1, eventSpeedBonus: () => 1, festivalOn: () => false,
 };
 export function initVillagers(deps: Deps): void { dep = deps; }
@@ -322,7 +321,7 @@ export function updateVillager(v, dt){
       const o = RING[hashStr(v.id) % RING.length];
       const arrived = moveToward(v, c.gx+o[0], c.gy+o[1], dt, 1);
       if(arrived){
-        if(v.carrying){ gainResource(v.carrying.type, v.carrying.amount); dep.spawnFly(v.gx, v.gy, v.carrying.type); v.carrying=null; }
+        if(v.carrying){ gainResource(v.carrying.type, v.carrying.amount); spawnFly(v.gx, v.gy, v.carrying.type); v.carrying=null; }
         v.targetBuilding = null;
         v.state='idle';
       }

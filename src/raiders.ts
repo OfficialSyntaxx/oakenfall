@@ -16,17 +16,16 @@ import { findTC, buildingCenter, hasBuildingType } from './buildings';
 import { getTier } from './progress';
 import { releaseClaims } from './lives';
 import { sfx } from './audio';
+import { spawnBoom } from './fx';
 
 type Deps = {
   toast: (msg: string, urgent?: boolean) => void;
-  /** Puff of debris where a raider is turned back or the stores are hit. */
-  spawnBoom: (gx: number, gy: number) => void;
   /** Are bandits enabled at all — Peaceful mode says no. */
   raidsEnabled: () => boolean;
   /** Curfew and open-gates decrees change how often trouble comes. */
   decreeRaidMul: () => number;
 };
-let dep: Deps = { toast: () => {}, spawnBoom: () => {}, raidsEnabled: () => true, decreeRaidMul: () => 1 };
+let dep: Deps = { toast: () => {}, raidsEnabled: () => true, decreeRaidMul: () => 1 };
 export function initRaiders(deps: Deps): void { dep = deps; }
 
 /** Difficulty and game mode together set how dangerous the wilds are. */
@@ -70,7 +69,7 @@ export function raiderTick(dt){
       const guard = G.villagers.find(v=>v.role==='guard' && !v.sick && v.stage!=='child' && dist2(v.gx,v.gy,r.gx,r.gy)<4.5);
       const reach = r.didSteal ? 1.5 : 3.6; // thieves reach the stores; the rest are turned back short of it
       if(guard || d < reach){
-        dep.spawnBoom(r.gx, r.gy);
+        spawnBoom(r.gx, r.gy);
         r.state='flee';
         r._flee = { gx: r.gx + (r.gx<G.MAP_SIZE/2?-7:7), gy: r.gy + (r.gy<G.MAP_SIZE/2?-7:7) };
         continue;
@@ -141,11 +140,11 @@ export function banditTick(dt: number): void {
         }
         if(stolen.length){
           const tcB = findTC();
-          if(tcB){ const c0 = buildingCenter(tcB); dep.spawnBoom(c0.gx-0.6, c0.gy); dep.spawnBoom(c0.gx+0.7, c0.gy+0.4); }
+          if(tcB){ const c0 = buildingCenter(tcB); spawnBoom(c0.gx-0.6, c0.gy); spawnBoom(c0.gx+0.7, c0.gy+0.4); }
           // Narrate the crossing: raiders come over an unwatched bridge if one exists
           if(openBridges.length){
             const br = openBridges[Math.floor(Math.random()*openBridges.length)];
-            dep.spawnBoom(br.gx, br.gy);
+            spawnBoom(br.gx, br.gy);
             dep.toast('🌉 Raiders poured across the unwatched bridge!', true);
           }
           dep.toast('🏴 Bandits raid the hold — lost '+stolen.join(', ')+'!', true); sfx('raid');

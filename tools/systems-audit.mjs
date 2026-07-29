@@ -164,6 +164,16 @@ await page.waitForTimeout(12000);
 const mended = (await snap()).worn;
 check('buildings wear down and can be mended', worn > 0 && mended < worn, `${worn} worn → ${mended}`);
 
+/* ---- visual effects ----
+ * Dust and debris are gone in under a second, so no screenshot can catch them
+ * and nothing else would notice if they stopped firing. The spawn counters are
+ * the only evidence. (The resource-fly counter is checked in the health check
+ * instead: this run keeps the stores at cap and the settlers spend it building,
+ * so a delivery is not guaranteed here.) */
+const fx = (await snap()).fx;
+check('raising a building kicks up dust', fx.dust > 0, `${fx.dust} dust bursts`);
+check('a repelled raid throws debris', fx.boom > 0, `${fx.boom} bursts`);
+
 /* ---- skills and guilds ----
  * Mastery takes about 420 seconds of steady work in one trade, so no test run
  * reaches it by playing — which is why nothing covered guilds at all until
