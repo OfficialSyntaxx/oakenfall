@@ -9,6 +9,7 @@
  * anything else. This module only decides what is burning and how fast.
  */
 import { G } from './state';
+import { chron } from './chronicle';
 import { clamp, dist2 } from './math';
 import { BUILD_DEFS } from './defs';
 import { seasonIndex } from './time';
@@ -18,13 +19,12 @@ import { sfx } from './audio';
 
 type Deps = {
   toast: (msg: string, urgent?: boolean) => void;
-  chron: (type: string, a?: any) => void;
   /** Peaceful mode has no fires, the same flag that turns off bandits. */
   hazardsEnabled: () => boolean;
   /** Game-mode decay multiplier — a harsher hold burns more readily. */
   decayMul: () => number;
 };
-let dep: Deps = { toast: () => {}, chron: () => {}, hazardsEnabled: () => true, decayMul: () => 1 };
+let dep: Deps = { toast: () => {}, hazardsEnabled: () => true, decayMul: () => 1 };
 export function initFire(deps: Deps): void { dep = deps; }
 
 /** Stone and earth do not burn: wells, roads, bridges, palisades and the mining
@@ -95,7 +95,7 @@ export function fireTick(dt){
       const nm = BUILD_DEFS[b.type]?BUILD_DEFS[b.type].name:b.type;
       removeBuilding(b);
       dep.toast('🔥 Your '+nm+' has burned to the ground!', true);
-      dep.chron('fire', nm);
+      chron('fire', nm);
       G.villagers.forEach(v=>{ if(v.morale!==undefined) v.morale=clamp(v.morale-6,0,100); });
       continue;
     }

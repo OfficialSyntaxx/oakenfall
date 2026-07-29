@@ -5,6 +5,7 @@
  * really made of, so they need to be importable rather than pushed in.
  */
 import { G } from './state';
+import { chron } from './chronicle';
 import { BUILD_DEFS } from './defs';
 import { dist2 } from './math';
 import { tileAt } from './mapgen';
@@ -13,11 +14,10 @@ type Deps = {
   /** Called when a building is removed, so a sheet showing it can close. */
   onRemoved: (b: any) => void;
   toast: (msg: string, urgent?: boolean) => void;
-  chron: (type: string, a?: any) => void;
   /** Game-mode decay multiplier. Peaceful is 0 — nothing ever wears out. */
   decayMul: () => number;
 };
-let dep: Deps = { onRemoved: () => {}, toast: () => {}, chron: () => {}, decayMul: () => 1 };
+let dep: Deps = { onRemoved: () => {}, toast: () => {}, decayMul: () => 1 };
 export function initBuildings(deps: Deps): void { dep = deps; }
 
 /** The town hall: every hauler's fallback drop-off, and the anchor for the
@@ -208,7 +208,7 @@ export function computeDistricts(announce){
     const prev = G.districts.find(d=>d.id===id);
     const name = prev ? prev.name : (dom+' '+DISTRICT_SUFFIX[_hashStr(id)%DISTRICT_SUFFIX.length]);
     next.push({id, name, gx:cx, gy:cy, size:group.length});
-    if(!prev && announce) dep.chron('district', name);
+    if(!prev && announce) chron('district', name);
   }
   G.districts = next;
 }

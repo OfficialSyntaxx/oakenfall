@@ -11,6 +11,7 @@
  * anything the UI is holding onto them for has to let go.
  */
 import { G } from './state';
+import { chron } from './chronicle';
 import { clamp, dist2 } from './math';
 import { roleLabel } from './defs';
 import { isNight, seasonIndex } from './time';
@@ -19,7 +20,6 @@ import { skillTier } from './skills';
 
 type Deps = {
   toast: (msg: string, urgent?: boolean) => void;
-  chron: (type: string, a?: any, b?: any, n?: any) => void;
   /** Called after a settler is removed, so the sheet showing them can close. */
   onPassed: (v: any) => void;
   /** How many settlers the hold's housing can hold. */
@@ -30,7 +30,7 @@ type Deps = {
   /** Middle of a building's footprint — where a bucket brigade runs to. */
   buildingCenter: (b: any) => { gx: number; gy: number };
 };
-let dep: Deps = { toast: () => {}, chron: () => {}, onPassed: () => {}, popCapacity: () => 0, spawnVillager: () => null,
+let dep: Deps = { toast: () => {}, onPassed: () => {}, popCapacity: () => 0, spawnVillager: () => null,
   buildingCenter: (b: any) => ({ gx: b.gx, gy: b.gy }) };
 export function initLives(deps: Deps): void { dep = deps; }
 
@@ -77,13 +77,13 @@ export function bumpRel(v: any, o: any, amount: number): void {
   if (r.type === 'friend' && r.s > 40 && !_relMoments.has('fr' + key)) {
     _relMoments.add('fr' + key);
     dep.toast('🤝 ' + v.name + ' and ' + o.name + ' became fast friends.');
-    dep.chron('friends', v.name, o.name);
+    chron('friends', v.name, o.name);
     remember(v, 'became friends with ' + o.name);
     remember(o, 'became friends with ' + v.name);
   } else if (r.type === 'rival' && r.s < -25 && !_relMoments.has('rv' + key)) {
     _relMoments.add('rv' + key);
     dep.toast('😤 ' + v.name + ' and ' + o.name + " can't abide each other's pace of work.", true);
-    dep.chron('rivals', v.name, o.name);
+    chron('rivals', v.name, o.name);
   }
 }
 
@@ -135,7 +135,7 @@ export function agingTick(dt: number): void {
     if (v.stage === 'child' && v.age >= ADULT_AGE) {
       v.stage = 'adult';
       dep.toast('🌿 ' + v.name + ' has come of age and joins the work.');
-      dep.chron('ofage', v.name);
+      chron('ofage', v.name);
       remember(v, 'came of age');
     } else if (v.stage === 'adult' && v.age >= v.lifespan - ELDER_BEFORE) {
       v.stage = 'elder';
@@ -175,7 +175,7 @@ export function passVillager(v: any): void {
   } else {
     dep.toast('🕊️ ' + v.name + ' passed peacefully at ' + seasons + ' seasons — laid to rest in the grove.');
   }
-  dep.chron('passed', v.name, null, seasons);
+  chron('passed', v.name, null, seasons);
 }
 
 /* ── FAMILIES ── settlers pair off and raise children. Both are on their own
@@ -201,7 +201,7 @@ export function familyTick(dt: number): void {
         a.morale = clamp(a.morale + 15, 0, 100);
         b.morale = clamp(b.morale + 15, 0, 100);
         dep.toast('💞 ' + a.name + ' and ' + b.name + ' have wed beneath the pines!');
-        dep.chron('wed', a.name, b.name);
+        chron('wed', a.name, b.name);
         G.journal.weddings++;
       }
     }
@@ -224,7 +224,7 @@ export function familyTick(dt: number): void {
     child.age = 0;
     child.stage = 'child';
     dep.toast('👶 A child is born to ' + parent.name + ' and ' + parent.partner + ' — welcome, ' + child.name + '!');
-    dep.chron('born', child.name, parent.name + ' and ' + parent.partner);
+    chron('born', child.name, parent.name + ' and ' + parent.partner);
     G.journal.childrenBorn++;
   }
 }

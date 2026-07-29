@@ -9,14 +9,14 @@
  * chronicle, so the progression can be reasoned about without a DOM.
  */
 import { G } from './state';
+import { chron } from './chronicle';
 import { dist2 } from './math';
 import { roleLabel } from './defs';
 
 type Deps = {
   toast: (msg: string, urgent?: boolean) => void;
-  chron: (type: string, a?: any) => void;
 };
-let dep: Deps = { toast: () => {}, chron: () => {} };
+let dep: Deps = { toast: () => {} };
 export function initSkills(deps: Deps): void { dep = deps; }
 
 /** Experience is measured in seconds worked, so the thresholds are roughly
@@ -90,7 +90,7 @@ export function recomputeGuilds(announce?: boolean): void {
     if (active && !G.guilds[role] && announce) {
       const g = GUILD_DEFS[role];
       dep.toast(g.ic + ' The ' + g.name + ' has formed — ' + g.blurb + ' (+' + Math.round(guildBonusVal() * 100) + '%).');
-      dep.chron('guild', g.name);
+      chron('guild', g.name);
     }
     G.guilds[role] = active;
   }

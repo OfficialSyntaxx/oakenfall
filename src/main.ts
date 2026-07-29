@@ -67,6 +67,7 @@ import { initLives, familyTick, ambientIdle, hasTrait, relTo, remember, bumpRel,
   memorialSpot, agingTick, passVillager, seedRelMoments,
   AGE_YEAR, ADULT_AGE, ELDER_BEFORE, LIFESPAN_BASE } from './lives';
 import { initWork, roleNeedScores, seekWork, maybeSwitchTrade } from './work';
+import { chron, chronicleAdd } from './chronicle';
 import { initSkills, SKILL_TIERS, skillTier, skillMul, gainSkill, hasNearbyMentor,
   GUILD_DEFS, guildBonusVal, recomputeGuilds, guildMulRes, guildFarmMul } from './skills';
 import { initWeather, getWeather, setWeather, rollWeather, rollClimate, rollPlague, plagueTick,
@@ -785,82 +786,6 @@ function renderShopSheet(){
   });
 }
 
-/* ── RELATIONSHIPS ── citizens form friendships & rivalries by proximity over
-   time (ported from the living-world AI, adapted to the hold's traits & names,
-   which persist across save/load — ids don't). */
-function chronicleAdd(text){
-  G.chronicle.unshift({ day:(typeof G.dayCount!=='undefined'?G.dayCount:1), season:(typeof seasonName==='function'?seasonName():''), text });
-  if(G.chronicle.length>80) G.chronicle.pop();
-}
-function pickOne(a){ return a[Math.floor(Math.random()*a.length)]; }
-// Varied phrasings so the chronicle reads written, not logged.
-function chron(type, a, b, n){
-  const T = {
-    founding:[
-      'The first settlers raised the Town Center of '+G.holdName+' and made camp beneath the pines.',
-      'Here '+G.holdName+' began — a handful of souls, a fire against the dark, and the whole wood watching.',
-      'Smoke rose over the valley for the first time; the folk of '+G.holdName+' had come to stay.'],
-    friends:[
-      a+' and '+b+' became fast friends.',
-      'A firm friendship took root between '+a+' and '+b+'.',
-      a+' found a steadfast companion in '+b+'.'],
-    rivals:[
-      a+' and '+b+' fell to quarrelling over the pace of the work.',
-      'No love was lost between '+a+' and '+b+'.'],
-    wed:[
-      a+' and '+b+' were wed beneath the pines.',
-      a+' and '+b+' pledged themselves to one another before the hold.',
-      'Hand in hand beneath the old oaks, '+a+' and '+b+' were married.'],
-    born:[
-      a+' was born to '+b+'.',
-      'A child, '+a+', came into the world — born to '+b+'.',
-      b+' welcomed a new child into the hold: '+a+'.'],
-    ofage:[
-      a+' came of age and took up the work of the hold.',
-      a+' grew to adulthood and joined the labour.',
-      'The hold gained a pair of hands as '+a+' came of age.'],
-    passed:[
-      a+' passed peacefully at '+n+' seasons, and rests now in the grove.',
-      'After '+n+' seasons, '+a+' passed gently, laid to rest among the oaks.',
-      a+' died full of years — '+n+' seasons — and joined the memorial grove.'],
-    season:[
-      a+' came to the hold.',
-      'The season turned; '+a+' settled over the valley.',
-      a+' arrived, and the light over the pines changed with it.'],
-    deed:[
-      'A deed worth remembering: '+a+'.',
-      'The hold earned its name anew — '+a+'.',
-      'Word spread of the hold\'s achievement: '+a+'.'],
-    plague:[
-      'A blight passed through the hold, and the sick beds filled for a time.',
-      'Sickness came to Oakenfall; the folk nursed their own until it broke.',
-      'A fever spread among the settlers before the herbs turned it back.'],
-    decision:[
-      'The steward faced a choice that day: '+a+'.',
-      'Word still tells of how the hold answered — '+a+'.',
-      a+' — and the steward\'s word settled it.'],
-    guild:[
-      'The masters of the hold banded together and founded the '+a+'.',
-      'Enough of the craft had mastered their trade to raise the '+a+'.',
-      'The '+a+' was established, and the whole hold prospered by it.'],
-    district:[
-      'The folk took to calling that corner of the hold '+a+'.',
-      a+' had grown enough to earn a name of its own.',
-      'A new quarter, '+a+', took shape among the rooftops.'],
-    climate:[
-      'A '+String(a).toLowerCase()+' settled over the valley.',
-      'The season bent to a '+String(a).toLowerCase()+', and the hold felt it.'],
-    fire:[
-      'Fire took the '+a+'; only ash and a hard lesson remained.',
-      'The '+a+' burned in the night, and the hold worked to stop the flames spreading.',
-      'A blaze claimed the '+a+' — the folk still speak of the smoke.'],
-    festival:[
-      'The hold held its year-turn festival and chose '+a+'.',
-      'At the new year the folk feasted and blessed the season with '+a+'.',
-      a+' was chosen at the festival, and the valley rang with song.'],
-  };
-  chronicleAdd(pickOne(T[type] || [a||'']));
-}
 /* ── AMBIENT LIFE ── idle & young citizens don't just stand there: they gather
    at the hearth after dark, seek warmth in winter, drift toward friends, and
    the children play. Only steers idle wander targets + a mood bubble — never
@@ -1287,17 +1212,17 @@ initCritters({ ctx });
 /* Weather reports what it did rather than reaching for main.ts's toast and
    chronicle directly — the module stays pure simulation that way, and can be
    reasoned about without a DOM. */
-initWeather({ toast, chron, sfx, forceWinter: ()=>!!gameMode.forceWinter });
-initSkills({ toast, chron });
+initWeather({ toast, sfx, forceWinter: ()=>!!gameMode.forceWinter });
+initSkills({ toast });
 initWork({ hasActiveBuilding, reassignRole });
-initBuildings({ toast, chron, decayMul: ()=>gameMode.decayMul,
+initBuildings({ toast, decayMul: ()=>gameMode.decayMul,
   onRemoved: (b)=>{ if(selection && selection.ref===b) deselectAll(); } });
 initProgress({ toast });
 initContracts({ toast, bountyCoinMul: ()=>(gameMode.bountyCoinMul||1),
   refreshRoutesSheet: ()=>renderTradeRoutesSheet() });
 initRaiders({ toast, raidsEnabled: ()=>gameMode.banditsEnabled!==false,
   decreeRaidMul });
-initFire({ toast, chron, hazardsEnabled: ()=>gameMode.banditsEnabled!==false,
+initFire({ toast, hazardsEnabled: ()=>gameMode.banditsEnabled!==false,
   decayMul: ()=>(gameMode.decayMul||1) });
 initEconomy({ toast, decayMul: ()=>(gameMode && gameMode.decayMul!==undefined) ? gameMode.decayMul : 1 });
 initSteward({ toast, reassignRole, startResearch, demolishBuilding });
@@ -1305,7 +1230,7 @@ initVillagers({ toast, decreeHungerMul, decreeWorkMul,
   eventSpeedBonus, festivalOn: ()=>!!(activeEvent && activeEvent.type==='festival') });
 /* Lives needs one thing back: when a settler passes, whatever the UI was
    holding them open for has to let go. */
-initLives({ toast, chron, popCapacity, spawnVillager, buildingCenter,
+initLives({ toast, popCapacity, spawnVillager, buildingCenter,
   onPassed: (v)=>{ if(selection && selection.ref===v) deselectAll(); } });
 
 let canvasDPR = 1;

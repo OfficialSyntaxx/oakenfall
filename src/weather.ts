@@ -14,6 +14,7 @@
  * back into the storm they just left.
  */
 import { G } from './state';
+import { chron } from './chronicle';
 import { dist2 } from './math';
 import { WEATHER_TABLE } from './defs';
 import { seasonIndex } from './time';
@@ -47,12 +48,11 @@ export function setWeather(type: string): void {
 
 type Deps = {
   toast: (msg: string, urgent?: boolean) => void;
-  chron: (type: string, a?: any) => void;
   sfx: (name: string) => void;
   /** Iron Winter runs its own weather and skips climate spells entirely. */
   forceWinter: () => boolean;
 };
-let dep: Deps = { toast: () => {}, chron: () => {}, sfx: () => {}, forceWinter: () => false };
+let dep: Deps = { toast: () => {}, sfx: () => {}, forceWinter: () => false };
 export function initWeather(deps: Deps): void { dep = deps; }
 
 /** Rolled each dawn, weighted by the season. */
@@ -95,7 +95,7 @@ export function rollClimate(): void {
     fair: '🌤️ A spell of fair weather blesses the valley — crops thrive and hearts lift.',
   };
   dep.toast(blurb[type], type !== 'fair');
-  dep.chron('climate', def.name);
+  chron('climate', def.name);
 }
 
 /* ── BLIGHT ── several settlers fall ill at once, and it spreads between those
@@ -125,7 +125,7 @@ export function rollPlague(): void {
   dep.toast('🤢 A blight sweeps the hold — ' + n + ' settler' + (n > 1 ? 's' : '') +
     ' have fallen ill! Seek a healer, and keep the sick from crowding.', true);
   dep.sfx('blight');
-  dep.chron('plague');
+  chron('plague');
 }
 
 export function plagueTick(dt: number): void {
