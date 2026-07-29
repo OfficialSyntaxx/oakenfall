@@ -12,30 +12,11 @@
  * used, and only this module knows it.
  */
 import { G } from './state';
+import { camera, view, panCameraTo, screenToWorldPixel } from './camera';
 import { project, TILE_W, TILE_H } from './math';
 import { MM_COLORS } from './defs';
 import { isNight } from './time';
 
-type Deps = {
-  /** Live view metrics and camera, for drawing the visible-region rectangle. */
-  viewport: () => { w: number; h: number };
-  camera: { panX: number; panY: number; scale: number };
-  /** Move the camera to a world point — what a tap on the map means. */
-  panCameraTo: (wx: number, wy: number) => void;
-};
-let dep: Deps = {
-  viewport: () => ({ w: 0, h: 0 }), camera: { panX: 0, panY: 0, scale: 1 },
-  panCameraTo: () => {},
-};
-export function initMinimap(deps: Deps): void { dep = deps; }
-
-/** Screen pixel back to world pixel — the same inversion main.ts uses, but
- *  derived from the deps here rather than reaching for its copy. */
-function screenToWorldPixel(sx: number, sy: number): { x: number; y: number } {
-  const v = dep.viewport();
-  return { x: (sx - v.w / 2 - dep.camera.panX) / dep.camera.scale,
-           y: (sy - v.h / 2 - dep.camera.panY) / dep.camera.scale };
-}
 
 /* =========================================================================
    MINIMAP
@@ -117,7 +98,7 @@ export function drawMinimap(){
   // What you can currently see. Sharing the world's projection makes this an
   // axis-aligned rectangle; it is only drawn when zoomed in far enough to mark a
   // genuine subsection, since zoomed out it would just outline everything.
-  const tl = screenToWorldPixel(0,0), br = screenToWorldPixel(dep.viewport().w,dep.viewport().h);
+  const tl = screenToWorldPixel(0,0), br = screenToWorldPixel(view.w,view.h);
   const vx = mmX(tl.x), vy = mmY(tl.y), vw = (br.x-tl.x)*scale, vh = (br.y-tl.y)*scale;
   if(vw*vh < S*S*0.62){
     mmCtx.save();
@@ -136,7 +117,7 @@ if(minimapCanvas){
     const { S, scale, offY } = mmLayout;
     const mx = (clientX-rect.left)/rect.width  * S;
     const my = (clientY-rect.top )/rect.height * S;
-    dep.panCameraTo((mx - S/2)/scale, (my - offY)/scale);
+    panCameraTo((mx - S/2)/scale, (my - offY)/scale);
   };
   let dragging = false;
   minimapCanvas.addEventListener('pointerdown', (e)=>{

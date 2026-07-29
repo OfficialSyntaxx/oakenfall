@@ -11,6 +11,7 @@
  * weather leaves the world changed for a while after it passes.
  */
 import { G } from './state';
+import { camera, view } from './camera';
 import { decorImg, isDecorReady, roadTileStamp } from './sprites';
 import { clamp, hash2, project } from './math';
 import { WATER_DROP, EDGE_DROP } from './defs';
@@ -21,13 +22,8 @@ import { TILE_W, TILE_H } from './math';
 import { shadeColor, tileDiamond } from './isokit';
 import { TERRAIN_B64 } from './assets';
 
-type Deps = {
-  ctx: any;
-  /** Live view metrics and camera, for culling what is off screen. */
-  viewport: () => { w: number; h: number };
-  camera: { panX: number; panY: number; scale: number };
-};
-let dep: Deps = { ctx: null, viewport: () => ({ w: 0, h: 0 }), camera: { panX: 0, panY: 0, scale: 1 } };
+type Deps = { ctx: any };
+let dep: Deps = { ctx: null };
 export function initTerrain(deps: Deps): void { dep = deps; }
 
 /* What grows or lies on each kind of ground, and how wide to draw it. */
@@ -369,7 +365,7 @@ export function drawTerrain(range){
         }
       }
       if(!stamp){
-        dep.ctx.strokeStyle='rgba(0,0,0,0.15)'; dep.ctx.lineWidth=0.8/dep.camera.scale;
+        dep.ctx.strokeStyle='rgba(0,0,0,0.15)'; dep.ctx.lineWidth=0.8/camera.scale;
         tileDiamond(p.x,yTop,TILE_W,TILE_H); dep.ctx.stroke();
       }
     }

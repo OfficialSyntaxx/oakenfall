@@ -7,6 +7,7 @@
  * genuinely carves a pool in the dark instead of being painted brighter.
  */
 import { G } from './state';
+import { camera, view, worldToScreen } from './camera';
 import { decorImg } from './sprites';
 import { clamp, project, TILE_W, TILE_H } from './math';
 import { seasonIndex, darknessFactor } from './time';
@@ -17,17 +18,8 @@ type Deps = {
   ctx: any;
   /** The canvas itself, for backing-store sized offscreen layers. */
   canvas: any;
-  viewport: () => { w: number; h: number; dpr: number };
-  camera: { panX: number; panY: number; scale: number };
-  /** World point to screen point, for placing light sources. */
-  worldToScreen: (x: number, y: number) => { x: number; y: number };
 };
-let dep: Deps = {
-  ctx: null, canvas: null,
-  viewport: () => ({ w: 0, h: 0, dpr: 1 }),
-  camera: { panX: 0, panY: 0, scale: 1 },
-  worldToScreen: (x, y) => ({ x, y }),
-};
+let dep: Deps = { ctx: null, canvas: null };
 export function initLighting(deps: Deps): void { dep = deps; }
 
 /* Soft clouds drifting over the hold — pure atmosphere, parallax with pan */
@@ -43,7 +35,7 @@ export function renderClouds(){
     }
   }
   dep.ctx.save();
-  dep.ctx.setTransform(dep.viewport().dpr,0,0,dep.viewport().dpr,0,0);
+  dep.ctx.setTransform(view.dpr,0,0,view.dpr,0,0);
   const halfW = G.MAP_SIZE*TILE_W/2;
   for(const c of cloudState){
     c.wx += c.v * (1/60);
@@ -51,10 +43,10 @@ export function renderClouds(){
     const img = decorImg('clouds', c.ci);
     if(!img) continue;
     // world → screen with a slight parallax lift (clouds pan a bit slower)
-    const sx = dep.viewport().w/2 + dep.camera.panX*0.85 + c.wx*dep.camera.scale;
-    const sy = dep.viewport().h/2 + dep.camera.panY*0.85 + c.wy*dep.camera.scale*0.8 - 60;
-    const w = 240*c.sc*dep.camera.scale*0.8, hh = w*(img.naturalHeight/img.naturalWidth);
-    if(sx < -w || sx > dep.viewport().w+w) continue;
+    const sx = view.w/2 + camera.panX*0.85 + c.wx*camera.scale;
+    const sy = view.h/2 + camera.panY*0.85 + c.wy*camera.scale*0.8 - 60;
+    const w = 240*c.sc*camera.scale*0.8, hh = w*(img.naturalHeight/img.naturalWidth);
+    if(sx < -w || sx > view.w+w) continue;
     dep.ctx.globalAlpha = 0.30;
     try { dep.ctx.drawImage(img, sx-w/2, sy-hh/2, w, hh); } catch(e){}
     dep.ctx.globalAlpha = 1;
@@ -87,15 +79,15 @@ let _lightningT = 0;
 export function renderWeather(){
   if(getWeather().type==='clear') return;
   dep.ctx.save();
-  dep.ctx.setTransform(dep.viewport().dpr,0,0,dep.viewport().dpr,0,0);
+  dep.ctx.setTransform(view.dpr,0,0,view.dpr,0,0);
   const t = G.worldTime;
   if(getWeather().type==='rain' || getWeather().type==='storm'){
     const n = getWeather().type==='storm' ? 90 : 55;
     dep.ctx.strokeStyle='rgba(170,200,220,0.30)'; dep.ctx.lineWidth=1;
     dep.ctx.beginPath();
     for(let i=0;i<n;i++){
-      const x = ((i*97.3 + t*260 + i*i*13)% (dep.viewport().w+40)) - 20;
-      const y = ((i*61.7 + t*540)% (dep.viewport().h+30)) - 15;
+      const x = ((i*97.3 + t*260 + i*i*13)% (view.w+40)) - 20;
+      const y = ((i*61.7 + t*540)% (view.h+30)) - 15;
       dep.ctx.moveTo(x, y); dep.ctx.lineTo(x-3, y+11);
     }
     dep.ctx.stroke();
@@ -104,14 +96,14 @@ export function renderWeather(){
       if(_lightningT<=0 && Math.random()<0.004){ _lightningT = 0.14; }
       if(_lightningT>0){
         dep.ctx.fillStyle='rgba(220,230,255,'+(_lightningT*1.6)+')';
-        dep.ctx.fillRect(0,0,dep.viewport().w,dep.viewport().h);
+        dep.ctx.fillRect(0,0,view.w,view.h);
       }
     }
   } else if(getWeather().type==='snow'){
     dep.ctx.fillStyle='rgba(230,240,248,0.55)';
     for(let i=0;i<60;i++){
-      const x = ((i*83.1 + Math.sin(t*0.8+i)*30 + t*18)% (dep.viewport().w+20)) - 10;
-      const y = ((i*47.9 + t*46)% (dep.viewport().h+20)) - 10;
+      const x = ((i*83.1 + Math.sin(t*0.8+i)*30 + t*18)% (view.w+20)) - 10;
+      const y = ((i*47.9 + t*46)% (view.h+20)) - 10;
       dep.ctx.beginPath(); dep.ctx.arc(x, y, 1.1+(i%3)*0.5, 0, 7); dep.ctx.fill();
     }
   }
@@ -130,7 +122,7 @@ export function renderLighting(){
     lightCanvas.width = dep.canvas.width; lightCanvas.height = dep.canvas.height;
     lctx = lightCanvas.getContext('2d');
   }
-  const dpr = dep.viewport().dpr;
+  const dpr = view.dpr;
   lctx.setTransform(1,0,0,1,0,0);
   lctx.globalCompositeOperation = 'source-over';
   lctx.clearRect(0,0,lightCanvas.width,lightCanvas.height);
@@ -144,9 +136,9 @@ export function renderLighting(){
     if(!r0) continue;
     const c = buildingCenter(b);
     const p = project(c.gx, c.gy);
-    const sx = (dep.viewport().w/2 + dep.camera.panX + p.x*dep.camera.scale) * dpr;
-    const sy = (dep.viewport().h/2 + dep.camera.panY + p.y*dep.camera.scale) * dpr;
-    const r = r0 * dep.camera.scale * dpr * flick;
+    const sx = (view.w/2 + camera.panX + p.x*camera.scale) * dpr;
+    const sy = (view.h/2 + camera.panY + p.y*camera.scale) * dpr;
+    const r = r0 * camera.scale * dpr * flick;
     if(sx < -r || sy < -r || sx > lightCanvas.width+r || sy > lightCanvas.height+r) continue;
     const g = lctx.createRadialGradient(sx, sy, 0, sx, sy, r);
     g.addColorStop(0, 'rgba(0,0,0,0.95)');

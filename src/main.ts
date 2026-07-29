@@ -30,9 +30,11 @@ import { tileAt, genMap, reindexTiles } from './mapgen';
 import { tileWalkable, nearestWalkable, pathFind } from './pathfind';
 import { initVillagers, moveToward, effMultiplier, findResourceTarget, updateVillager,
   resetFrozenFisherNotice } from './villager';
+import { camera, panVel, camGlide, view, setViewport, panCameraTo, clampCamera,
+  initCameraZoom, screenToWorldPixel, worldToScreen, visibleTileRange, ZOOM_MIN, ZOOM_MAX } from './camera';
 import { initSprites, SPRITES, VANIM, DECOR, SPRITE_SCALE, SPRITE_ANCHOR_Y,
   preloadSprites, loadVillagerAnims, villagerAnimFor, blitSprite, loadDecor, } from './sprites';
-import { initMinimap, drawMinimap } from './minimap';
+import { drawMinimap } from './minimap';
 import { initLighting, renderClouds, renderVignette, renderWeather, renderLighting } from './lighting';
 import { initVillagerRender, drawVillager, drawStatusBubble, drawWorkerBadge, drawRoad } from './villagerrender';
 import { initBuildingRender, drawHerd, drawBuilding, drawTorch } from './buildrender';
@@ -751,7 +753,7 @@ function buildDiagnostics(){
   lines.push('- Stock: ' + Object.entries(G.stockpile).map(([k,v])=>k+':'+Math.round(v)).join(' '));
   lines.push('- Researched: ' + (Object.keys(G.researched).join(', ') || 'none') + (G.activeResearch ? ' (researching: '+G.activeResearch.id+')' : ''));
   lines.push('- Device: ' + (navigator.userAgent||'?').slice(0,110));
-  lines.push('- Screen: ' + cssW + 'x' + cssH + ' @' + canvasDPR + 'x · ' + (window.matchMedia('(orientation: landscape)').matches ? 'landscape' : 'portrait'));
+  lines.push('- Screen: ' + view.w + 'x' + view.h + ' @' + canvasDPR + 'x · ' + (window.matchMedia('(orientation: landscape)').matches ? 'landscape' : 'portrait'));
   if(errorLog.length){
     lines.push('- Recent errors:');
     for(const e of errorLog) lines.push('  · ['+e.kind+'] '+e.msg);
@@ -1074,7 +1076,7 @@ function drawDistrictLabels(){
   for(const d of G.districts){
     const p = project(d.gx, d.gy);
     const s = worldToScreen(p.x, p.y);
-    if(s.x<-80||s.x>cssW+80||s.y<-40||s.y>cssH+40) continue;
+    if(s.x<-80||s.x>view.w+80||s.y<-40||s.y>view.h+40) continue;
     const y = s.y - 6;
     ctx.lineWidth=3; ctx.strokeStyle='rgba(10,8,4,0.6)'; ctx.strokeText(d.name, s.x, y);
     ctx.fillStyle='rgba(226,205,160,0.82)'; ctx.fillText(d.name, s.x, y);
@@ -1124,55 +1126,10 @@ function backstoryFor(v){
 let selection = { type:null, ref:null }; // type: 'villager'|'building'|'tile'
 let buildMode = { active:false, key:null, movingBuilding:null };
 
-const camera = { panX:0, panY:0, scale:1.05 };
-const panVel = { x:0, y:0, active:false };
-// Eased camera glide to a target pan (used when focusing a selection). Any
-// direct drag/pinch clears it (see input handlers). Lerped in loop().
-const camGlide = { x:0, y:0, active:false };
-function panCameraTo(wx, wy){
-  panVel.active = false;
-  camGlide.x = -wx*camera.scale;
-  camGlide.y = -wy*camera.scale + cssH*0.35;
-  camGlide.active = true;
-}
 
-// Keep the map always at least 40% visible on each axis.
-const ZOOM_MIN = 0.4, ZOOM_MAX = 2.4;
 // Pick a starting zoom that fits a comfortable slice of the hold on whatever
 // screen you're on — small phones and un-maximized windows were far too zoomed
 // in (only a few tiles visible). Aims for ~10 tiles across the smaller side.
-function initCameraZoom(){
-  const minDim = Math.min(cssW, cssH);
-  camera.scale = Math.max(0.6, Math.min(1.25, minDim / (10 * TILE_W)));
-}
-function clampCamera(){
-  // The isometric diamond spans world X in [-half, +half] (centered on 0)
-  // and world Y in [0, G.MAP_SIZE*TILE_H]. The screen-center look-at point in
-  // world coords is (-panX/scale, -panY/scale); clamp THAT to the map bounds
-  // so the camera can never wander into the void.
-  camera.scale = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, camera.scale));
-  const s = camera.scale;
-  const halfW = G.MAP_SIZE * (TILE_W/2);
-  const minWX = -halfW, maxWX = halfW;
-  const minWY = 0, maxWY = G.MAP_SIZE * TILE_H;
-  // pan = -lookAt*scale  →  lookAt = -pan/scale
-  camera.panX = Math.max(-maxWX*s, Math.min(-minWX*s, camera.panX));
-  camera.panY = Math.max(-maxWY*s, Math.min(-minWY*s, camera.panY));
-}
-let cssW=window.innerWidth, cssH=window.innerHeight;
-
-/* =========================================================================
-   MAP GENERATION
-========================================================================= */
-/* Smooth value noise in [0,1). Two octaves is plenty at 36 tiles across —
-   more only adds cost the eye can't resolve at this scale. */
-
-/* =========================================================================
-   BUILDINGS
-========================================================================= */
-/* =========================================================================
-   VILLAGERS
-========================================================================= */
 const TRAIT_POOL = [
   {id:'hardy',    label:'Hardy',    ic:'🛡️', desc:'Tires 20% slower.'},
   {id:'swift',    label:'Swift',    ic:'💨', desc:'Moves 20% faster.'},
@@ -1458,26 +1415,27 @@ function update(rawDt){
 ========================================================================= */
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-initIsoKit(ctx);   // the iso drawing kit shares this one context
+/* ── WIRING ─────────────────────────────────────────────────────────────
+   Every module that draws or reports gets its dependencies here, in one place.
+   This used to be scattered through main.ts, each call sited next to whatever
+   const it happened to read, which is how one cut of the terrain code swept
+   eleven of them up with it.
+
+   Most renderers now take only `ctx`. Everything else — the camera, the
+   viewport, the sprite tables — is an ordinary import, because those are const
+   objects with mutable contents rather than bindings a module would have to
+   assign to. What is left in these calls is genuinely un-importable: the
+   canvas context, and a few callbacks back into main.ts's own UI state. */
+initIsoKit(ctx);
 initSprites({ ctx });
-/* The FX layer gets the same context, plus live readings of the viewport and
-   the camera — both change constantly, so it reads them rather than being
-   handed a copy. `camera` is a const object with mutable contents, so passing
-   the reference is enough. */
-initFX({ ctx, camera, viewport: ()=>({ w: cssW, h: cssH, dpr: canvasDPR }) });
+initFX({ ctx });
 initScenery({ ctx, windAt });
-initMinimap({ camera, panCameraTo, viewport: ()=>({ w: cssW, h: cssH }) });
-initLighting({ ctx, canvas, camera, worldToScreen,
-  viewport: ()=>({ w: cssW, h: cssH, dpr: canvasDPR }) });
+initLighting({ ctx, canvas });
 initVillagerRender({ ctx, isSelected: (v)=>!!(selection && selection.type==='villager' && selection.ref===v) });
 initBuildingRender({ ctx, windAt, drawRoad,
   bannerColor: ()=>bannerPalette[G.bannerIdx]||BANNER_COLORS[0] });
-initTerrain({ ctx, camera, viewport: ()=>({ w: cssW, h: cssH }) });
+initTerrain({ ctx });
 
-/* Every module that draws or reports gets its dependencies here, in one place.
-   This block used to be scattered through main.ts, each call sited next to
-   whatever const it happened to read — which is how a cut of the terrain code
-   swept the wiring up with it. */
 initCritters({ ctx });
 
 /* Weather reports what it did rather than reaching for main.ts's toast and
@@ -1515,17 +1473,19 @@ function resizeCanvas(){
   // same value) forces a layout reflow, which in an embedded iframe can trigger
   // another 'resize' event and loop forever. Skipping identical resizes breaks that cycle.
   // The backing store must be compared against its TARGET, not merely be non-zero:
-  // cssW/cssH are seeded from innerWidth/innerHeight at parse time, so on a
+  // view.w/view.h are seeded from innerWidth/innerHeight at parse time, so on a
   // DPR-1 display every term matched on the very first call and the canvas was
   // left at its 300x150 default, stretched by CSS — a blurry, low-res world.
   const targetW = Math.floor(newW*newDPR), targetH = Math.floor(newH*newDPR);
-  if(newW===cssW && newH===cssH && newDPR===canvasDPR && canvas.width===targetW && canvas.height===targetH) return;
+  if(newW===view.w && newH===view.h && newDPR===canvasDPR && canvas.width===targetW && canvas.height===targetH) return;
   _resizing = true;
   try {
     canvasDPR = newDPR;
-    cssW = newW; cssH = newH;
-    canvas.width = Math.floor(cssW*canvasDPR); canvas.height = Math.floor(cssH*canvasDPR);
-    canvas.style.width = cssW+'px'; canvas.style.height = cssH+'px';
+    // One setter, so every module that reads the viewport sees the new size in
+    // the same frame — they import `view` rather than being handed a copy.
+    setViewport(newW, newH, newDPR);
+    canvas.width = Math.floor(view.w*canvasDPR); canvas.height = Math.floor(view.h*canvasDPR);
+    canvas.style.width = view.w+'px'; canvas.style.height = view.h+'px';
     // Do NOT call ctx.setTransform here — render() re-applies it every frame
   } finally {
     _resizing = false;
@@ -1568,37 +1528,6 @@ function requestResize(){
 window.addEventListener('resize', requestResize);
 window.addEventListener('orientationchange', requestResize);
 
-function screenToWorldPixel(sx,sy){
-  return { x:(sx - cssW/2 - camera.panX)/camera.scale, y:(sy - cssH/2 - camera.panY)/camera.scale };
-}
-function worldToScreen(wx,wy){
-  return { x: wx*camera.scale + cssW/2 + camera.panX, y: wy*camera.scale + cssH/2 + camera.panY };
-}
-
-function visibleTileRange(){
-  // Margin scales with zoom: zoomed out = more tiles visible = larger buffer needed
-  const margin = Math.ceil(4 / camera.scale) + 2;
-  const corners = [
-    screenToWorldPixel(0,0), screenToWorldPixel(cssW,0),
-    screenToWorldPixel(0,cssH), screenToWorldPixel(cssW,cssH)
-  ];
-  let minGX=Infinity,maxGX=-Infinity,minGY=Infinity,maxGY=-Infinity;
-  for(const c of corners){
-    const g = inProject(c.x,c.y);
-    minGX=Math.min(minGX,g.gx); maxGX=Math.max(maxGX,g.gx);
-    minGY=Math.min(minGY,g.gy); maxGY=Math.max(maxGY,g.gy);
-  }
-  return {
-    x0: clamp(Math.floor(minGX-margin),0,G.MAP_SIZE-1),
-    x1: clamp(Math.ceil(maxGX+margin),0,G.MAP_SIZE-1),
-    y0: clamp(Math.floor(minGY-margin),0,G.MAP_SIZE-1),
-    y1: clamp(Math.ceil(maxGY+margin),0,G.MAP_SIZE-1),
-  };
-}
-
-
-
-
 /* ── DECOR & FX SPRITES ── Kenney farm crops + Tiny Swords bushes/rocks/particles,
    graded and embedded. All optional: every consumer has a procedural fallback. */
 // Asset URLs (files, not inlined base64) — bundled locally, cached by the
@@ -1607,7 +1536,7 @@ function visibleTileRange(){
 
 function drawGhost(){
   if(!buildMode.active) return;
-  const wp = screenToWorldPixel(cssW/2, cssH/2);
+  const wp = screenToWorldPixel(view.w/2, view.h/2);
   const g = inProject(wp.x, wp.y);
   const gx = Math.round(g.gx), gy = Math.round(g.gy);
   buildMode.ghostGX = gx; buildMode.ghostGY = gy;
@@ -1680,15 +1609,15 @@ let _voidGrad = null, _voidKey = '';
 function voidBackdrop(){
   const dark = (typeof darknessFactor==='function') ? darknessFactor() : 0;
   const band = Math.round(dark*4); // quantised so we rebuild rarely, not per frame
-  const key = cssW+'x'+cssH+':'+band;
+  const key = view.w+'x'+view.h+':'+band;
   if(_voidGrad && _voidKey===key) return _voidGrad;
   const t = band/4;
   // Day: slate-teal deep water. Night: near-black with a cold blue cast.
   const mix = (a,b)=> a.map((v,i)=> Math.round(v + (b[i]-v)*t));
   const inner = mix([34,54,64],[12,18,30]);
   const outer = mix([13,21,28],[5,8,14]);
-  const g = ctx.createRadialGradient(cssW/2, cssH*0.46, Math.min(cssW,cssH)*0.12,
-                                     cssW/2, cssH*0.46, Math.max(cssW,cssH)*0.78);
+  const g = ctx.createRadialGradient(view.w/2, view.h*0.46, Math.min(view.w,view.h)*0.12,
+                                     view.w/2, view.h*0.46, Math.max(view.w,view.h)*0.78);
   g.addColorStop(0, `rgb(${inner[0]},${inner[1]},${inner[2]})`);
   g.addColorStop(1, `rgb(${outer[0]},${outer[1]},${outer[2]})`);
   _voidGrad = g; _voidKey = key;
@@ -1745,18 +1674,18 @@ function render(){
   // Always re-apply DPR scale cleanly — never rely on ctx.getTransform() across frames
   const dpr = canvasDPR;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, cssW, cssH);
+  ctx.clearRect(0, 0, view.w, view.h);
   // The world beyond the hold. Flat black made the map read as an island cut out
   // of nothing; a deep, cold expanse gives it somewhere to sit. Cached and only
   // rebuilt on resize — allocating a gradient every frame is expensive.
   ctx.fillStyle = voidBackdrop();
-  ctx.fillRect(0, 0, cssW, cssH);
+  ctx.fillRect(0, 0, view.w, view.h);
   setKitTime(G.worldTime);   // one clock push per frame, not one per sprite
 
   if(!G.grid.length) return; // map not yet generated
 
   ctx.save();
-  ctx.translate(cssW/2+camera.panX, cssH/2+camera.panY);
+  ctx.translate(view.w/2+camera.panX, view.h/2+camera.panY);
   ctx.scale(camera.scale, camera.scale);
 
   try { drawSea(); } catch(e){ /* guard */ }
@@ -2534,9 +2463,9 @@ function ensureSelectionVisible(){
   const top = 130, left = 40;
   // Measure the real sheet (offsetHeight ignores the slide-in transform)
   const sheetEl = document.getElementById('bottom-sheet');
-  const sheetH = sheetEl ? Math.min(sheetEl.offsetHeight, cssH*0.5) : cssH*0.5;
-  const bottom = sideDock ? cssH - 50 : cssH - sheetH - 30;
-  const right = sideDock ? cssW - Math.min(cssW*0.46, 380) - 40 : cssW - 40;
+  const sheetH = sheetEl ? Math.min(sheetEl.offsetHeight, view.h*0.5) : view.h*0.5;
+  const bottom = sideDock ? view.h - 50 : view.h - sheetH - 30;
+  const right = sideDock ? view.w - Math.min(view.w*0.46, 380) - 40 : view.w - 40;
   let dx = 0, dy = 0;
   if(s.x < left) dx = left - s.x; else if(s.x > right) dx = right - s.x;
   if(s.y < top) dy = top - s.y; else if(s.y > bottom) dy = bottom - s.y;
@@ -3005,8 +2934,8 @@ canvas.addEventListener('touchmove', (e)=>{
     // the map zooms about your fingers and can be dragged with two down.
     const anchor = touchState.pinchWorld || screenToWorldPixel(touchState.midStartX, touchState.midStartY);
     camera.scale = newScale;
-    camera.panX = mid.x - cssW/2 - anchor.x*newScale;
-    camera.panY = mid.y - cssH/2 - anchor.y*newScale;
+    camera.panX = mid.x - view.w/2 - anchor.x*newScale;
+    camera.panY = mid.y - view.h/2 - anchor.y*newScale;
     clampCamera();
   }
 }, {passive:false});
@@ -3023,8 +2952,8 @@ canvas.addEventListener('touchend', (e)=>{
         const target = camera.scale < 1.5 ? 1.9 : 1.0;
         const wu = screenToWorldPixel(tx, ty);
         camera.scale = target;
-        camera.panX = tx - cssW/2 - wu.x*target;
-        camera.panY = ty - cssH/2 - wu.y*target;
+        camera.panX = tx - view.w/2 - wu.x*target;
+        camera.panY = ty - view.h/2 - wu.y*target;
         clampCamera();
         _lastTapT = 0;
         return;
@@ -3078,8 +3007,8 @@ canvas.addEventListener('wheel', (e)=>{
   const newScale = clamp(camera.scale * (e.deltaY<0?1.08:0.93), ZOOM_MIN, ZOOM_MAX);
   const worldUnderMouse = screenToWorldPixel(e.clientX, e.clientY);
   camera.scale = newScale;
-  camera.panX = e.clientX - cssW/2 - worldUnderMouse.x*newScale;
-  camera.panY = e.clientY - cssH/2 - worldUnderMouse.y*newScale;
+  camera.panX = e.clientX - view.w/2 - worldUnderMouse.x*newScale;
+  camera.panY = e.clientY - view.h/2 - worldUnderMouse.y*newScale;
   clampCamera();
 }, {passive:false});
 
@@ -3615,7 +3544,7 @@ function enterEditor(){
   camera.scale = ZOOM_MIN;   // start on an overview — you paint the whole land, not one corner
   centreOnHold();
   // The brush panel owns the bottom of the screen — lift the land into what's left.
-  camera.panY -= cssH*0.14; clampCamera();
+  camera.panY -= view.h*0.14; clampCamera();
   editorTitle();
   started = true;
   requestAnimationFrame(loop);

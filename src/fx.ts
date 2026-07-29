@@ -11,20 +11,11 @@
  * live view metrics come in through initFX().
  */
 import { project } from './math';
+import { camera, view } from './camera';
 import { decorImg } from './sprites';
 
-type Deps = {
-  ctx: any;
-  /** Live canvas metrics — these change on every resize, so read, not copied. */
-  viewport: () => { w: number; h: number; dpr: number };
-  /** The camera object itself: const binding, mutable contents, so the live
-   *  pan and zoom are always visible here. */
-  camera: { panX: number; panY: number; scale: number };
-};
-let dep: Deps = {
-  ctx: null, viewport: () => ({ w: 0, h: 0, dpr: 1 }),
-  camera: { panX: 0, panY: 0, scale: 1 },
-};
+type Deps = { ctx: any };
+let dep: Deps = { ctx: null };
 export function initFX(deps: Deps): void { dep = deps; }
 
 /* Effects are short-lived and never assertable from a screenshot, so they
@@ -50,10 +41,9 @@ export function spawnFly(gx: number, gy: number, resType: string): void {
   if (!el) return;
   const r = el.getBoundingClientRect();
   const p = project(gx, gy);
-  const view = dep.viewport();
   flyFX.push({
-    sx: view.w / 2 + dep.camera.panX + p.x * dep.camera.scale,
-    sy: view.h / 2 + dep.camera.panY + p.y * dep.camera.scale,
+    sx: view.w / 2 + camera.panX + p.x * camera.scale,
+    sy: view.h / 2 + camera.panY + p.y * camera.scale,
     tx: r.left + r.width / 2, ty: r.top + r.height / 2,
     ic: FLY_ICON[resType] || '✨', t: 0,
   });
@@ -66,7 +56,7 @@ export function renderFlyFX(dt: number): void {
   ctx.save();
   // Screen space, not world space: these end at a HUD element, so the world
   // transform has to come off.
-  ctx.setTransform(dep.viewport().dpr, 0, 0, dep.viewport().dpr, 0, 0);
+  ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
   ctx.font = '16px serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
