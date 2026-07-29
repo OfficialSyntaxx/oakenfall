@@ -30,6 +30,8 @@ import { tileAt, genMap, reindexTiles } from './mapgen';
 import { tileWalkable, nearestWalkable, pathFind } from './pathfind';
 import { initVillagers, moveToward, effMultiplier, findResourceTarget, updateVillager,
   resetFrozenFisherNotice } from './villager';
+import { initLighting, renderClouds, renderVignette, renderWeather, renderLighting } from './lighting';
+import { initVillagerRender, drawVillager, drawStatusBubble, drawWorkerBadge, drawRoad } from './villagerrender';
 import { initBuildingRender, drawHerd, drawBuilding, drawTorch } from './buildrender';
 import { initScenery, buildAtlas, drawTree, drawRock, drawFishSpot, drawAnimal,
   drawMemorial, drawMerchantCart } from './scenery';
@@ -1570,6 +1572,12 @@ initIsoKit(ctx);   // the iso drawing kit shares this one context
    the reference is enough. */
 initFX({ ctx, decorImg, camera, viewport: ()=>({ w: cssW, h: cssH, dpr: canvasDPR }) });
 initScenery({ ctx, decorImg, sprites: SPRITES, spriteScale: SPRITE_SCALE, windAt });
+initLighting({ ctx, canvas, decorImg, camera, worldToScreen,
+  viewport: ()=>({ w: cssW, h: cssH, dpr: canvasDPR }) });
+initVillagerRender({ ctx, decorImg, sprites: SPRITES, spriteScale: SPRITE_SCALE,
+  vanim: VANIM, villagerAnimFor,
+  isSelected: (v)=>!!(selection && selection.type==='villager' && selection.ref===v),
+  roadTile: ()=>(DECOR.roadTile && DECOR.roadTile[0]) || null });
 initBuildingRender({ ctx, decorImg, sprites: SPRITES, spriteScale: SPRITE_SCALE,
   spriteAnchorY: SPRITE_ANCHOR_Y, blitSprite, windAt, drawRoad,
   bannerColor: ()=>bannerPalette[G.bannerIdx]||BANNER_COLORS[0] });
@@ -1732,182 +1740,6 @@ function decorImg(key, idx){
   return (img.complete && img.naturalWidth>0) ? img : null;
 }
 /* Resource-fly-to-HUD: a little icon arcs from the drop-off point to its HUD pill */
-function drawVillager(v){
-  const p = project(v.gx, v.gy);
-  const moving = ['walkingToResource','walkingToDropoff','walkingToFarm','seekingFood','seekingSleep'].includes(v.state) ||
-                 (v.state==='idle' && (Math.abs(v.gx-v.idleGX)>0.05 || Math.abs(v.gy-v.idleGY)>0.05));
-  const bob = moving ? Math.abs(Math.sin(v.bobPhase))*1.8 : 0;
-  if(v.state!=='sleeping') v.bobPhase += moving ? 0.22 : 0.05;
-  const cx = p.x, cy = p.y - bob;
-  const csc = (v.stage==='child' ? 0.68 : 1) * villagerBuild(v);  // children smaller; adults vary in build
-  drawShadow(cx, p.y+6, 9.5*csc);
-
-  // Track facing from horizontal motion (persists while standing still)
-  if(v._lastGX===undefined) v._lastGX = v.gx;
-  const dxm = v.gx - v._lastGX;
-  if(Math.abs(dxm) > 0.002) v._faceLeft = dxm < 0;
-  v._lastGX = v.gx;
-
-  // Animated sprite path (Tiny Swords Pawn) — falls through to canvas art if not loaded
-  if(v.state!=='spawning'){
-    const anim = villagerAnimFor(v);
-    if(anim && anim.length && anim[0].complete && anim[0].naturalWidth>0){
-      const fi = Math.floor(G.worldTime*5 + (hashStr(v.id)%7)) % anim.length;
-      const frame = anim[fi];
-      const img = tintedFrame(frame, villagerTint(v));
-      // Frames are trim-cropped at bake time: character fills the image.
-      // Draw at a fixed CHARACTER height with feet planted on the tile.
-      // Aspect from the original frame (tinted result is a canvas, no naturalWidth).
-      const hgt = 30*csc, w = hgt * (frame.naturalWidth/frame.naturalHeight);
-      ctx.save();
-      if(v._faceLeft){ ctx.translate(cx,0); ctx.scale(-1,1); ctx.translate(-cx,0); }
-      try { ctx.drawImage(img, cx - w/2, cy - hgt + 7, w, hgt); } catch(e){}
-      ctx.restore();
-      if(v.role==='fisher' && v.state==='working'){
-        const spImg = decorImg('splash', G.worldTime*7 + hashStr(v.id)%5);
-        if(spImg){
-          const sw = 22, sh = sw*(spImg.naturalHeight/spImg.naturalWidth);
-          try { ctx.drawImage(spImg, cx + 8, cy - sh + 12, sw, sh); } catch(e){}
-        }
-      }
-      if(v.sick){ ctx.fillStyle='rgba(120,160,60,0.18)'; ctx.beginPath(); ctx.ellipse(cx, cy-14, 10, 14, 0, 0, Math.PI*2); ctx.fill(); }
-      drawStatusBubble(v, cx, cy - 34*csc);
-      return;
-    }
-  }
-
-  // Arrival materialize effect — a brief warm glow that rises and fades as a
-  // new settler steps out of the Town Center door.
-  if(v.state==='spawning'){
-    const t = clamp(1 - (v.spawnTimer/1.1), 0, 1); // 0 -> 1 over the spawn duration
-    const riseY = cy - t*14;
-    const glowR = 14 + Math.sin(t*Math.PI)*10;
-    const alpha = Math.sin(t*Math.PI); // fades in then out
-    const grd = ctx.createRadialGradient(cx, riseY, 0, cx, riseY, glowR);
-    grd.addColorStop(0, `rgba(255,215,140,${0.55*alpha})`);
-    grd.addColorStop(1, 'rgba(255,180,80,0)');
-    ctx.fillStyle = grd;
-    ctx.beginPath(); ctx.arc(cx, riseY, glowR, 0, Math.PI*2); ctx.fill();
-    // rising sparkle motes
-    for(let i=0;i<3;i++){
-      const sp = (t + i*0.33) % 1;
-      const sx = cx + Math.sin(sp*8+i*2)*6;
-      const sy = cy - sp*22;
-      ctx.fillStyle = `rgba(255,225,170,${(1-sp)*0.8})`;
-      ctx.beginPath(); ctx.arc(sx, sy, 1.4, 0, Math.PI*2); ctx.fill();
-    }
-  }
-
-  // Try AI villager sprite
-  const spriteKey = 'villager_'+(v.role==='idle'?'idle':v.role);
-  const img = SPRITES[spriteKey];
-  const spawnAlpha = v.state==='spawning' ? clamp(1-(v.spawnTimer/1.1), 0.15, 1) : 1;
-  ctx.save();
-  ctx.globalAlpha = spawnAlpha;
-  if(img && img.complete && img.naturalWidth>0){
-    try {
-      const w = (SPRITE_SCALE[spriteKey]||40)*csc;
-      const h = w*(img.naturalHeight/img.naturalWidth);
-      // Mirror if facing left
-      ctx.save();
-      if(v.facing===-1){ ctx.translate(cx*2,0); ctx.scale(-1,1); }
-      ctx.drawImage(img, cx-w/2, cy-h+6, w, h);
-      ctx.restore();
-    } catch(e){ delete SPRITES[spriteKey]; }
-  } else {
-    // Canvas fallback character
-    const seed = v.__seed || (v.__seed = hashStr(v.id));
-    const tintShift = ((seed%100)/100-0.5)*0.18;
-    const col = ROLE_COLORS[v.role]||ROLE_COLORS.idle;
-    const skin = ['#d8b893','#c9a47a','#b8855e'][seed%3];
-    ctx.save(); ctx.translate(cx,cy); ctx.scale(csc,csc);
-    const legSwing = moving ? Math.sin(v.bobPhase*2)*3.2 : 0;
-    ctx.strokeStyle='#241a10'; ctx.lineWidth=2.6; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(-2.5,4); ctx.lineTo(-2.5+legSwing,10); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(2.5,4); ctx.lineTo(2.5-legSwing,10); ctx.stroke();
-    ctx.fillStyle=shadeColor(col.body,tintShift);
-    ctx.beginPath(); ctx.moveTo(-6,6); ctx.quadraticCurveTo(-7,-10,0,-13); ctx.quadraticCurveTo(7,-10,6,6); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle='rgba(0,0,0,0.25)'; ctx.lineWidth=1; ctx.stroke();
-    const armSwing=moving?Math.sin(v.bobPhase*2+Math.PI)*2.4:0;
-    ctx.strokeStyle=shadeColor(col.body,-0.15); ctx.lineWidth=2.4; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(-5,-5); ctx.lineTo(-7+armSwing*0.4,2+Math.abs(armSwing)); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(5,-5); ctx.lineTo(7-armSwing*0.4,2+Math.abs(armSwing)); ctx.stroke();
-    ctx.fillStyle=skin; ctx.beginPath(); ctx.arc(0,-16,4.4,0,7); ctx.fill();
-    ctx.fillStyle=shadeColor(col.hood,tintShift); ctx.beginPath(); ctx.arc(0,-18,5,Math.PI,0); ctx.fill();
-    const tool=ROLE_TOOL_ICON[v.role];
-    if(tool&&(v.state==='working'||v.state==='walkingToResource'||v.state==='farming')){
-      ctx.font='10px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.fillText(tool,8,-8+(v.state==='working'?Math.sin(v.bobPhase*4)*3:0));
-    }
-    ctx.restore();
-  }
-  ctx.restore(); // pop globalAlpha
-
-  // Selection ring
-  if(selection.type==='villager' && selection.ref===v){
-    ctx.strokeStyle='rgba(231,162,61,0.9)'; ctx.lineWidth=1.6;
-    ctx.beginPath(); ctx.ellipse(cx,p.y+6,11,5,0,0,7); ctx.stroke();
-  }
-  drawStatusBubble(v, cx, cy-30*csc);
-}
-// Shared floating status bubble (used by both sprite and canvas villager paths)
-function drawStatusBubble(v, bx, by){
-  const bub=bubbleFor(v);
-  if(!bub) return;
-  let bg='rgba(40,30,18,0.88)', bd='rgba(0,0,0,0.5)';
-  if(bub.tone==='warn'){ bg='rgba(70,28,20,0.9)'; bd='#a4402c'; }
-  else if(bub.tone==='cool'){ bg='rgba(22,32,46,0.9)'; bd='#3a5a78'; }
-  else if(bub.tone==='good'){ bg='rgba(28,42,24,0.9)'; bd='#4a7a3a'; }
-  ctx.fillStyle=bg; ctx.strokeStyle=bd; ctx.lineWidth=1.2;
-  roundRect(bx-11,by-11,22,18,5); ctx.fill(); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(bx-3,by+7); ctx.lineTo(bx,by+12); ctx.lineTo(bx+3,by+7); ctx.closePath();
-  ctx.fillStyle=bg; ctx.fill();
-  ctx.font='12px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText(bub.ic,bx,by-1);
-}
-
-function drawWorkerBadge(b){
-  if(b.condition!==undefined && b.condition<35 && b.type!=='road'){
-    const c0 = buildingCenter(b); const p0 = project(c0.gx, c0.gy);
-    ctx.font='13px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-    const bob0 = Math.sin(G.worldTime*3)*2;
-    ctx.fillText('⚠️', p0.x, p0.y - 48 + bob0);
-  }
-  if(!b.workers || b.workers<=0 || b.type==='townCenter' || b.type==='house' || b.type==='granary' || b.type==='road') return;
-  const c = buildingCenter(b);
-  const p = project(c.gx, c.gy);
-  const bx = p.x + 20, by = p.y - 30;
-  ctx.fillStyle='rgba(30,22,14,0.88)';
-  ctx.strokeStyle='rgba(231,162,61,0.75)'; ctx.lineWidth=1;
-  roundRect(bx-11, by-8, 22, 14, 4); ctx.fill(); ctx.stroke();
-  ctx.font='10px serif'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.fillText('👷'.slice(0,2), bx, by);
-  ctx.fillStyle='#e7d7ad'; ctx.font='bold 9px sans-serif';
-  ctx.fillText(b.workers, bx+7, by);
-}
-
-function drawRoad(gx,gy){
-  // The terrain layer already stamps the Kenney stone path under road tiles.
-  if(DECOR.roadTile && DECOR.roadTile[0] && DECOR.roadTile[0].complete && DECOR.roadTile[0].naturalWidth>0) return;
-  const p = project(gx,gy);
-  ctx.fillStyle='#3a3226';
-  tileDiamond(p.x, p.y, TILE_W*0.82, TILE_H*0.82); ctx.fill();
-  // cobble texture lines
-  ctx.strokeStyle='#2c261c'; ctx.lineWidth=0.8;
-  ctx.beginPath();
-  ctx.moveTo(p.x-20,p.y); ctx.lineTo(p.x+20,p.y);
-  ctx.moveTo(p.x,p.y-10); ctx.lineTo(p.x,p.y+10);
-  ctx.stroke();
-  // centre dashed lane
-  ctx.strokeStyle='rgba(90,78,55,0.45)'; ctx.lineWidth=1.5;
-  ctx.setLineDash([4,5]);
-  ctx.beginPath(); ctx.moveTo(p.x-17,p.y); ctx.lineTo(p.x+17,p.y); ctx.stroke();
-  ctx.setLineDash([]); // always reset
-  // edge border
-  ctx.strokeStyle='rgba(255,255,255,0.04)'; ctx.lineWidth=1;
-  tileDiamond(p.x,p.y,TILE_W*0.82,TILE_H*0.82); ctx.stroke();
-}
-
 /* =========================================================================
    MINIMAP
 ========================================================================= */
@@ -2258,57 +2090,6 @@ function render(){
   try { renderFlyFX(1/60); } catch(e){}
   try { renderVignette(); } catch(e){}
 }
-/* Soft clouds drifting over the hold — pure atmosphere, parallax with pan */
-let cloudState = null;
-function renderClouds(){
-  if(getWeather().type==='storm') return; // storm layer owns the sky
-  if(!decorImg('clouds',0)) return;
-  if(!cloudState){
-    cloudState = [];
-    for(let i=0;i<7;i++){
-      cloudState.push({ wx:(Math.random()*2-1)*G.MAP_SIZE*TILE_W/2, wy:Math.random()*G.MAP_SIZE*TILE_H,
-                        v:5+Math.random()*6, sc:1.1+Math.random()*1.6, ci:i%3 });
-    }
-  }
-  ctx.save();
-  ctx.setTransform(canvasDPR,0,0,canvasDPR,0,0);
-  const halfW = G.MAP_SIZE*TILE_W/2;
-  for(const c of cloudState){
-    c.wx += c.v * (1/60);
-    if(c.wx > halfW + 200){ c.wx = -halfW - 200; c.wy = Math.random()*G.MAP_SIZE*TILE_H; }
-    const img = decorImg('clouds', c.ci);
-    if(!img) continue;
-    // world → screen with a slight parallax lift (clouds pan a bit slower)
-    const sx = cssW/2 + camera.panX*0.85 + c.wx*camera.scale;
-    const sy = cssH/2 + camera.panY*0.85 + c.wy*camera.scale*0.8 - 60;
-    const w = 240*c.sc*camera.scale*0.8, hh = w*(img.naturalHeight/img.naturalWidth);
-    if(sx < -w || sx > cssW+w) continue;
-    ctx.globalAlpha = 0.30;
-    try { ctx.drawImage(img, sx-w/2, sy-hh/2, w, hh); } catch(e){}
-    ctx.globalAlpha = 1;
-  }
-  ctx.restore();
-}
-let _vignetteCache=null;
-function renderVignette(){
-  if(!_vignetteCache || _vignetteCache.w!==canvas.width || _vignetteCache.h!==canvas.height){
-    const c=document.createElement('canvas'); c.width=canvas.width; c.height=canvas.height;
-    const vc=c.getContext('2d');
-    const g=vc.createRadialGradient(c.width/2,c.height/2,Math.min(c.width,c.height)*0.42, c.width/2,c.height/2,Math.max(c.width,c.height)*0.72);
-    g.addColorStop(0,'rgba(0,0,0,0)');
-    g.addColorStop(1,'rgba(8,10,6,0.34)');
-    vc.fillStyle=g; vc.fillRect(0,0,c.width,c.height);
-    // faint warm grade at centre
-    const g2=vc.createRadialGradient(c.width/2,c.height*0.42,0, c.width/2,c.height*0.42,Math.max(c.width,c.height)*0.5);
-    g2.addColorStop(0,'rgba(255,220,160,0.045)'); g2.addColorStop(1,'rgba(0,0,0,0)');
-    vc.fillStyle=g2; vc.fillRect(0,0,c.width,c.height);
-    _vignetteCache={cnv:c,w:canvas.width,h:canvas.height};
-  }
-  ctx.save(); ctx.setTransform(1,0,0,1,0,0);
-  ctx.drawImage(_vignetteCache.cnv,0,0);
-  ctx.restore();
-}
-
 /* ── DEBUG OVERLAY ── admin-only stats panel (top-left, screen space). */
 let _dbgLast = 0, _dbgFps = 0;
 function drawDebugOverlay(){
@@ -2336,89 +2117,6 @@ function drawDebugOverlay(){
   lines.forEach((l,i)=> ctx.fillText(l, x+8, y+6+i*15));
   ctx.restore();
 }
-/* ── WEATHER PARTICLES ── screen-space rain streaks / snowflakes / lightning */
-let _lightningT = 0;
-function renderWeather(){
-  if(getWeather().type==='clear') return;
-  ctx.save();
-  ctx.setTransform(canvasDPR,0,0,canvasDPR,0,0);
-  const t = G.worldTime;
-  if(getWeather().type==='rain' || getWeather().type==='storm'){
-    const n = getWeather().type==='storm' ? 90 : 55;
-    ctx.strokeStyle='rgba(170,200,220,0.30)'; ctx.lineWidth=1;
-    ctx.beginPath();
-    for(let i=0;i<n;i++){
-      const x = ((i*97.3 + t*260 + i*i*13)% (cssW+40)) - 20;
-      const y = ((i*61.7 + t*540)% (cssH+30)) - 15;
-      ctx.moveTo(x, y); ctx.lineTo(x-3, y+11);
-    }
-    ctx.stroke();
-    if(getWeather().type==='storm'){
-      _lightningT -= 1/60;
-      if(_lightningT<=0 && Math.random()<0.004){ _lightningT = 0.14; }
-      if(_lightningT>0){
-        ctx.fillStyle='rgba(220,230,255,'+(_lightningT*1.6)+')';
-        ctx.fillRect(0,0,cssW,cssH);
-      }
-    }
-  } else if(getWeather().type==='snow'){
-    ctx.fillStyle='rgba(230,240,248,0.55)';
-    for(let i=0;i<60;i++){
-      const x = ((i*83.1 + Math.sin(t*0.8+i)*30 + t*18)% (cssW+20)) - 10;
-      const y = ((i*47.9 + t*46)% (cssH+20)) - 10;
-      ctx.beginPath(); ctx.arc(x, y, 1.1+(i%3)*0.5, 0, 7); ctx.fill();
-    }
-  }
-  ctx.restore();
-}
-
-/* ── DYNAMIC LIGHTING ── darkness overlay with warm light pools punched out
-   at every lit structure via destination-out radial gradients. */
-let lightCanvas=null, lctx=null;
-const LIGHT_RADII = { manor:130, townCenter:200, tavern:22, watchtower:28, house:95, bakery:22, tradingPost:20, miningPost:100, sawmill:20, windmill:26, fishingHut:24, huntingCabin:24, forestCamp:90, lampPost:105 };
-function renderLighting(){
-  const dark = darknessFactor();
-  if(dark <= 0.02) return;
-  if(!lightCanvas || lightCanvas.width!==canvas.width || lightCanvas.height!==canvas.height){
-    lightCanvas = document.createElement('canvas');
-    lightCanvas.width = canvas.width; lightCanvas.height = canvas.height;
-    lctx = lightCanvas.getContext('2d');
-  }
-  const dpr = canvasDPR;
-  lctx.setTransform(1,0,0,1,0,0);
-  lctx.globalCompositeOperation = 'source-over';
-  lctx.clearRect(0,0,lightCanvas.width,lightCanvas.height);
-  lctx.fillStyle = 'rgba(8,10,26,'+dark+')';
-  lctx.fillRect(0,0,lightCanvas.width,lightCanvas.height);
-  // Punch warm pools of light around lit buildings
-  lctx.globalCompositeOperation = 'destination-out';
-  const flick = 1 + Math.sin(G.worldTime*7)*0.04;
-  for(const b of G.buildings){
-    const r0 = LIGHT_RADII[b.type];
-    if(!r0) continue;
-    const c = buildingCenter(b);
-    const p = project(c.gx, c.gy);
-    const sx = (cssW/2 + camera.panX + p.x*camera.scale) * dpr;
-    const sy = (cssH/2 + camera.panY + p.y*camera.scale) * dpr;
-    const r = r0 * camera.scale * dpr * flick;
-    if(sx < -r || sy < -r || sx > lightCanvas.width+r || sy > lightCanvas.height+r) continue;
-    const g = lctx.createRadialGradient(sx, sy, 0, sx, sy, r);
-    g.addColorStop(0, 'rgba(0,0,0,0.95)');
-    g.addColorStop(0.55, 'rgba(0,0,0,0.55)');
-    g.addColorStop(1, 'rgba(0,0,0,0)');
-    lctx.fillStyle = g;
-    lctx.beginPath(); lctx.arc(sx, sy, r, 0, Math.PI*2); lctx.fill();
-  }
-  // Composite onto the main canvas in raw pixel space
-  ctx.save();
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.drawImage(lightCanvas, 0, 0);
-  ctx.restore();
-}
-
-/* =========================================================================
-   DAY/NIGHT TINT
-========================================================================= */
 const daytintEl = document.getElementById('daytint');
 const phaseLabelEl = document.getElementById('phase-label');
 const clockDayEl = document.querySelector('#clock');
@@ -2439,6 +2137,7 @@ function updateDayTint(){
   const qd = questsDoneCount();
   document.getElementById('quest-dot').classList.toggle('hidden', qd>=lastSeenQuestCount);
 }
+
 let lastSeenQuestCount = 0;
 
 function renderQuestSheet(){

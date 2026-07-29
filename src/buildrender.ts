@@ -669,40 +669,6 @@ export function drawTorch(x,y){
   dep.ctx.beginPath(); dep.ctx.ellipse(x,y-9,3,Math.max(0.5,5*flick),0,0,7); dep.ctx.fill();
 }
 
-const ROLE_COLORS = {
-  idle:   {body:'#6e5a3f', hood:'#3f3324'},
-  lumberjack:{body:'#5c6e3f', hood:'#33401f'},
-  miner:  {body:'#5a5650', hood:'#33312c'},
-  farmer: {body:'#8a7332', hood:'#4a3d18'},
-  fisher: {body:'#3f6a78', hood:'#234048'},
-  hunter: {body:'#6e4a2e', hood:'#3a2716'},
-};
-const ROLE_TOOL_ICON = { lumberjack:'🪓', miner:'⛏️', farmer:'🌾', fisher:'🎣', hunter:'🏹' };
-const STATE_ICON = {
-  idle:'…', walkingToResource:'…', working_wood:'🪓', working_stone:'⛏️',
-  walkingToDropoff:null, walkingToFarm:'…', farming:'🌾',
-  seekingFood:'🍖', eating:'🍖', seekingSleep:'😴', sleeping:'💤'
-};
-function bubbleFor(v){
-  if(v.state==='spawning') return null; // the arrival glow speaks for itself
-  if(v.sick) return {ic:'🤧', tone:'warn'};
-  if(v.state==='eating') return {ic:'🍖', tone:'good'};
-  if(v.state==='sleeping') return {ic:'💤', tone:'cool'};
-  if(v.state==='seekingFood') return {ic:'🍖', tone:'warn'};
-  if(v.state==='seekingSleep') return {ic:'😴', tone:'cool'};
-  if(v._mentored>0 && (v.state==='working'||v.state==='farming') && Math.sin(G.worldTime*1.5+v.gx*2)>0) return {ic:'📖', tone:'good'};
-  if(v.state==='working') return {ic: ({wood:'🪓', stone:'⛏️', fish:'🎣', meat:'🏹'})[v.resKind] || '🪓', tone:'normal'};
-  if(v.state==='farming') return {ic:'🌾', tone:'normal'};
-  if(v.state==='walkingToDropoff' && v.carrying) {
-    const ic = {wood:'🪵', stone:'🪨', food:(v.resKind==='fish'?'🐟':(v.resKind==='meat'?'🍖':'🌾'))}[v.carrying.type] || '🎒';
-    return {ic, tone:'normal'};
-  }
-  if(v.state==='walkingToResource'||v.state==='walkingToFarm') return {ic:'🚶', tone:'faint'};
-  if(v.hunger>70) return {ic:'🍖', tone:'warn'};
-  if(v.fatigue>70) return {ic:'😴', tone:'warn'};
-  if(v.role==='idle' || v.stage==='child') return {ic: v.ambientEmote || '💤', tone:'faint'};
-  return null;
-}
 
 // Per-settler variety on the shared sprite frames: a small palette of clothing
 // tints keyed to each villager's id, so a crowd no longer looks like one person
@@ -710,11 +676,3 @@ function bubbleFor(v){
 // frame's own alpha mask so transparency and shading survive. Cached per
 // (frame,tint) — never allocated per draw.
 
-function villagerTint(v){
-  if(v._tint !== undefined) return v._tint;
-  return (v._tint = VILLAGER_TINTS[hashStr((v.id||'')+'t') % VILLAGER_TINTS.length]);
-}
-function villagerBuild(v){
-  if(v._build !== undefined) return v._build;
-  return (v._build = v.stage==='child' ? 1 : 0.9 + (hashStr((v.id||'')+'b') % 21)/100); // 0.90–1.10
-}
