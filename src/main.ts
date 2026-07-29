@@ -30,6 +30,8 @@ import { tileAt, genMap, reindexTiles } from './mapgen';
 import { tileWalkable, nearestWalkable, pathFind } from './pathfind';
 import { initVillagers, moveToward, effMultiplier, findResourceTarget, updateVillager,
   resetFrozenFisherNotice } from './villager';
+import { initContracts, rollDailyBounties, checkBounties, makeRouteOffer, refreshRouteOffers,
+  acceptRoute, cancelRoute, processTradeRoutes, routeGoodLabel } from './contracts';
 import { initRaiders, raidEntryPoint, launchRaid, raiderTick, wolfTick, banditTick,
   setWolfRisk, resetRaidTimers, hastenRaid } from './raiders';
 import { initFire, FLAMMABLE, igniteBuilding, fireTick, fireDrynessMul } from './fire';
@@ -945,14 +947,6 @@ function renderFeedbackSheet(kind){
 }
 
 // Trader's ledger — cumulative coin flow by category, for the economy view.
-const BOUNTY_POOL = [
-  { id:'bwood',  key:'wood',  min:30, max:60, ic:'🪵', name:'Timber Drive',   d:n=>'Gather '+n+' wood today' },
-  { id:'bstone', key:'stone', min:20, max:45, ic:'🪨', name:'Quarry Push',    d:n=>'Gather '+n+' stone today' },
-  { id:'bfood',  key:'food',  min:25, max:50, ic:'🌾', name:'Harvest Rally',  d:n=>'Gather '+n+' food today' },
-  { id:'bbread', key:'bread', min:4,  max:10, ic:'🍞', name:'Warm Ovens',     d:n=>'Bake '+n+' bread today' },
-  { id:'bplank', key:'planks',min:5,  max:12, ic:'🪚', name:'Mill Work',      d:n=>'Saw '+n+' planks today' },
-  { id:'bbuild', key:'built', min:1,  max:2,  ic:'🔨', name:'Raise the Hold', d:n=>'Construct '+n+' building'+(n>1?'s':'')+' today' },
-];
 const SHOP_ITEMS = [
   { id:'festival', ic:'🎉', name:'Feast Day',        cost:30, desc:'Begin a festival at once — the hold works 25% faster for a while.' },
   { id:'merchant', ic:'🧳', name:'Summon Merchant',  cost:25, desc:'A merchant arrives immediately with improved trade rates.' },
@@ -977,69 +971,6 @@ function applyPatronBanners(){
   if(G.bannerIdx >= bannerPalette.length) G.bannerIdx = 0;
 }
 
-/* ── TRADE ROUTES ── recurring caravan contracts: deliver goods every few days
-   for coins. Needs a Trading Post. Ties the merchant economy to logistics. */
-const ROUTE_GOODS = [
-  {type:'planks', ic:'🪚', label:'planks', unit:2.4},
-  {type:'bread',  ic:'🍞', label:'bread',  unit:2.2},
-  {type:'wood',   ic:'🪵', label:'timber', unit:0.7},
-  {type:'stone',  ic:'🪨', label:'stone',  unit:0.9},
-  {type:'food',   ic:'🌾', label:'provisions', unit:0.8},
-];
-const ROUTE_TOWNS = ['Greyford','Ashmere','Dunhollow','Pinebrook','Coldwater','Marren','Highcross','Thornwick'];
-function makeRouteOffer(){
-  const g = ROUTE_GOODS[Math.floor(Math.random()*ROUTE_GOODS.length)];
-  const amt = [6,8,10,12,15][Math.floor(Math.random()*5)];
-  const every = 2 + Math.floor(Math.random()*3); // every 2-4 days
-  const coins = Math.max(3, Math.round(amt*g.unit + every*1.5));
-  const town = ROUTE_TOWNS[Math.floor(Math.random()*ROUTE_TOWNS.length)];
-  return { id:'r'+Math.random().toString(36).slice(2,8), name:town, ic:g.ic,
-    giveType:g.type, giveAmt:amt, coins, everyDays:every };
-}
-function refreshRouteOffers(){
-  while(G.routeOffers.length < 3) G.routeOffers.push(makeRouteOffer());
-}
-function acceptRoute(id){
-  if(!hasActiveBuilding('tradingPost')){ toast('Build a Trading Post to broker caravan routes.', true); return; }
-  if(G.tradeRoutes.length >= 3){ toast('You can hold at most three trade routes.', true); return; }
-  const i = G.routeOffers.findIndex(o=>o.id===id); if(i<0) return;
-  const o = G.routeOffers.splice(i,1)[0];
-  o.nextDay = G.dayCount + o.everyDays; o.missed = 0;
-  G.tradeRoutes.push(o);
-  toast(o.ic+' Caravan route to '+o.name+' agreed — '+o.giveAmt+' '+ROUTE_GOODS.find(g=>g.type===o.giveType).label+' every '+o.everyDays+' days.');
-  refreshRouteOffers();
-  renderTradeRoutesSheet();
-}
-function cancelRoute(id){
-  const i = G.tradeRoutes.findIndex(r=>r.id===id); if(i<0) return;
-  const r = G.tradeRoutes.splice(i,1)[0];
-  toast('🐫 The route to '+r.name+' is dissolved.');
-  renderTradeRoutesSheet();
-}
-// Called at each dawn: fulfil or miss due caravans.
-function processTradeRoutes(){
-  for(const r of G.tradeRoutes.slice()){
-    if(G.dayCount < r.nextDay) continue;
-    const g = ROUTE_GOODS.find(x=>x.type===r.giveType);
-    if((G.stockpile[r.giveType]||0) >= r.giveAmt){
-      G.stockpile[r.giveType] -= r.giveAmt;
-      G.coins += r.coins; logCoinIn('routes', r.coins);
-      r.missed = 0;
-      toast(r.ic+' Caravan to '+r.name+' paid 💰'+r.coins+' for '+r.giveAmt+' '+g.label+'.');
-    } else {
-      r.missed = (r.missed||0) + 1;
-      if(r.missed >= 2){
-        G.tradeRoutes.splice(G.tradeRoutes.indexOf(r),1);
-        toast('🐫 The route to '+r.name+' was broken — the caravan left empty twice.', true);
-        G.villagers.forEach(v=>{ if(v.morale!==undefined) v.morale = clamp(v.morale-4,0,100); });
-        continue;
-      } else {
-        toast('⚠️ No '+g.label+' ready for the '+r.name+' caravan — one more miss ends the route.', true);
-      }
-    }
-    r.nextDay = G.dayCount + r.everyDays;
-  }
-}
 function renderLedgerSheet(){
   const IN = { bounties:['🎯','Daily bounties'], quests:['📜','Goals'], deeds:['🏅','Deeds'], routes:['🐫','Trade routes'], tithe:['💰','Tithe'] };
   const OUT = { shop:['🛒','Hold Shop'] };
@@ -1066,7 +997,7 @@ function renderLedgerSheet(){
 function renderTradeRoutesSheet(){
   refreshRouteOffers();
   const hasPost = hasActiveBuilding('tradingPost');
-  const lbl = t=>ROUTE_GOODS.find(g=>g.type===t).label;
+  const lbl = routeGoodLabel;
   sheetContent.innerHTML = `
     <div class="sheet-sub">Recurring caravan contracts — deliver goods on schedule for a steady flow of coins. Requires a Trading Post.</div>
     ${!hasPost ? '<div class="sheet-sub" style="color:#e8b2a4;">⚠️ No active Trading Post — build one to broker routes.</div>' : ''}
@@ -1125,25 +1056,6 @@ function renderShopSheet(){
   });
 }
 
-function rollDailyBounties(){
-  G.dailyProgress = { wood:0, stone:0, food:0, bread:0, planks:0, flour:0, built:0 };
-  const pool = [...BOUNTY_POOL];
-  G.dailyBounties = [];
-  for(let i=0;i<2 && pool.length;i++){
-    const idx = Math.floor(Math.random()*pool.length);
-    const bt = pool.splice(idx,1)[0];
-    const n = bt.min + Math.floor(Math.random()*(bt.max-bt.min+1));
-    G.dailyBounties.push({ id:bt.id, key:bt.key, n, reward: 8+Math.floor(n/4), done:false, ic:bt.ic, name:bt.name, desc:bt.d(n) });
-  }
-}
-function checkBounties(){
-  for(const b of G.dailyBounties){
-    if(!b.done && (G.dailyProgress[b.key]||0) >= b.n){
-      b.done = true; { const c = Math.round(b.reward * (gameMode.bountyCoinMul||1)); G.coins += c; logCoinIn('bounties', c); } sfx('coin'); buzz(12);
-      toast('💰 Bounty complete: '+b.name+' — +'+Math.round(b.reward*(gameMode.bountyCoinMul||1))+' coins!');
-    }
-  }
-}
 /* ── RELATIONSHIPS ── citizens form friendships & rivalries by proximity over
    time (ported from the living-world AI, adapted to the hold's traits & names,
    which persist across save/load — ids don't). */
@@ -1967,6 +1879,8 @@ initSkills({ toast, chron });
 initWork({ hasActiveBuilding, reassignRole });
 initBuildings({ onRemoved: (b)=>{ if(selection && selection.ref===b) deselectAll(); } });
 initProgress({ toast });
+initContracts({ toast, bountyCoinMul: ()=>(gameMode.bountyCoinMul||1),
+  refreshRoutesSheet: ()=>renderTradeRoutesSheet() });
 initRaiders({ toast, spawnBoom, raidsEnabled: ()=>gameMode.banditsEnabled!==false,
   decreeRaidMul });
 initFire({ toast, chron, hazardsEnabled: ()=>gameMode.banditsEnabled!==false,
