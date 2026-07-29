@@ -164,6 +164,21 @@ await page.waitForTimeout(12000);
 const mended = (await snap()).worn;
 check('buildings wear down and can be mended', worn > 0 && mended < worn, `${worn} worn → ${mended}`);
 
+/* ---- the minimap ----
+ * A whole module nothing else touches. It is drawn on its own canvas, so the
+ * world render passing says nothing about it — a minimap that stopped painting
+ * would have gone unnoticed indefinitely. Asking how many distinct colours are
+ * on it separates "drew the island" from "cleared to black". */
+const mmColours = await page.evaluate(() => {
+  const c = document.getElementById('minimap');
+  if (!c) return 0;
+  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  const cols = new Set();
+  for (let i = 0; i < d.length; i += 4) cols.add(d[i] + ',' + d[i + 1] + ',' + d[i + 2]);
+  return cols.size;
+});
+check('the minimap draws the island', mmColours > 8, `${mmColours} distinct colours`);
+
 /* ---- visual effects ----
  * Dust and debris are gone in under a second, so no screenshot can catch them
  * and nothing else would notice if they stopped firing. The spawn counters are
