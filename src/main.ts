@@ -30,6 +30,8 @@ import { tileAt, genMap, reindexTiles } from './mapgen';
 import { tileWalkable, nearestWalkable, pathFind } from './pathfind';
 import { initVillagers, moveToward, effMultiplier, findResourceTarget, updateVillager,
   resetFrozenFisherNotice } from './villager';
+import { initProgress, techAvailable, startResearch, computeTierIdx, checkTierUp,
+  getTier, resetTier } from './progress';
 import { initEconomy, BASE_CAP, capFor, foodSafeCap, foodSpoilTick, gainResource,
   harvestBoonMul, logCoinIn, logCoinOut, resetCapWarnings } from './economy';
 import { initSteward, stewardOrders, clearStewardOrders, stewardCommand,
@@ -249,7 +251,7 @@ const SCENARIOS = {
   winters:  { name:'Five Winters',   ic:'❄️', desc:'Endure five winters. The cold is the oldest enemy.',
               done:()=>G.journal.wintersEndured>=5, progress:()=>G.journal.wintersEndured+'/5 winters' },
   town:     { name:'Rise to a Town', ic:'🏰', desc:'Grow the hold from outpost to town.',
-              done:()=>currentTierIdx>=3, progress:()=>HOLD_TIERS[currentTierIdx].name+' → Town' },
+              done:()=>getTier()>=3, progress:()=>HOLD_TIERS[getTier()].name+' → Town' },
   timber:   { name:'Timber Trade',   ic:'🪚', desc:'Saw 300 planks — a hold that exports is a hold that lasts.',
               done:()=>(G.totals.planks||0)>=300, progress:()=>Math.floor(G.totals.planks||0)+'/300 planks' },
   bulwark:  { name:'Bulwark',        ic:'🛡️', desc:'Drive off eight raids without losing the hold.',
@@ -280,7 +282,7 @@ function showVictory(sc){
         <span>👥 ${G.villagers.length} settlers</span>
         <span>🏗️ ${G.journal.buildingsRaised} raised</span>
         <span>❄️ ${G.journal.wintersEndured} winters</span>
-        <span>${HOLD_TIERS[currentTierIdx].ic} ${HOLD_TIERS[currentTierIdx].name}</span>
+        <span>${HOLD_TIERS[getTier()].ic} ${HOLD_TIERS[getTier()].name}</span>
       </div>
       <button class="action-btn primary" id="v-continue">Carry on with the hold</button>
       <button class="action-btn" id="v-card">🖼️ Keep a chronicle card</button>
@@ -423,7 +425,7 @@ window.__oakDebug = function(){
     researchedCount: Object.keys(G.researched).filter(k=>G.researched[k]).length,
     orders: stewardOrders.map(o=>o.kind),
     stockpile: Object.assign({}, G.stockpile),
-    coins: G.coins, tier: currentTierIdx,
+    coins: G.coins, tier: getTier(),
     needs: (typeof roleNeedScores==='function') ? roleNeedScores().slice(0,3) : [],
     critters: (typeof G.critters!=='undefined') ? G.critters.length : 0,
     raiders: G.raiders.length,
@@ -676,7 +678,7 @@ const DECISIONS = [
     ]},
   { id:'tribute', ic:'🏴', title:'A Bandit Ultimatum',
     text:'A rider bears a crude banner: pay 25 food in tribute, or the bandits will come for far more.',
-    cond:()=>currentTierIdx>=1 && (G.stockpile.food||0)>=25 && (gameMode.banditsEnabled!==false),
+    cond:()=>getTier()>=1 && (G.stockpile.food||0)>=25 && (gameMode.banditsEnabled!==false),
     choices:[
       {label:'Pay the tribute', outcome:'They take the food and melt back into the trees.', run:()=>{ G.stockpile.food-=25; changeMorale(-2); }},
       {label:'Refuse them', outcome:'You bar the gate. The folk stand a little taller — but a raid may come.', run:()=>{ changeMorale(3); banditTimer=Math.min(banditTimer,25); }},
@@ -902,7 +904,7 @@ function buildDiagnostics(){
   const lines = [];
   lines.push('## Oakenfall Report');
   lines.push('- Version: ' + GAME_VERSION + ' · Mode: ' + gameModeId + ' · Map: ' + G.MAP_SIZE);
-  lines.push('- Day ' + G.dayCount + ' · ' + seasonName() + ' · ' + getWeather().label + ' · Tier: ' + HOLD_TIERS[currentTierIdx].name);
+  lines.push('- Day ' + G.dayCount + ' · ' + seasonName() + ' · ' + getWeather().label + ' · Tier: ' + HOLD_TIERS[getTier()].name);
   lines.push('- Pop: ' + G.villagers.length + '/' + popCapacity() + ' · Buildings: ' + G.buildings.length + ' · Coins: ' + G.coins);
   lines.push('- Stock: ' + Object.entries(G.stockpile).map(([k,v])=>k+':'+Math.round(v)).join(' '));
   lines.push('- Researched: ' + (Object.keys(G.researched).join(', ') || 'none') + (G.activeResearch ? ' (researching: '+G.activeResearch.id+')' : ''));
@@ -1267,44 +1269,8 @@ function chron(type, a, b, n){
 
 const DECAY_RATE = 100/(10*245); // full decay over ~10 day cycles
 
-/* ── RESEARCH & POLICIES ── one active project at a time, run from the Town Center */
-
-function techAvailable(t){ return !G.researched[t.id] && (!t.req || G.researched[t.req]); }
-function startResearch(id){
-  if(G.activeResearch) { toast('Research is already underway.', true); return; }
-  const t = TECH_TREE.find(x=>x.id===id);
-  if(!t || G.researched[id]) return;
-  for(const [k,amt] of Object.entries(t.cost)){ if((G.stockpile[k]||0)<amt){ toast('Not enough '+k+' for '+t.name+'.', true); return; } }
-  for(const [k,amt] of Object.entries(t.cost)) G.stockpile[k]-=amt;
-  G.activeResearch = { id, remaining:t.time, total:t.time };
-  toast('🔬 Research begun: '+t.name);
-}
 let journalTimer = 1;
 let activeEvent = null; // {type, endsAt, data}
-
-/* ── HOLD TIERS ─────────────────────────────────────────────────────── */
-
-let currentTierIdx = 0;
-function computeTierIdx(){
-  const pop = G.villagers.length;
-  const bld = G.buildings.filter(b=>b.type!=='road' && b.type!=='townCenter').length;
-  let idx = 0;
-  for(let i=HOLD_TIERS.length-1; i>=0; i--){
-    if(pop>=HOLD_TIERS[i].pop && bld>=HOLD_TIERS[i].bld){ idx=i; break; }
-  }
-  return idx;
-}
-function checkTierUp(){
-  const idx = computeTierIdx();
-  if(idx > currentTierIdx){
-    currentTierIdx = idx;
-    const t = HOLD_TIERS[idx];
-    toast(t.ic+' Your hold has grown into a '+t.name+'!');
-    sfx('tier'); buzz([20,40,20]);
-  } else if(idx < currentTierIdx){
-    currentTierIdx = idx; // shrunk (villager loss) — no toast, just track
-  }
-}
 
 /* ── RANDOM EVENTS ──────────────────────────────────────────────────── */
 function rollRandomEvent(){
@@ -1721,7 +1687,7 @@ function update(rawDt){
   banditTimer -= dt;
   if(banditTimer<=0){
     banditTimer = 160 + Math.random()*120;
-    if(!ADMIN.noRaids && gameMode.banditsEnabled && currentTierIdx>=2 && Math.random()<0.5*decreeRaidMul()){
+    if(!ADMIN.noRaids && gameMode.banditsEnabled && getTier()>=2 && Math.random()<0.5*decreeRaidMul()){
       const guards = G.villagers.filter(v=>v.role==='guard' && !v.sick).length;
       const palisades = G.buildings.filter(b=>b.type==='palisade').length;
       const towers = G.buildings.filter(b=>b.type==='watchtower' && (b.condition===undefined||b.condition>=35)).length;
@@ -1733,9 +1699,9 @@ function update(rawDt){
       const openBridges = allBridges.filter(br=> !guardPosts.some(gp=> Math.max(Math.abs(gp.gx-br.gx), Math.abs(gp.gy-br.gy)) <= 3));
       const riverMoat = (G.waterTiles.length && !riverFrozen()) ? Math.max(0, 5 - openBridges.length*1.5) : 0;
       const defense = guards*(G.researched.militia?8:4) + palisades*0.8 + towers*2 + riverMoat;
-      const strength = 10 + currentTierIdx*6 + Math.random()*8;
+      const strength = 10 + getTier()*6 + Math.random()*8;
       const mitigation = Math.min(0.95, defense / (defense + strength));
-      const raidN = 2 + Math.floor(Math.random()*2) + (currentTierIdx>=3?1:0);
+      const raidN = 2 + Math.floor(Math.random()*2) + (getTier()>=3?1:0);
       launchRaid(raidN, mitigation <= 0.72, raidEntryPoint(openBridges));
       if(mitigation > 0.72){
         G.journal.raidsRepelled = (G.journal.raidsRepelled||0) + 1;
@@ -2197,8 +2163,9 @@ initCritters({ ctx, sprites: SPRITES, spriteScale: SPRITE_SCALE, waterDrop: WATE
    reasoned about without a DOM. */
 initWeather({ toast, chron, sfx, forceWinter: ()=>!!gameMode.forceWinter });
 initSkills({ toast, chron });
-initWork({ hasActiveBuilding, reassignRole, currentTier: ()=>currentTierIdx });
+initWork({ hasActiveBuilding, reassignRole });
 initBuildings({ onRemoved: (b)=>{ if(selection && selection.ref===b) deselectAll(); } });
+initProgress({ toast });
 initEconomy({ toast, decayMul: ()=>(gameMode && gameMode.decayMul!==undefined) ? gameMode.decayMul : 1 });
 initSteward({ toast, reassignRole, startResearch, demolishBuilding, spawnDust });
 initVillagers({ toast, spawnFly, decreeHungerMul, decreeWorkMul,
@@ -4065,7 +4032,7 @@ function drawDebugOverlay(){
     'Weather '+getWeather().label+(G.climate?'  Climate '+(G.climate.name||G.climate.ic):''),
     'Settlers '+G.villagers.length+' ('+idle+' idle)  Buildings '+G.buildings.filter(b=>b.type!=='road').length,
     'Raiders '+G.raiders.length+'  Fires '+G.buildings.filter(b=>b._fire>0).length,
-    'Coins '+Math.floor(G.coins)+'  Tier '+HOLD_TIERS[currentTierIdx].name,
+    'Coins '+Math.floor(G.coins)+'  Tier '+HOLD_TIERS[getTier()].name,
     'Toggles: '+(ADMIN.freezeNeeds?'FreezeNeeds ':'')+(ADMIN.noRaids?'NoRaids ':'')||'Toggles: none',
   ];
   ctx.font = '11px monospace'; ctx.textAlign='left'; ctx.textBaseline='top';
@@ -4175,7 +4142,7 @@ function updateDayTint(){
   }
   daytintEl.style.backgroundColor = color;
   phaseLabelEl.textContent = label;
-  clockDayEl.childNodes[0].nodeValue = (G.holdName && G.holdName!=='Oakenfall' ? G.holdName+' · ' : '')+(gameModeId!=='settler' ? GAME_MODES[gameModeId].name+' · ' : '')+HOLD_TIERS[currentTierIdx].ic+' '+HOLD_TIERS[currentTierIdx].name+' · Day '+G.dayCount+' · '+seasonName()+' '+getWeather().ic+(G.climate?' '+G.climate.ic:'')+' · ';
+  clockDayEl.childNodes[0].nodeValue = (G.holdName && G.holdName!=='Oakenfall' ? G.holdName+' · ' : '')+(gameModeId!=='settler' ? GAME_MODES[gameModeId].name+' · ' : '')+HOLD_TIERS[getTier()].ic+' '+HOLD_TIERS[getTier()].name+' · Day '+G.dayCount+' · '+seasonName()+' '+getWeather().ic+(G.climate?' '+G.climate.ic:'')+' · ';
   const qd = questsDoneCount();
   document.getElementById('quest-dot').classList.toggle('hidden', qd>=lastSeenQuestCount);
 }
@@ -4187,8 +4154,8 @@ function renderQuestSheet(){
   sheetContent.innerHTML = `
     <div class="sheet-sub">${questsDoneCount()}/${QUESTS.length} complete</div>
     <div class="row" style="margin:6px 0 4px;flex-wrap:wrap;gap:6px;">
-      <div class="pill" style="pointer-events:none;">${HOLD_TIERS[currentTierIdx].ic} ${HOLD_TIERS[currentTierIdx].name}</div>
-      ${currentTierIdx < HOLD_TIERS.length-1 ? `<div class="sheet-sub" style="align-self:center;">Next: ${HOLD_TIERS[currentTierIdx+1].name} at ${HOLD_TIERS[currentTierIdx+1].pop} settlers &amp; ${HOLD_TIERS[currentTierIdx+1].bld} buildings</div>` : `<div class="sheet-sub" style="align-self:center;">Highest tier reached!</div>`}
+      <div class="pill" style="pointer-events:none;">${HOLD_TIERS[getTier()].ic} ${HOLD_TIERS[getTier()].name}</div>
+      ${getTier() < HOLD_TIERS.length-1 ? `<div class="sheet-sub" style="align-self:center;">Next: ${HOLD_TIERS[getTier()+1].name} at ${HOLD_TIERS[getTier()+1].pop} settlers &amp; ${HOLD_TIERS[getTier()+1].bld} buildings</div>` : `<div class="sheet-sub" style="align-self:center;">Highest tier reached!</div>`}
     </div>
     ${G.dailyBounties.length ? `<div class="sheet-sub" style="margin:6px 0 2px;"><b>📯 Today's Bounties</b></div>`+G.dailyBounties.map(bb=>`<div class="sheet-sub">${bb.done?'✅':'▫️'} ${bb.ic} ${bb.desc} — <b>${(G.dailyProgress[bb.key]||0) >= bb.n ? bb.n : Math.min(bb.n, Math.floor(G.dailyProgress[bb.key]||0))}/${bb.n}</b> · 💰${bb.reward}</div>`).join('') : ''}
     <div class="row" style="margin:4px 0 6px;gap:6px;">
@@ -4404,7 +4371,7 @@ async function exportHoldCard(){
     x.fillStyle='#b3a681'; x.font="600 22px 'Cinzel', Georgia, serif"; x.fillText('⚜  THE CHRONICLE OF  ⚜', ccx, 250);
     x.fillStyle='#f0e2c0'; x.font="700 72px 'Cinzel', Georgia, serif";
     x.fillText((G.holdName||'Oakenfall').slice(0,22), ccx, 330);
-    const tier=(HOLD_TIERS[currentTierIdx]||{ic:'🏕️',name:'Hold'});
+    const tier=(HOLD_TIERS[getTier()]||{ic:'🏕️',name:'Hold'});
     x.fillStyle='#e8a13c'; x.font="500 30px 'Cinzel', Georgia, serif"; x.fillText(tier.ic+' '+tier.name, ccx, 378);
     // stats row
     const stats=[['Day', G.dayCount], ['Settlers', G.villagers.length], ['Winters', G.journal.wintersEndured||0], ['Deeds', Object.keys(G.deeds).length+'/'+DEED_DEFS.length]];
@@ -4718,7 +4685,7 @@ function renderJournalSheet(){
   });
 }
 function renderChronicleSheet(){
-  const tier = (typeof HOLD_TIERS!=='undefined' && HOLD_TIERS[currentTierIdx]) || {ic:'🏕️', name:'Hold'};
+  const tier = (typeof HOLD_TIERS!=='undefined' && HOLD_TIERS[getTier()]) || {ic:'🏕️', name:'Hold'};
   // Group consecutive entries by (day, season); chronicle is newest-first.
   const groups=[]; let cur=null;
   for(const e of G.chronicle){
@@ -6022,7 +5989,7 @@ function resetHoldState(){
   G.questsCompleted={}; lastSeenQuestCount=0;
   G.totals={wood:0,stone:0,food:0};
   resetCapWarnings();
-  G.researched={}; G.activeResearch=null; currentTierIdx=0; setWeather('clear');
+  G.researched={}; G.activeResearch=null; resetTier(); setWeather('clear');
   G.coins=0; G.bannerIdx=G.crestChoice; G.onboardDone=false; G.decrees={curfew:false,tithe:false,openGates:false,rationing:false}; decisionTimer=3.2; _lastDecision=''; G.ledger={in:{bounties:0,deeds:0,routes:0,quests:0,tithe:0},out:{shop:0}}; rollDailyBounties();
   applyDifficulty(readDifficultyConfig());
 }

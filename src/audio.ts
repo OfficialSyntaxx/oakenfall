@@ -92,7 +92,10 @@ export function sfx(kind: string): void {
 }
 
 /** Buzz the handset. Silently does nothing where unsupported. */
-export function buzz(ms: number): void {
+/** A number is a single pulse; an array is a pattern of on/off durations —
+ *  buzz([20,40,20]) is two short taps. The signature said `number` only, which
+ *  was wrong about callers that have always passed patterns. */
+export function buzz(ms: number | number[]): void {
   try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {}
 }
 

@@ -10,6 +10,7 @@ import { G } from './state';
 import { BUILD_DEFS, ROLE_DEFS } from './defs';
 import { riverFrozen } from './time';
 import { capFor } from './economy';
+import { getTier } from './progress';
 import { remember } from './lives';
 
 export interface RoleNeed {
@@ -25,13 +26,11 @@ export interface RoleNeed {
 type Deps = {
   /** Is there a working building of this type — not just a ruin? */
   hasActiveBuilding: (type: string) => boolean;
-  /** Hold tier; guards are only worth posting once there is something to raid. */
-  currentTier: () => number;
   /** Put a settler into a trade. Handles the walk and the claim release. */
   reassignRole: (v: any, role: string) => void;
 };
 let dep: Deps = {
-  hasActiveBuilding: () => false, currentTier: () => 0, reassignRole: () => {},
+  hasActiveBuilding: () => false, reassignRole: () => {},
 };
 export function initWork(deps: Deps): void { dep = deps; }
 
@@ -62,7 +61,7 @@ export function roleNeedScores(): RoleNeed[] {
   add('hunter', 'huntingCabin', hungry * 0.9);
   add('lumberjack', 'forestCamp', (1 - frac('wood')) * 1.25);
   add('miner', 'miningPost', (1 - frac('stone')) * 1.05);
-  if (dep.currentTier() >= 2) add('guard', 'guardPost', 0.85);   // worth raiding now
+  if (getTier() >= 2) add('guard', 'guardPost', 0.85);   // worth raiding now
 
   /* Last resort only. With NO workplace standing at all, folk gather deadfall
      and forage by hand — badly, but enough to climb back. Without this, a hold
