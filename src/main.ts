@@ -27,6 +27,12 @@ import { DAY_LEN, NIGHT_LEN, CYCLE_LEN, SEASON_LEN, setForceWinter, seasonIndex,
 function updateSunShadows(){ setSunShadow(...sunShadow()); }
 import { tileAt, genMap, reindexTiles } from './mapgen';
 import { tileWalkable, nearestWalkable, pathFind } from './pathfind';
+import { initBuildings, findTC, addBuilding, removeBuilding, buildingCenter, popCapacity,
+  hasBuildingType, hasActiveBuilding, nearestBuildingOfTypes, recomputeLogistics } from './buildings';
+
+/** Road links are recomputed on a timer, not per frame — the BFS is cheap but
+ *  the network only changes when something is built. */
+let _logisticsTimer = 0;
 import { initLives, familyTick, ambientIdle, hasTrait, relTo, remember, bumpRel, relationsTick, releaseClaims,
   memorialSpot, agingTick, passVillager, seedRelMoments,
   AGE_YEAR, ADULT_AGE, ELDER_BEFORE, LIFESPAN_BASE } from './lives';
@@ -223,7 +229,6 @@ function rollName(){
    every invocation since the Vite migration. Because the frame loop catches and
    throttles exceptions, it never surfaced as a crash: settlers simply walked to
    the trees, filled their arms, dropped nothing, and went back for more. */
-function findTC(){ return G.buildings.find(b=>b.type==='townCenter') || null; }
 const BASE_CAP = { wood:200, stone:160, food:180, planks:80, flour:60, bread:60 };
 function capFor(type){
   let cap = BASE_CAP[type];
@@ -1445,17 +1450,6 @@ function drawDistrictLabels(){
    (tapping the blaze) and nearby settlers, rain, or winter put it out. */
 const FLAMMABLE = new Set(['house','manor','tavern','bakery','sawmill','forestCamp',
   'farm','granary','windmill','huntingCabin','fishingHut','tradingPost','guardPost']);
-function removeBuilding(b){
-  for(let yy=b.gy; yy<b.gy+b.h; yy++) for(let xx=b.gx; xx<b.gx+b.w; xx++){
-    if(G.grid[yy] && G.grid[yy][xx] && G.grid[yy][xx].building===b) G.grid[yy][xx].building = null;
-  }
-  G.villagers.forEach(v=>{
-    if(v.targetBuilding===b){ v.targetBuilding=null; v.path=[]; v.pathTarget=null;
-      if(/^walking/.test(v.state) || v.state==='working' || v.state==='farming') v.state='idle'; }
-  });
-  const i = G.buildings.indexOf(b); if(i>=0) G.buildings.splice(i,1);
-  if(selection && selection.ref===b && typeof deselectAll==='function') deselectAll();
-}
 function fireDrynessMul(){
   let m = 1; const s = seasonIndex();
   if(s===1) m *= 1.7;          // summer — dry
@@ -1621,71 +1615,6 @@ let cssW=window.innerWidth, cssH=window.innerHeight;
 /* =========================================================================
    BUILDINGS
 ========================================================================= */
-function addBuilding(type, gx, gy){
-  // (processing buildings get a procTimer below)
-  const b = { id:'b'+Math.random().toString(36).slice(2,9), type, gx, gy, w:1, h:1, workers:0, condition:100 };
-  if(type==='townCenter'){ b.w=2; b.h=2; }
-  if(BUILD_DEFS[type] && BUILD_DEFS[type].proc) b.procTimer = BUILD_DEFS[type].proc.every;
-  G.buildings.push(b);
-  if(b.w===1){ if(G.grid[gy] && G.grid[gy][gx]) G.grid[gy][gx].building = b; }
-  else {
-    for(let yy=gy; yy<gy+b.h; yy++) for(let xx=gx; xx<gx+b.w; xx++) if(G.grid[yy] && G.grid[yy][xx]) G.grid[yy][xx].building = b;
-  }
-  return b;
-}
-function buildingCenter(b){
-  return { gx:b.gx + b.w/2 - 0.5, gy:b.gy + b.h/2 - 0.5 };
-}
-
-// BFS the road/bridge network out from the Town Center; processors with a
-// connected road in their 8-neighborhood get the logistics bonus.
-let _logisticsTimer = 0;
-function recomputeLogistics(){
-  const tc = findTC();
-  if(!tc){ G.buildings.forEach(b=>{ b._roadLinked=false; }); return; }
-  const isRoadTile = (x,y)=>{ const t=tileAt(x,y); return t && t.building && (t.building.type==='road'||t.building.type==='bridge'); };
-  const seen = new Set(), queue = [];
-  // seed: road tiles touching the TC footprint (incl. diagonals)
-  for(let y=tc.gy-1; y<=tc.gy+tc.h; y++) for(let x=tc.gx-1; x<=tc.gx+tc.w; x++){
-    if(isRoadTile(x,y) && !seen.has(x+','+y)){ seen.add(x+','+y); queue.push([x,y]); }
-  }
-  while(queue.length){
-    const [x,y] = queue.pop();
-    for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++){
-      if(!dx&&!dy) continue;
-      const k=(x+dx)+','+(y+dy);
-      if(!seen.has(k) && isRoadTile(x+dx,y+dy)){ seen.add(k); queue.push([x+dx,y+dy]); }
-    }
-  }
-  for(const b of G.buildings){
-    if(!BUILD_DEFS[b.type] || !BUILD_DEFS[b.type].proc){ b._roadLinked=false; continue; }
-    let linked=false;
-    for(let dy=-1;dy<=b.h&&!linked;dy++) for(let dx=-1;dx<=b.w;dx++){
-      if(seen.has((b.gx+dx)+','+(b.gy+dy))){ linked=true; break; }
-    }
-    b._roadLinked = linked;
-  }
-}
-function popCapacity(){
-  let cap = 4;
-  for(const b of G.buildings) if(b.type==='house') cap += 3;
-  for(const b of G.buildings) if(b.type==='manor') cap += 6;
-  return cap;
-}
-function hasBuildingType(type){ return G.buildings.some(b=>b.type===type); }
-function hasActiveBuilding(type){ return G.buildings.some(b=>b.type===type && (b.condition===undefined||b.condition>=35)); }
-function nearestBuildingOfTypes(types, fromGX, fromGY, requireSlot){
-  let best=null, bestD=Infinity;
-  for(const b of G.buildings){
-    if(!types.includes(b.type)) continue;
-    if(requireSlot && b.workers>=3) continue;
-    const c = buildingCenter(b);
-    const d = dist2(fromGX,fromGY,c.gx,c.gy);
-    if(d<bestD){ bestD=d; best=b; }
-  }
-  return best;
-}
-
 /* =========================================================================
    VILLAGERS
 ========================================================================= */
@@ -3021,6 +2950,7 @@ initCritters({ ctx, sprites: SPRITES, spriteScale: SPRITE_SCALE, waterDrop: WATE
 initWeather({ toast, chron, sfx, forceWinter: ()=>!!gameMode.forceWinter });
 initSkills({ toast, chron });
 initWork({ capFor, hasActiveBuilding, reassignRole, currentTier: ()=>currentTierIdx });
+initBuildings({ onRemoved: (b)=>{ if(selection && selection.ref===b) deselectAll(); } });
 /* Lives needs one thing back: when a settler passes, whatever the UI was
    holding them open for has to let go. */
 initLives({ toast, chron, popCapacity, spawnVillager, buildingCenter,
