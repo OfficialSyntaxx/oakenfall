@@ -30,6 +30,7 @@ import { tileAt, genMap, reindexTiles } from './mapgen';
 import { tileWalkable, nearestWalkable, pathFind } from './pathfind';
 import { initVillagers, moveToward, effMultiplier, findResourceTarget, updateVillager,
   resetFrozenFisherNotice } from './villager';
+import { initFire, FLAMMABLE, igniteBuilding, fireTick, fireDrynessMul } from './fire';
 import { initProgress, techAvailable, startResearch, computeTierIdx, checkTierUp,
   getTier, resetTier } from './progress';
 import { initEconomy, BASE_CAP, capFor, foodSafeCap, foodSpoilTick, gainResource,
@@ -821,7 +822,6 @@ function checkDeeds(){
 }
 
 let eventTimer = 140; // world-seconds until the next random event roll
-let fireTimer = 340 + Math.random()*260; // world-seconds until the next fire roll
 let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
@@ -1364,87 +1364,6 @@ function drawDistrictLabels(){
 
 /* ── DISASTERS: FIRE ── timber buildings can catch and spread; a bucket brigade
    (tapping the blaze) and nearby settlers, rain, or winter put it out. */
-const FLAMMABLE = new Set(['house','manor','tavern','bakery','sawmill','forestCamp',
-  'farm','granary','windmill','huntingCabin','fishingHut','tradingPost','guardPost']);
-function fireDrynessMul(){
-  let m = 1; const s = seasonIndex();
-  if(s===1) m *= 1.7;          // summer — dry
-  else if(s===3) m *= 0.12;    // winter — snow-damped
-  else if(s===2) m *= 1.15;    // autumn — dry leaves
-  if(getWeather().type==='rain') m *= 0.3;
-  else if(getWeather().type==='storm') m *= 0.5;
-  else if(getWeather().type==='snow') m *= 0.2;
-  else if(getWeather().type==='clear') m *= 1.2;
-  m *= climateFireMul();   // drought dries the timber; a cold snap damps it
-  return m;
-}
-function nearWell(gx, gy){
-  return G.buildings.some(w=>w.type==='well' && (w.condition===undefined||w.condition>=35) && dist2(gx,gy,w.gx,w.gy) < 12.25); // within ~3.5 tiles
-}
-function igniteBuilding(b, announce){
-  if(!b || b._fire || !FLAMMABLE.has(b.type)) return;
-  if(b.condition!==undefined && b.condition<=0) return;
-  b._fire = 20 + Math.random()*14;
-  if(announce){
-    toast('🔥 Fire! Your '+(BUILD_DEFS[b.type]?BUILD_DEFS[b.type].name:b.type)+' is ablaze — tap it and send a bucket brigade!', true);
-    if(typeof sfx==='function') sfx('fire');
-  }
-}
-function fireTick(dt){
-  fireTimer -= dt;
-  if(fireTimer<=0){
-    fireTimer = 320 + Math.random()*300;
-    const cand = G.buildings.filter(b=>FLAMMABLE.has(b.type) && (b.condition===undefined||b.condition>0));
-    // Only once the hold is established, and never while one is already ablaze.
-    if(gameMode.banditsEnabled!==false && G.dayCount>2 && cand.length>=4 && !G.buildings.some(b=>b._fire)){
-      const chance = Math.min(0.6, 0.28 * fireDrynessMul() * (gameMode.decayMul||1));
-      if(Math.random() < chance){
-        const pick = cand[Math.floor(Math.random()*cand.length)];
-        const c = buildingCenter(pick);
-        // A well nearby usually smothers a spark before it takes hold.
-        if(!(nearWell(c.gx,c.gy) && Math.random()<0.7)) igniteBuilding(pick, true);
-      }
-    }
-  }
-  const burning = G.buildings.filter(b=>b._fire);
-  if(!burning.length) return;
-  const ambientDouse = getWeather().type==='storm'?11:getWeather().type==='rain'?8:getWeather().type==='snow'?6:0;
-  for(const b of burning){
-    const c = buildingCenter(b);
-    const near = G.villagers.filter(v=>v.stage!=='child' && dist2(v.gx,v.gy,c.gx,c.gy) < 9).length;
-    const wellDouse = nearWell(c.gx,c.gy) ? 4.5 : 0;   // a well close by keeps water flowing
-    const douse = ambientDouse + wellDouse + near*2.2 + (b._bucket||0);
-    b._bucket = Math.max(0, (b._bucket||0) - dt*7);
-    b._fire = clamp(b._fire + (3.6 - douse)*dt, 0, 100);
-    if(b.condition===undefined) b.condition = 100;
-    b.condition = Math.max(0, b.condition - b._fire*0.05*dt);
-    if(b._fire <= 0.5){
-      delete b._fire; delete b._bucket;
-      toast('💧 The fire at your '+(BUILD_DEFS[b.type]?BUILD_DEFS[b.type].name:b.type)+' is out.');
-      G.villagers.forEach(v=>{ if(dist2(v.gx,v.gy,c.gx,c.gy)<9 && v.morale!==undefined) v.morale=clamp(v.morale+3,0,100); });
-      continue;
-    }
-    if(b.condition <= 0){
-      const nm = BUILD_DEFS[b.type]?BUILD_DEFS[b.type].name:b.type;
-      removeBuilding(b);
-      toast('🔥 Your '+nm+' has burned to the ground!', true);
-      if(typeof chron==='function') chron('fire', nm);
-      G.villagers.forEach(v=>{ if(v.morale!==undefined) v.morale=clamp(v.morale-6,0,100); });
-      continue;
-    }
-    // spread to a nearby timber building when the blaze is strong
-    if(b._fire > 45){
-      for(const o of G.buildings){
-        if(o===b || o._fire || !FLAMMABLE.has(o.type)) continue;
-        const oc = buildingCenter(o);
-        if(dist2(c.gx,c.gy,oc.gx,oc.gy) < 5.8 && Math.random() < 0.13*dt){
-          igniteBuilding(o);
-          toast('🔥 The fire spreads to your '+(BUILD_DEFS[o.type]?BUILD_DEFS[o.type].name:o.type)+'!', true);
-        }
-      }
-    }
-  }
-}
 function drawBuildingFire(b){
   if(!b._fire) return;
   const c = buildingCenter(b);
@@ -2166,6 +2085,8 @@ initSkills({ toast, chron });
 initWork({ hasActiveBuilding, reassignRole });
 initBuildings({ onRemoved: (b)=>{ if(selection && selection.ref===b) deselectAll(); } });
 initProgress({ toast });
+initFire({ toast, chron, hazardsEnabled: ()=>gameMode.banditsEnabled!==false,
+  decayMul: ()=>(gameMode.decayMul||1) });
 initEconomy({ toast, decayMul: ()=>(gameMode && gameMode.decayMul!==undefined) ? gameMode.decayMul : 1 });
 initSteward({ toast, reassignRole, startResearch, demolishBuilding, spawnDust });
 initVillagers({ toast, spawnFly, decreeHungerMul, decreeWorkMul,
