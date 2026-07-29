@@ -158,3 +158,14 @@ export const LEGACY_TRAITS: Record<string, any> = {
   brave:     { id: 'brave',     label: 'Brave',     ic: '🦁', desc: 'Stood through a raid — loses only half morale to attacks.' },
   steadfast: { id: 'steadfast', label: 'Steadfast', ic: '🕯️', desc: "Carries a loved one's memory — steadier morale." },
 };
+
+/** Water sits this far below the land surface, and the map edge drops this far
+ *  into the sea. Anything drawn ON water — ducks, fish, bridges, reflections —
+ *  has to subtract WATER_DROP or it floats above the surface.
+ *
+ *  These live here rather than beside the terrain renderer because the wiring
+ *  block reads them at module load: a `const` declared further down main.ts is
+ *  in its temporal dead zone at that point, and the resulting throw lands in a
+ *  frame loop that swallows it. */
+export const WATER_DROP = 6;
+export const EDGE_DROP = 14;
