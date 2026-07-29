@@ -12,8 +12,12 @@ import { tileAt } from './mapgen';
 type Deps = {
   /** Called when a building is removed, so a sheet showing it can close. */
   onRemoved: (b: any) => void;
+  toast: (msg: string, urgent?: boolean) => void;
+  chron: (type: string, a?: any) => void;
+  /** Game-mode decay multiplier. Peaceful is 0 — nothing ever wears out. */
+  decayMul: () => number;
 };
-let dep: Deps = { onRemoved: () => {} };
+let dep: Deps = { onRemoved: () => {}, toast: () => {}, chron: () => {}, decayMul: () => 1 };
 export function initBuildings(deps: Deps): void { dep = deps; }
 
 /** The town hall: every hauler's fallback drop-off, and the anchor for the
@@ -148,3 +152,84 @@ export const BUILD_NEEDS_ADJ: Record<string, { test: (t: any) => boolean; need: 
   miningPost:   { test: (t) => t.type === 'stone',  need: 'by a stone outcrop' },
   huntingCabin: { test: (t) => !!t.wilds,           need: 'along the wilds' },
 };
+
+
+/* ═══ WHAT TIME DOES TO A HOLD ═══════════════════════════════════════════
+   Everything below is about buildings changing on their own: weathering,
+   clustering into named quarters, and — for a forester's grove — mending the
+   land around them. */
+
+/** Full decay over about ten day/night cycles at 1x. Slow enough that repair is
+ *  a rhythm rather than a chore, fast enough that neglect shows. */
+const DECAY_RATE = 100 / (10 * 245);
+
+export function decayTick(dt: number): void {
+  const mul = dep.decayMul();
+  for (const b of G.buildings) {
+    // Roads do not weather, and the town centre is the one thing that stands.
+    if (b.type === 'road' || b.type === 'townCenter') continue;
+    if (b.condition === undefined) b.condition = 100;
+    if (b.condition > 0) b.condition = Math.max(0, b.condition - DECAY_RATE * mul * dt);
+    // Warn once on the way down, and re-arm once mended, so a building on the
+    // threshold does not nag every frame.
+    if (b.condition < 35 && !b._wornWarned) {
+      b._wornWarned = true;
+      dep.toast('⚠️ Your ' + (BUILD_DEFS[b.type] ? BUILD_DEFS[b.type].name : b.type) +
+        ' is falling into disrepair! (Tap it to repair — or 🔧 Mend the Hold in the coin shop.)', true);
+    }
+    if (b.condition >= 35) b._wornWarned = false;
+  }
+}
+
+const DISTRICT_DESC = {
+  house:"Hearth", manor:"Hearth", farm:"Harvest", pasture:"Meadow", granary:"Harvest",
+  windmill:"Mill", bakery:"Mill", forestCamp:"Timber", sawmill:"Timber", miningPost:"Stone",
+  fishingHut:"Wharf", huntingCabin:"Hunters'", guardPost:"Warden", watchtower:"Warden",
+  palisade:"Warden", well:"Warden", tavern:"Market", tradingPost:"Market",
+};
+const DISTRICT_SUFFIX = ['Quarter','Row','End','Green','Rise','Reach','Cross','Gate','Hollow','Bank'];
+function _hashStr(s){ let h=2166136261; for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); } return h>>>0; }
+export function computeDistricts(announce){
+  const pts = G.buildings.filter(b=>b.type!=='road'&&b.type!=='townCenter'&&b.type!=='bridge');
+  const seen = new Set();
+  const next = [];
+  for(const b of pts){
+    if(seen.has(b)) continue;
+    const stack=[b], group=[]; seen.add(b);
+    while(stack.length){
+      const c=stack.pop(); group.push(c);
+      for(const o of pts){ if(!seen.has(o) && dist2(c.gx,c.gy,o.gx,o.gy) < 8){ seen.add(o); stack.push(o); } }
+    }
+    if(group.length < 3) continue;
+    const counts={}; group.forEach(g=>{ const d=DISTRICT_DESC[g.type]||'Old'; counts[d]=(counts[d]||0)+1; });
+    let dom='Old', best=0; for(const k in counts){ if(counts[k]>best){ best=counts[k]; dom=k; } }
+    const cx=group.reduce((s,g)=>s+g.gx,0)/group.length, cy=group.reduce((s,g)=>s+g.gy,0)/group.length;
+    const id = dom+':'+Math.round(cx/3)+','+Math.round(cy/3);
+    const prev = G.districts.find(d=>d.id===id);
+    const name = prev ? prev.name : (dom+' '+DISTRICT_SUFFIX[_hashStr(id)%DISTRICT_SUFFIX.length]);
+    next.push({id, name, gx:cx, gy:cy, size:group.length});
+    if(!prev && announce) dep.chron('district', name);
+  }
+  G.districts = next;
+}
+
+/* ── FORESTER'S GROVE ── replants tired and barren forest near each grove, so
+   timber stays sustainable if you invest in the land. */
+let _foresterTimer = 0;
+export function foresterTick(dt){
+  _foresterTimer -= dt;
+  if(_foresterTimer > 0) return;
+  _foresterTimer = 8;
+  const groves = G.buildings.filter(b=>b.type==='forester' && (b.condition===undefined||b.condition>=35));
+  if(!groves.length) return;
+  for(const g of groves){
+    for(const t of G.forestTiles){
+      if(dist2(t.gx,t.gy,g.gx,g.gy) > 20) continue; // within ~4.5 tiles
+      const base = t.baseMax || 6;
+      if(t.maxResource < base){
+        t.maxResource = Math.min(base, t.maxResource + 1); // replant / let the stand recover
+        if(t.maxResource>0 && t.resourceAmount<=0 && G.worldTime>=t.regrowAt) t.resourceAmount = Math.min(t.maxResource, 1);
+      }
+    }
+  }
+}
