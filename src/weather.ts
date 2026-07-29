@@ -52,8 +52,8 @@ type Deps = {
   /** Iron Winter runs its own weather and skips climate spells entirely. */
   forceWinter: () => boolean;
 };
-let d: Deps = { toast: () => {}, chron: () => {}, sfx: () => {}, forceWinter: () => false };
-export function initWeather(deps: Deps): void { d = deps; }
+let dep: Deps = { toast: () => {}, chron: () => {}, sfx: () => {}, forceWinter: () => false };
+export function initWeather(deps: Deps): void { dep = deps; }
 
 /** Rolled each dawn, weighted by the season. */
 export function rollWeather(): void {
@@ -69,19 +69,19 @@ export function rollWeather(): void {
       storm: '⛈️ A storm batters the hold — stay near shelter!',
       snow: '🌨️ Snow falls softly over Oakenfall.',
     };
-    d.toast(msgs[weather.type]);
+    dep.toast(msgs[weather.type]);
   }
 }
 
 export function rollClimate(): void {
   if (G.climate) {
     if (G.dayCount >= G.climate.endsDay) {
-      d.toast(G.climate.ic + ' The ' + CLIMATE_DEFS[G.climate.type].name.toLowerCase() + ' has broken.');
+      dep.toast(G.climate.ic + ' The ' + CLIMATE_DEFS[G.climate.type].name.toLowerCase() + ' has broken.');
       G.climate = null;
     }
     return;
   }
-  if (d.forceWinter()) return;                          // Iron Winter is its own climate
+  if (dep.forceWinter()) return;                          // Iron Winter is its own climate
   if (G.dayCount <= 3 || Math.random() > 0.16) return;  // uncommon
   const s = seasonIndex();
   const options = Object.keys(CLIMATE_DEFS).filter((k) => CLIMATE_DEFS[k].seasons.includes(s));
@@ -94,8 +94,8 @@ export function rollClimate(): void {
     coldsnap: '🥶 A cold snap grips the hold — folk burn through food and tire fast. Keep the stores full.',
     fair: '🌤️ A spell of fair weather blesses the valley — crops thrive and hearts lift.',
   };
-  d.toast(blurb[type], type !== 'fair');
-  d.chron('climate', def.name);
+  dep.toast(blurb[type], type !== 'fair');
+  dep.chron('climate', def.name);
 }
 
 /* ── BLIGHT ── several settlers fall ill at once, and it spreads between those
@@ -105,7 +105,7 @@ export function rollPlague(): void {
   if (G.plague) {
     if (G.dayCount >= G.plague.endsDay) {
       G.plague = null;
-      d.toast('🌿 The sickness has run its course — the hold breathes easier.');
+      dep.toast('🌿 The sickness has run its course — the hold breathes easier.');
     }
     return;
   }
@@ -122,10 +122,10 @@ export function rollPlague(): void {
     v.sickTimer = (25 + Math.random() * 20) * (G.researched.herbs ? 0.6 : 1);
     n++;
   }
-  d.toast('🤢 A blight sweeps the hold — ' + n + ' settler' + (n > 1 ? 's' : '') +
+  dep.toast('🤢 A blight sweeps the hold — ' + n + ' settler' + (n > 1 ? 's' : '') +
     ' have fallen ill! Seek a healer, and keep the sick from crowding.', true);
-  d.sfx('blight');
-  d.chron('plague');
+  dep.sfx('blight');
+  dep.chron('plague');
 }
 
 export function plagueTick(dt: number): void {

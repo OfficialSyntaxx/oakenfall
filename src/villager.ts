@@ -41,11 +41,11 @@ type Deps = {
   /** Is a feast day underway — settlers are cheerier while it lasts. */
   festivalOn: () => boolean;
 };
-let d: Deps = {
+let dep: Deps = {
   toast: () => {}, gainResource: () => {}, spawnFly: () => {},
   harvestBoonMul: () => 1, decreeHungerMul: () => 1, decreeWorkMul: () => 1, eventSpeedBonus: () => 1, festivalOn: () => false,
 };
-export function initVillagers(deps: Deps): void { d = deps; }
+export function initVillagers(deps: Deps): void { dep = deps; }
 
 export function moveToward(v, tgx, tgy, dt, speedMul){
   const gtx=Math.round(tgx), gty=Math.round(tgy);
@@ -84,8 +84,8 @@ export function effMultiplier(v){
   if(v.stage==='elder') m *= 0.6;   // elders slow, but still contribute
   if(G.festivalBoon==='craft') m += 0.15; // Craftsmen's Fair boon
   m *= skillMul(v);                 // proficiency from time spent in the role
-  m *= d.decreeWorkMul();             // Rationing slows work a touch
-  m *= d.eventSpeedBonus(); // festival boost
+  m *= dep.decreeWorkMul();             // Rationing slows work a touch
+  m *= dep.eventSpeedBonus(); // festival boost
   return Math.max(0.12, m);  // floor at 12% so villager never becomes truly catatonic
 }
 
@@ -117,7 +117,7 @@ export function resetFrozenFisherNotice(): void { _frozenFisherToldOnce = false;
 export function updateVillager(v, dt){
   if(SKILL_STATES.includes(v.state)) gainSkill(v, dt);
   // needs
-  const hungerMul = ((v.trait && v.trait.id==='glutton') ? 1.3 : 1) * climateHungerMul() * d.decreeHungerMul();
+  const hungerMul = ((v.trait && v.trait.id==='glutton') ? 1.3 : 1) * climateHungerMul() * dep.decreeHungerMul();
   if(!ADMIN.freezeNeeds) v.hunger = clamp(v.hunger + HUNGER_RATE*hungerMul*dt, 0, 100);
 
   let fr = isNight() ? FATIGUE_RATE*1.8 : FATIGUE_RATE;
@@ -142,7 +142,7 @@ export function updateVillager(v, dt){
   if(seasonIndex()===3) mTarget -= 8;                   // winter gloom
   if(getWeather().type==='storm') mTarget -= 10;
   if(G.researched.hearth) mTarget += 8;
-  if(d.festivalOn()) mTarget += 20;
+  if(dep.festivalOn()) mTarget += 20;
   if(G.festivalBoon==='courage') mTarget += 8;            // Rite of Courage boon
   if(G.climate) mTarget += CLIMATE_DEFS[G.climate.type].morale; // fair lifts, drought/snap weigh
   if(G.plague) mTarget -= 6;                               // a sickness in the hold weighs on all
@@ -157,11 +157,11 @@ export function updateVillager(v, dt){
     if(v.moraleLowT > 60){
       releaseClaims(v);
       G.villagers.splice(G.villagers.indexOf(v), 1);
-      d.toast('💔 '+v.name+' has lost heart and left the hold...', true);
+      dep.toast('💔 '+v.name+' has lost heart and left the hold...', true);
       // A left-behind partner carries their memory — and steadier resolve
       if(v.partner){
         const p = G.villagers.find(o=>o.name===v.partner);
-        if(p){ p.trait = LEGACY_TRAITS.steadfast; d.toast('🕯️ '+p.name+' keeps '+v.name+'\'s memory close — Steadfast.'); }
+        if(p){ p.trait = LEGACY_TRAITS.steadfast; dep.toast('🕯️ '+p.name+' keeps '+v.name+'\'s memory close — Steadfast.'); }
       }
       return;
     }
@@ -170,16 +170,16 @@ export function updateVillager(v, dt){
   // illness: triggered by prolonged hunger (>85) or winter + frail
   if(!v.sick){
     const illnessRisk = (v.hunger>85 ? 0.004 : 0) + ((seasonIndex()===3 && v.trait && v.trait.id==='frail') ? 0.003 : 0);
-    if(Math.random() < illnessRisk * (G.researched.herbs?0.6:1) * dt){ v.sick=true; v.sickTimer = (25+Math.random()*20)*(G.researched.herbs?0.6:1); d.toast(v.name+' has fallen ill!', true); }
+    if(Math.random() < illnessRisk * (G.researched.herbs?0.6:1) * dt){ v.sick=true; v.sickTimer = (25+Math.random()*20)*(G.researched.herbs?0.6:1); dep.toast(v.name+' has fallen ill!', true); }
   } else {
     v.sickTimer -= dt;
-    if(v.sickTimer<=0){ v.sick=false; d.toast(v.name+' has recovered.'); }
+    if(v.sickTimer<=0){ v.sick=false; dep.toast(v.name+' has recovered.'); }
   }
 
   // famine: if food is out AND hungry, villager's speed drops sharply (already via effMultiplier),
   // but if hunger hits 100 for >20s, trigger a critical crisis toast once
   if(v.hunger>=99.9){
-    if(!v._famineWarned){ v._famineWarned=true; d.toast(v.name+' is starving!', true); }
+    if(!v._famineWarned){ v._famineWarned=true; dep.toast(v.name+' is starving!', true); }
   } else { v._famineWarned=false; }
 
 
@@ -249,7 +249,7 @@ export function updateVillager(v, dt){
           if(t){ t.workers++; v.targetTile=t; v.state='walkingToResource'; v.resKind='stone'; }
         } else if(v.role==='fisher'){
           if(riverFrozen()){
-            if(!_frozenFisherToldOnce){ _frozenFisherToldOnce = true; d.toast('❄️ The river is frozen over — the fishers wait for thaw.', true); }
+            if(!_frozenFisherToldOnce){ _frozenFisherToldOnce = true; dep.toast('❄️ The river is frozen over — the fishers wait for thaw.', true); }
           } else {
             const t = findResourceTarget(v, G.waterTiles);
             if(t){ t.workers++; v.targetTile=t; v.state='walkingToResource'; v.resKind='fish'; }
@@ -293,7 +293,7 @@ export function updateVillager(v, dt){
         const WORKPLACE_FOR = { wood:'forestCamp', stone:'miningPost', fish:'fishingHut', meat:'huntingCabin' };
         const byHand = !hasActiveBuilding(WORKPLACE_FOR[v.resKind]) ? 0.5 : 1;
         const stockKey = (v.resKind==='fish' || v.resKind==='meat') ? 'food' : v.resKind;
-        const foodBoon = stockKey==='food' ? d.harvestBoonMul() : 1;
+        const foodBoon = stockKey==='food' ? dep.harvestBoonMul() : 1;
         const yieldAmt = Math.max(1, Math.round((yr[0] + Math.floor(Math.random()*(yr[1]-yr[0]+1))) * seasonYieldMul() * toolsMul * byHand * foodBoon * guildMulRes(v.resKind)));
         t.resourceAmount -= 1;
         v.carrying = { type:stockKey, amount:yieldAmt };
@@ -324,7 +324,7 @@ export function updateVillager(v, dt){
       const o = RING[hashStr(v.id) % RING.length];
       const arrived = moveToward(v, c.gx+o[0], c.gy+o[1], dt, 1);
       if(arrived){
-        if(v.carrying){ d.gainResource(v.carrying.type, v.carrying.amount); d.spawnFly(v.gx, v.gy, v.carrying.type); v.carrying=null; }
+        if(v.carrying){ dep.gainResource(v.carrying.type, v.carrying.amount); dep.spawnFly(v.gx, v.gy, v.carrying.type); v.carrying=null; }
         v.targetBuilding = null;
         v.state='idle';
       }
@@ -350,7 +350,7 @@ export function updateVillager(v, dt){
           if(nt && nt.type==='water'){ irr = 1.15; break; }
         }
         const terrace = G.researched.terracing ? 1.15 : 1;
-        d.gainResource('food', Math.max(1, Math.round((6+Math.floor(Math.random()*4)) * seasonYieldMul() * weatherFarmMul() * (G.researched.crops?1.2:1) * irr * terrace * d.harvestBoonMul() * guildFarmMul())));
+        dep.gainResource('food', Math.max(1, Math.round((6+Math.floor(Math.random()*4)) * seasonYieldMul() * weatherFarmMul() * (G.researched.crops?1.2:1) * irr * terrace * dep.harvestBoonMul() * guildFarmMul())));
         v.workTimer = 5.5/effMultiplier(v);
       }
       break;

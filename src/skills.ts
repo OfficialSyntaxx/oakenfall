@@ -16,8 +16,8 @@ type Deps = {
   toast: (msg: string, urgent?: boolean) => void;
   chron: (type: string, a?: any) => void;
 };
-let d: Deps = { toast: () => {}, chron: () => {} };
-export function initSkills(deps: Deps): void { d = deps; }
+let dep: Deps = { toast: () => {}, chron: () => {} };
+export function initSkills(deps: Deps): void { dep = deps; }
 
 /** Experience is measured in seconds worked, so the thresholds are roughly
  *  "half a day" and "a day and a half" of steady work in one trade. */
@@ -59,7 +59,7 @@ export function gainSkill(v: any, dt: number): void {
   v.skills[v.role] = (v.skills[v.role] || 0) + dt * (mentored ? 2 : 1);
   const after = skillTier(v, v.role);
   if (after.label && after.label !== before.label) {
-    d.toast(after.ic + ' ' + v.name + ' is now a ' + after.label + ' ' + roleLabel(v.role) +
+    dep.toast(after.ic + ' ' + v.name + ' is now a ' + after.label + ' ' + roleLabel(v.role) +
       (mentored ? ' (well taught)' : '') + '.');
   }
 }
@@ -89,8 +89,8 @@ export function recomputeGuilds(announce?: boolean): void {
     const active = (count[role] || 0) >= 2;
     if (active && !G.guilds[role] && announce) {
       const g = GUILD_DEFS[role];
-      d.toast(g.ic + ' The ' + g.name + ' has formed — ' + g.blurb + ' (+' + Math.round(guildBonusVal() * 100) + '%).');
-      d.chron('guild', g.name);
+      dep.toast(g.ic + ' The ' + g.name + ' has formed — ' + g.blurb + ' (+' + Math.round(guildBonusVal() * 100) + '%).');
+      dep.chron('guild', g.name);
     }
     G.guilds[role] = active;
   }

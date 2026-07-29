@@ -13,8 +13,8 @@ type Deps = {
   /** Called when a building is removed, so a sheet showing it can close. */
   onRemoved: (b: any) => void;
 };
-let d: Deps = { onRemoved: () => {} };
-export function initBuildings(deps: Deps): void { d = deps; }
+let dep: Deps = { onRemoved: () => {} };
+export function initBuildings(deps: Deps): void { dep = deps; }
 
 /** The town hall: every hauler's fallback drop-off, and the anchor for the
  *  camera, the road network and half the distance checks in the game.
@@ -61,7 +61,7 @@ export function removeBuilding(b: any): void {
   });
   const i = G.buildings.indexOf(b);
   if (i >= 0) G.buildings.splice(i, 1);
-  d.onRemoved(b);
+  dep.onRemoved(b);
 }
 
 export function buildingCenter(b: any): { gx: number; gy: number } {
@@ -138,3 +138,13 @@ export function recomputeLogistics(): void {
     b._roadLinked = linked;
   }
 }
+
+/** Some trades must be sited at their work: a fishing hut on the bank, a
+ *  forestry camp at the treeline. `test` runs against each neighbouring tile;
+ *  `need` is the phrase shown when a player picks somewhere unsuitable. */
+export const BUILD_NEEDS_ADJ: Record<string, { test: (t: any) => boolean; need: string }> = {
+  fishingHut:   { test: (t) => t.type === 'water',  need: 'beside water' },
+  forestCamp:   { test: (t) => t.type === 'forest', need: 'at the treeline' },
+  miningPost:   { test: (t) => t.type === 'stone',  need: 'by a stone outcrop' },
+  huntingCabin: { test: (t) => !!t.wilds,           need: 'along the wilds' },
+};

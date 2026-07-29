@@ -30,9 +30,9 @@ type Deps = {
   /** Middle of a building's footprint — where a bucket brigade runs to. */
   buildingCenter: (b: any) => { gx: number; gy: number };
 };
-let d: Deps = { toast: () => {}, chron: () => {}, onPassed: () => {}, popCapacity: () => 0, spawnVillager: () => null,
+let dep: Deps = { toast: () => {}, chron: () => {}, onPassed: () => {}, popCapacity: () => 0, spawnVillager: () => null,
   buildingCenter: (b: any) => ({ gx: b.gx, gy: b.gy }) };
-export function initLives(deps: Deps): void { d = deps; }
+export function initLives(deps: Deps): void { dep = deps; }
 
 export function hasTrait(v: any, id: string): boolean { return v.trait && v.trait.id === id; }
 export function relTo(v: any, o: any): any {
@@ -76,14 +76,14 @@ export function bumpRel(v: any, o: any, amount: number): void {
   const key = [v.name, o.name].sort().join('|');
   if (r.type === 'friend' && r.s > 40 && !_relMoments.has('fr' + key)) {
     _relMoments.add('fr' + key);
-    d.toast('🤝 ' + v.name + ' and ' + o.name + ' became fast friends.');
-    d.chron('friends', v.name, o.name);
+    dep.toast('🤝 ' + v.name + ' and ' + o.name + ' became fast friends.');
+    dep.chron('friends', v.name, o.name);
     remember(v, 'became friends with ' + o.name);
     remember(o, 'became friends with ' + v.name);
   } else if (r.type === 'rival' && r.s < -25 && !_relMoments.has('rv' + key)) {
     _relMoments.add('rv' + key);
-    d.toast('😤 ' + v.name + ' and ' + o.name + " can't abide each other's pace of work.", true);
-    d.chron('rivals', v.name, o.name);
+    dep.toast('😤 ' + v.name + ' and ' + o.name + " can't abide each other's pace of work.", true);
+    dep.chron('rivals', v.name, o.name);
   }
 }
 
@@ -134,8 +134,8 @@ export function agingTick(dt: number): void {
     v.age += dy;
     if (v.stage === 'child' && v.age >= ADULT_AGE) {
       v.stage = 'adult';
-      d.toast('🌿 ' + v.name + ' has come of age and joins the work.');
-      d.chron('ofage', v.name);
+      dep.toast('🌿 ' + v.name + ' has come of age and joins the work.');
+      dep.chron('ofage', v.name);
       remember(v, 'came of age');
     } else if (v.stage === 'adult' && v.age >= v.lifespan - ELDER_BEFORE) {
       v.stage = 'elder';
@@ -157,7 +157,7 @@ export function passVillager(v: any): void {
     }
     if (o.parents && o.parents.includes(v.name)) o.morale = clamp((o.morale || 65) - 6, 0, 100);
   });
-  d.onPassed(v);
+  dep.onPassed(v);
 
   const spot = memorialSpot();
   G.memorials.push({ name: v.name, gx: spot.gx, gy: spot.gy });
@@ -168,14 +168,14 @@ export function passVillager(v: any): void {
 
   const seasons = Math.floor((v.age || 2) * 4);
   if (skillTier(v, v.role).label === 'Master') {
-    d.toast('🕊️ ' + v.name + ', a Master ' + roleLabel(v.role) + ', has passed at ' + seasons +
+    dep.toast('🕊️ ' + v.name + ', a Master ' + roleLabel(v.role) + ', has passed at ' + seasons +
       ' seasons — a grievous loss to the hold.');
     // The whole hold mourns a master.
     G.villagers.forEach((o: any) => { if (o.morale !== undefined) o.morale = clamp(o.morale - 3, 0, 100); });
   } else {
-    d.toast('🕊️ ' + v.name + ' passed peacefully at ' + seasons + ' seasons — laid to rest in the grove.');
+    dep.toast('🕊️ ' + v.name + ' passed peacefully at ' + seasons + ' seasons — laid to rest in the grove.');
   }
-  d.chron('passed', v.name, null, seasons);
+  dep.chron('passed', v.name, null, seasons);
 }
 
 /* ── FAMILIES ── settlers pair off and raise children. Both are on their own
@@ -200,8 +200,8 @@ export function familyTick(dt: number): void {
         remember(a, 'wed ' + b.name); remember(b, 'wed ' + a.name);
         a.morale = clamp(a.morale + 15, 0, 100);
         b.morale = clamp(b.morale + 15, 0, 100);
-        d.toast('💞 ' + a.name + ' and ' + b.name + ' have wed beneath the pines!');
-        d.chron('wed', a.name, b.name);
+        dep.toast('💞 ' + a.name + ' and ' + b.name + ' have wed beneath the pines!');
+        dep.chron('wed', a.name, b.name);
         G.journal.weddings++;
       }
     }
@@ -211,20 +211,20 @@ export function familyTick(dt: number): void {
   if (G.birthTimer <= 0) {
     G.birthTimer = 120 + Math.random() * 80;
     // No room and no food is no time to have a child.
-    if (G.villagers.length >= d.popCapacity() || G.stockpile.food <= 30) return;
+    if (G.villagers.length >= dep.popCapacity() || G.stockpile.food <= 30) return;
     const couples = G.villagers.filter((v: any) =>
       v.partner && v.morale > 55 && G.villagers.some((o: any) => o.name === v.partner));
     if (!couples.length) return;
     const parent = couples[Math.floor(Math.random() * couples.length)];
     const other = G.villagers.find((o: any) => o.name === parent.partner);
     const inherited = Math.random() < 0.5 ? parent.trait : (other ? other.trait : parent.trait);
-    const child = d.spawnVillager(null, inherited);
+    const child = dep.spawnVillager(null, inherited);
     child.gx = parent.gx; child.gy = parent.gy;
     child.parents = [parent.name, parent.partner];
     child.age = 0;
     child.stage = 'child';
-    d.toast('👶 A child is born to ' + parent.name + ' and ' + parent.partner + ' — welcome, ' + child.name + '!');
-    d.chron('born', child.name, parent.name + ' and ' + parent.partner);
+    dep.toast('👶 A child is born to ' + parent.name + ' and ' + parent.partner + ' — welcome, ' + child.name + '!');
+    dep.chron('born', child.name, parent.name + ' and ' + parent.partner);
     G.journal.childrenBorn++;
   }
 }
@@ -245,7 +245,7 @@ export function ambientIdle(v: any): void {
     let nearest = null, nearestD = Infinity;
     for (const b of G.buildings) {
       if (!b._fire) continue;
-      const c = d.buildingCenter(b);
+      const c = dep.buildingCenter(b);
       const dd = dist2(v.gx, v.gy, c.gx, c.gy);
       if (dd < nearestD) { nearestD = dd; nearest = c; }
     }

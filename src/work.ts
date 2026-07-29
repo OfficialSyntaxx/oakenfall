@@ -31,10 +31,10 @@ type Deps = {
   /** Put a settler into a trade. Handles the walk and the claim release. */
   reassignRole: (v: any, role: string) => void;
 };
-let d: Deps = {
+let dep: Deps = {
   capFor: () => 1, hasActiveBuilding: () => false, currentTier: () => 0, reassignRole: () => {},
 };
-export function initWork(deps: Deps): void { d = deps; }
+export function initWork(deps: Deps): void { dep = deps; }
 
 /* Recomputed at most once a second: every idle settler asks the same question
    in the same frame, and the answer cannot have changed between them. */
@@ -47,11 +47,11 @@ export function roleNeedScores(): RoleNeed[] {
   const pop = Math.max(1, G.villagers.length);
   const count: Record<string, number> = {};
   for (const v of G.villagers) count[v.role] = (count[v.role] || 0) + 1;
-  const frac = (k: string) => (G.stockpile[k] || 0) / Math.max(1, d.capFor(k));
+  const frac = (k: string) => (G.stockpile[k] || 0) / Math.max(1, dep.capFor(k));
 
   const out: RoleNeed[] = [];
   const add = (role: string, workplace: string, score: number) => {
-    if (!d.hasActiveBuilding(workplace)) return;        // nowhere to do the work
+    if (!dep.hasActiveBuilding(workplace)) return;        // nowhere to do the work
     out.push({ role, score: score / (1 + (count[role] || 0)), raw: score, workers: count[role] || 0 });
   };
 
@@ -63,7 +63,7 @@ export function roleNeedScores(): RoleNeed[] {
   add('hunter', 'huntingCabin', hungry * 0.9);
   add('lumberjack', 'forestCamp', (1 - frac('wood')) * 1.25);
   add('miner', 'miningPost', (1 - frac('stone')) * 1.05);
-  if (d.currentTier() >= 2) add('guard', 'guardPost', 0.85);   // worth raiding now
+  if (dep.currentTier() >= 2) add('guard', 'guardPost', 0.85);   // worth raiding now
 
   /* Last resort only. With NO workplace standing at all, folk gather deadfall
      and forage by hand — badly, but enough to climb back. Without this, a hold
@@ -96,7 +96,7 @@ export function seekWork(v: any): boolean {
   if (G.buildings.some((b: any) => b._fire > 0)) return false;
   const best = roleNeedScores()[0];
   if (!best || best.score < 0.35) return false;
-  d.reassignRole(v, best.role);
+  dep.reassignRole(v, best.role);
   v.ambientEmote = '💡';
   return true;
 }
@@ -139,7 +139,7 @@ export function maybeSwitchTrade(v: any): boolean {
   const worthIt = minePressure <= 0.05 ? true : pickPressure > minePressure * 1.8;
   if (!worthIt) return false;
 
-  d.reassignRole(v, pick.role);
+  dep.reassignRole(v, pick.role);
   v.ambientEmote = '🔁';
   remember(v, 'took up ' + (ROLE_DEFS[pick.role] ? ROLE_DEFS[pick.role].label : pick.role));
   return true;
