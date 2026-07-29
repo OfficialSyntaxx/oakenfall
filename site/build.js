@@ -139,8 +139,8 @@ const credits = md(fs.readFileSync(path.join(ROOT, 'CREDITS.md'), 'utf8'));
 
 // Version guard: the game's GAME_VERSION and CHANGELOG.md's top entry must
 // agree, or the chronicle silently drifts from the game. Fail the build.
-const gameSrc = fs.readFileSync(path.join(ROOT, 'src', 'main.ts'), 'utf8');
-const gameVer = (gameSrc.match(/const GAME_VERSION = '([^']+)'/) || [])[1];
+const gameSrc = fs.readFileSync(path.join(ROOT, 'src', 'version.ts'), 'utf8');
+const gameVer = (gameSrc.match(/GAME_VERSION = '([^']+)'/) || [])[1];
 const logVer = (changelogSrc.match(/^## (\S+)/m) || [])[1];
 if (!gameVer || gameVer !== logVer) {
   throw new Error(`version drift: GAME_VERSION=${gameVer} but CHANGELOG.md top entry=${logVer}`);

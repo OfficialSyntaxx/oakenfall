@@ -3,7 +3,7 @@
  *
  * A store build carries its own version numbers, and hand-maintained copies of
  * a number drift — the same failure the CHANGELOG guard exists to stop. This
- * derives both platforms' versions from the one in src/main.ts, so bumping the
+ * derives both platforms' versions from the one in src/version.ts, so bumping the
  * game bumps the app.
  *
  * versionCode / CURRENT_PROJECT_VERSION must increase monotonically for every
@@ -16,9 +16,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
-const main = fs.readFileSync(path.join(ROOT, 'src/main.ts'), 'utf8');
-const m = main.match(/const GAME_VERSION = '([\d.]+)'/);
-if (!m) { console.error('GAME_VERSION not found in src/main.ts'); process.exit(1); }
+const main = fs.readFileSync(path.join(ROOT, 'src/version.ts'), 'utf8');
+const m = main.match(/GAME_VERSION = '([\d.]+)'/);
+if (!m) { console.error('GAME_VERSION not found in src/version.ts'); process.exit(1); }
 
 const version = m[1];
 const [maj, min, pat] = version.split('.').map(Number);

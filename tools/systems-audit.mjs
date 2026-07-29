@@ -164,6 +164,17 @@ await page.waitForTimeout(12000);
 const mended = (await snap()).worn;
 check('buildings wear down and can be mended', worn > 0 && mended < worn, `${worn} worn → ${mended}`);
 
+/* ---- bug reporting ----
+ * A player should never need a GitHub account to tell us something broke, and
+ * the diagnostics block is the half that makes a report useful. Nothing else
+ * touches it, and it reads a dozen systems — so it is exactly the sort of thing
+ * that quietly starts throwing after a refactor. */
+const diag = await page.evaluate(() => {
+  try { return window.__oakDiagnostics(); } catch (e) { return 'THREW: ' + e.message; }
+});
+const diagOK = diag.includes('Oakenfall Report') && /Version: \d/.test(diag) && /Pop: \d/.test(diag);
+check('a bug report assembles its diagnostics', diagOK, diag.split('\n')[1] || diag.slice(0, 80));
+
 /* ---- the minimap ----
  * A whole module nothing else touches. It is drawn on its own canvas, so the
  * world render passing says nothing about it — a minimap that stopped painting

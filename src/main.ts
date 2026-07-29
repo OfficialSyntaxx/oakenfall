@@ -20,6 +20,9 @@ import {
 } from './isokit';
 import { installStorage, isNative } from './storage';
 import { ADMIN } from './admin';
+import { GAME_VERSION, CHANGELOG } from './version';
+import { initFeedback, logError, recentErrors, buildDiagnostics, copyFeedback,
+  renderFeedbackSheet } from './feedback';
 import { G, saveFields, loadSavedFields, assertSaveCoverage } from './state';
 import { DAY_LEN, NIGHT_LEN, CYCLE_LEN, SEASON_LEN, setForceWinter, seasonIndex, seasonName,
   seasonYieldMul, seasonFatigueMul, riverFrozen, dayPhaseFrac, isNight, darknessFactor, sunShadow } from './time';
@@ -319,7 +322,7 @@ window.__oakDebug = function(){
     /* The frame loop catches exceptions so one bad frame can't kill the game.
        That is right, but it means a fault can run for months in silence — see
        findTC. Anything in here is a real error the game swallowed. */
-    errors: errorLog.map(e=>e.kind+': '+e.msg.slice(0,90)),
+    errors: recentErrors().map(e=>e.kind+': '+e.msg.slice(0,90)),
     claimants: G.villagers.filter(v=>v.targetTile).length,
     buildings: G.buildings.filter(b=>b.type!=='road').map(b=>b.type),
     placements: G.buildings.filter(b=>b.type!=='road').map(b=>({t:b.type, gx:b.gx, gy:b.gy})),
@@ -362,6 +365,9 @@ window.__oakProbe = function(){
    wilds. It used to return 'w' for wilds AND for water, which made the two
    indistinguishable — a wilds forest read as 'w' rather than forest, and a
    test looking for open water found meadow. */
+/** The diagnostics block a bug report attaches. Exposed so a test can check it
+ *  is actually assembled — a report that arrives empty is worse than none. */
+window.__oakDiagnostics = function(){ return buildDiagnostics(); };
 window.__oakGrid = function(){
   return G.grid.map(row=>row.map(t=> t.wilds ? t.type.charAt(0).toUpperCase() : t.type.charAt(0)));
 };
@@ -668,168 +674,7 @@ function checkDeeds(){
 
 let eventTimer = 140; // world-seconds until the next random event roll
 
-/* ── VERSION & FEEDBACK SYSTEM ── */
-const GAME_VERSION = '1.82.0';
-// Set to your GitHub repo URL (e.g. 'https://github.com/you/oakenfall') — used
-// only as a fallback link if the auto-file backend is unreachable. Reports now
-// POST to FEEDBACK_ENDPOINT, a Netlify function that files the GitHub issue
-// server-side so players never need a GitHub account. Empty REPO_URL = plain
-// copy-to-clipboard fallback.
-const REPO_URL = 'https://github.com/OfficialSyntaxx/oakenfall';
-const FEEDBACK_ENDPOINT = '/.netlify/functions/submit-feedback';
-const CHANGELOG = [
-  ['1.45.0', 'Show off your hold. A new “Share Card” button in the Journal tab makes a handsome chronicle card — your hold\'s name and crest, its tier, days survived, winters endured, settlers, and deeds — as an image you can save or share with a tap.'],
-  ['1.44.0', 'You can see the raids now. When bandits come, hooded raiders march in from the treeline (or pour across an unwatched bridge) with torches held high, making for the Town Center — and your Guards ride out to meet them and turn them back. A raid is no longer a line of text; it\'s a thing you watch your walls and warriors answer.'],
-  ['1.43.0', 'The woods are no longer bottomless. Forest stands slowly tire as they\'re felled, yielding a little less each time, and a fully-worked stand goes barren. The new Forester\'s Grove (🌲) replants nearby forest — reviving barren ground and keeping your timber sustainable. Tend the land, or spread your camps, so you don\'t clear-cut your own valley.'],
-  ['1.42.0', 'Your word matters now. Every few days the hold brings you a decision — strangers at the gate asking to join, a bandit demanding tribute, tumbled ruins worth digging, a peddler\'s mystery crate — each with real choices and consequences for your food, coins, morale, or people. They wait politely until no other panel is open, and every ruling is set down in the Chronicle.'],
-  ['1.41.0', 'Rule your hold with Decrees (⚖️ in the Goals tab). Enact lasting laws, each a real trade-off: a Curfew that quiets the nights but wears on spirits, a Tithe that fills the coffers at the cost of goodwill, Open Gates that draw newcomers but lower your guard, or Rationing that stretches the stores at the price of slower work. Change your reign whenever you like.'],
-  ['1.40.0', 'The research oak grows a second tier. Four advanced techs now sit behind the ones you know — Hill Terracing (more farm yield), Aqueducts (every farm irrigated), Cold Storage (food spoils half as slow), and the Guild Charter (guild bonuses to +15%). Late-game research is no longer finished by midwinter.'],
-  ['1.39.0', 'Granaries matter now. Raw food kept beyond what your stores can safely hold slowly spoils — a small pantry keeps a little, each Granary keeps a lot more, and Deep Cellars more still. Stockpiling for a hard winter finally depends on building the storage to hold it. (Bread and flour keep fine; no spoilage in Peaceful, worse in Iron Winter.)'],
-  ['1.38.0', 'Make it yours. When you found a hold you can now give it a name and choose its crest colour — the name flies in the HUD, heads your Chronicle, and shows on the website deeds page. A small thing that turns any hold into your hold.'],
-  ['1.37.1', 'Tidying: the Trader\'s Ledger no longer shows an always-empty “route penalties” line (missed routes cost morale, not coins). Website almanac and homepage refreshed to cover the newer systems.'],
-  ['1.37.0', 'The hold speaks up. Big moments now have their own sound — a bright fanfare when you earn a deed or hold a festival, an uneasy tone when a blight or raid strikes, and a low crackle when fire breaks out — all from the built-in synth, layered over the existing effects (toggle sound with 🔊 as always).'],
-  ['1.36.0', 'The Trader\'s Ledger (📒 in the Shop tab) lays your coin economy bare — a breakdown of where every coin came from (bounties, goals, deeds, trade routes) and where it went (the shop, missed-route penalties), all-time, with a running net. No more guessing whether your caravans actually pay.'],
-  ['1.35.0', 'Guilds. When two or more of your settlers master the same trade, they band together into a guild — the Woodwrights, Stonecutters, Ploughmen, Fishers, or Hunters — and that craft yields +10% for the whole hold. Growing and keeping veterans, and pairing them to train the young, now pays off across your whole settlement. Active guilds are listed in the Journal.'],
-  ['1.34.0', 'A new hardship: the Blight. Every so often a sickness sweeps the hold — several settlers fall ill at once, and it spreads between those standing close until it runs its course. Herbal Lore research softens the outbreak and slows its spread, and a Healer clears the currently sick. Keep your people from crowding when the fever comes.'],
-  ['1.33.0', 'Your hold names itself. When buildings cluster together, the folk christen that corner — the Timber Row, the Hearth Quarter, the Mill End — with the name shown right on the map and set down in the Chronicle. The name follows whatever trade dominates the cluster, so your settlement reads like a real town taking shape.'],
-  ['1.32.0', 'Livestock! The new Pasture (🐑) grazes a herd that grows on its own and gives a steady trickle of food through the green seasons — a hands-off alternative to farming. But come winter the animals need fodder from your food stores, or the herd dwindles in the cold. A food source that also has an appetite.'],
-  ['1.31.0', 'Easier to pick up, easier to read. New holds get a gentle step-by-step guide (build a house, set a woodcutter, raise a farm, survive winter) that bows out once you\'re on your feet. A small status strip now shows active climate, festival blessings, trade routes, and fires at a glance. And your redeemed cosmetic unlocks now live in their own store, so they survive even if you start a fresh hold.'],
-  ['1.30.1', 'Housekeeping: the memorial grove is now finite — the oldest graves are quietly reclaimed over very long games, keeping things tidy and saves small — and the website\'s building count was corrected.'],
-  ['1.30.0', 'Redeem codes (⚙ → 🎁). Cosmetic packs bought on the Oakenfall website can now be unlocked in-game with a code — verified right on your device, so the game still never touches the network. The first packs are cosmetic-only (a Patron plaque and premium banner dyes); nothing that affects the balance of play. Foundation for supporting the hold.'],
-  ['1.29.0', 'Three new systems. The Well (⛲, Defense) is a firebreak — timber near it rarely catches and douses fast, so you can plan against fire instead of just praying. Apprenticeship: a Master working near a novice of the same trade teaches them twice as fast (📖). And climate spells — droughts (fire risk up, crops wither), cold snaps (food & stamina drain), and fair spells (crops and spirits thrive) — sweep in for a few days at a time, shown beside the season in the clock.'],
-  ['1.28.1', 'Refinements to the new systems: idle settlers now rush to a fire with buckets (and help put it out), fires start less often and only once your hold is established, and losing a Master to old age is now felt across the whole hold. Small polish to how flames read on the map.'],
-  ['1.28.0', 'Fire! Timber buildings can now catch — more likely in dry summer, rare in winter or rain. A blaze damages the building and spreads to neighbours if left alone. Tap it and fling water to rally a bucket brigade; nearby settlers, rain, and winter help douse it. Let it burn and the building is lost. A new hazard that rewards spacing your timber and keeping folk close. (Disabled in Peaceful mode.)'],
-  ['1.27.0', 'Settlers now grow into their trade — the longer one works a role, the better they get, rising from Skilled (+8%) to Master (+18%) at their craft. Their proficiency shows in the settler sheet and the Folk roster, a promotion is announced, and it persists across the years — so a veteran\'s passing truly costs the hold. A new “Master of the Craft” deed marks your first.'],
-  ['1.26.0', 'Deeds now pay out — earning one grants a one-time reward of coins (and sometimes resources), shown on the badge and announced when earned. The badge wall in the Journal now doubles as a set of goals worth chasing.'],
-  ['1.25.0', 'Trade routes — recurring caravan contracts brokered at the Trading Post (🐫 in the Shop tab). Agree to deliver a set amount of a good (planks, bread, timber, stone, or provisions) every few days, and each fulfilled run pays coins automatically. Miss a delivery twice and the route breaks, with a morale knock. Hold up to three at once — a steady coin income that rewards a well-supplied, road-linked hold.'],
-  ['1.24.0', 'Events inbox (📨 in the Journal tab): the hold\'s recent tidings are now kept in a filterable list — All, ⚔ Raids, 👥 Folk, 🏗 Building, or ✦ Other — so a notice you missed while looking away is no longer lost. Holds the last 40 events, newest first.'],
-  ['1.23.0', 'Seasonal festivals — once a year, as spring returns, the hold gathers and you choose one of three lasting blessings: Harvest Feast (+20% food yield), Rite of Courage (higher morale, raids sting less), or Craftsmen\'s Fair (+15% work speed). The blessing holds until the next year\'s festival and shows in the Journal. A real yearly decision point.'],
-  ['1.22.0', 'Statistics view (📊 in the Journal tab): a line graph of your settlers, provisions, and timber over the last 60 days, plus lifetime tallies — peak population, winters endured, buildings raised, raids survived, weddings, births, and more. Day-by-day history is recorded in saves.'],
-  ['1.21.0', 'Deeds — 14 achievements your hold can earn (First Winter, Bridge Builder, Full Granary, Grey Hairs, Held the Gate and more), shown as parchment badges in the Journal tab. Each is announced when earned and recorded in the Chronicle. Persists in saves.'],
-  ['1.20.0', 'New “Folk” tab in the Hold Menu: a sortable roster of every settler — by role, morale, or name — showing their stage, trait, and mood at a glance. Tap any name to open their sheet and glide the camera to them. No more hunting the map for that one idle worker.'],
-  ['1.19.5', 'Polish: focusing a settler or tapping the minimap now glides the camera smoothly instead of snapping, and villager/building gauges share one consistent bar style. The website Almanac gains a “River & Roads” chapter covering bridges, fords, the winter freeze, and road logistics.'],
-  ['1.19.4', 'A settler\'s sheet now has a “Find on map” button that pans the camera straight to them — handy for tracking down that last idle worker.'],
-  ['1.19.3', 'The build menu is now sorted into sections — Homes, Food & Provisions, Industry, Trade & Hall, Defense, and Roadworks — so raising a structure is quicker to scan.'],
-  ['1.19.2', 'Children now look like children — settlers under the age of coming render noticeably smaller until they grow up.'],
-  ['1.19.1', 'Chronicle polish: the hold\'s story now reads written, not logged — each moment has several varied phrasings — and a new “Read the full Chronicle” view presents it on an illuminated parchment, grouped by day and season, worth a screenshot.'],
-  ['1.19.0', 'The Chronicle: your hold now keeps a dated story of its life — foundings, friendships, weddings, births, comings-of-age, passings, and the turning seasons — readable in the Journal tab and worth screenshotting. Completes the living-citizen update: settlers befriend, wed, raise children, grow old, and are remembered.'],
-  ['1.18.0', 'Living citizens, step three: idle settlers and children no longer stand about — they gather at the hearth (or tavern) after dark, huddle for warmth in winter, drift over to close friends for a chat, and the little ones play near home. A mood bubble shows what they\'re up to. Purely ambient — it never interrupts assigned work.'],
-  ['1.17.0', 'Living citizens, step two: settlers now grow up, grow old, and pass on. Children are born, come of age and join the work; elders slow but keep contributing; the aged pass peacefully and are laid to rest in a memorial grove west of the Town Center, with partners and children who mourn them. Each settler\'s sheet shows their stage and age.'],
-  ['1.16.0', 'Living citizens, step one: settlers now form friendships (and the odd rivalry) as they live and work near one another — see each settler\'s bonds and memories in their sheet, and couples now tend to wed a close friend. First piece of the AI-driven citizen merge.'],
-  ['1.15.0', 'Menus, reorganised: the 📜 button and 💰 coins now open one Hold Menu with tabs — Goals, Research, Shop, and Journal — so research is finally reachable without hunting for the Town Center. Menus remember where you came from with a back arrow, and you can drag the sheet taller. Mobile HUD fixes: the day/season line no longer hides under the minimap in landscape, and the Play page now runs the game truly full-screen.'],
-  ['1.14.0', 'The river lives: fords (shallow crossings you can wade, slowly), winter freezes the river solid — crossable ice but no fishing and no moat. Guard posts near bridges keep crossings watched. Roads linked to the Town Center speed nearby workshops 12%. Settlers earn Brave and Steadfast traits from raids and heartbreak. The merchant now parks a cart by your Town Center. New 📷 photo mode. Saves now work on the website version (they were silently failing).'],
-  ['1.13.0', 'Bridges! Build plank spans over the river (20 wood, 6 planks) to open the far bank to your settlers. The river now acts as a natural moat against bandit raids — but every bridge you build is a door raiders can use. Riverside farms yield +15%.'],
-  ['1.12.1', 'iPhone polish: works fully offline (no more web-font fetch), can be saved to the home screen as a real app with its own oak icon, the screen stays awake while you play, and every top-bar button is now a full 44px touch target.'],
-  ['1.12.0', 'Cleaner HUD: save/sound/fullscreen folded into a ⚙ menu, resource row fades at its edge to hint it scrolls, the camera pans so your selection is never hidden behind the sheet, and the minimap can be enlarged with its ⤢ button.'],
-  ['1.11.1', 'HUD no longer overlaps: portrait gets a two-row top bar (buttons above, resources below), landscape reserves space for the buttons, and the day/season line moved clear of the minimap.'],
-  ['1.11.0', 'Real audio samples for chopping, mining, tap, warning, and sheet open/close (Kenney RPG Audio / Interface / Impact packs), layered over the existing procedural sound as an upgrade, not a dependency. Added an optional ambient music toggle.'],
-  ['1.10.1', 'Fixed cramped/overlapping Game Mode description on the start screen; richer, less flat start-screen background.'],
-  ['1.10.0', 'Bug reports & suggestions now file to GitHub automatically — no GitHub account or manual submit needed.'],
-  ['1.9.0', 'GitHub pipeline live: bug reports and suggestions file directly to the project repo as issues.'],
-  ['1.8.0', 'Feedback system: report bugs & suggest features from the Goals sheet. Knight guards, meat-hauling hunters, raid explosions, fisher splashes, resource-fly effects.'],
-  ['1.7.0', 'Kenney terrain & stone roads, Tiny Swords buildings & animated villagers, swaying ancient oaks, drifting clouds, farm crops & fences.'],
-  ['1.6.0', 'Research tree, Manor, game modes, Hold Shop & coins, daily bounties, families, decay & repair, weather, morale, bandits & defense.'],
-];
 // Ring buffer of recent errors — auto-attached to bug reports
-const errorLog = [];
-function logError(kind, msg){
-  errorLog.push({ t: Date.now(), kind, msg: String(msg).slice(0, 300) });
-  if(errorLog.length > 10) errorLog.shift();
-}
-/* A field added to G without deciding what the save does with it goes here, not
-   to a player's ruined hold. Logged rather than thrown: the suites assert this
-   log is empty, so it fails the build loudly while never bricking a live game
-   over a bookkeeping mistake. */
-try{ assertSaveCoverage(); }catch(e){ logError('save-format', e.message); console.error(e.message); }
-window.addEventListener('error', (e)=>{ logError('window', (e.message||'') + ' @' + (e.filename||'').split('/').pop() + ':' + e.lineno); });
-window.addEventListener('unhandledrejection', (e)=>{ logError('promise', e.reason); });
-
-function buildDiagnostics(){
-  const lines = [];
-  lines.push('## Oakenfall Report');
-  lines.push('- Version: ' + GAME_VERSION + ' · Mode: ' + gameModeId + ' · Map: ' + G.MAP_SIZE);
-  lines.push('- Day ' + G.dayCount + ' · ' + seasonName() + ' · ' + getWeather().label + ' · Tier: ' + HOLD_TIERS[getTier()].name);
-  lines.push('- Pop: ' + G.villagers.length + '/' + popCapacity() + ' · Buildings: ' + G.buildings.length + ' · Coins: ' + G.coins);
-  lines.push('- Stock: ' + Object.entries(G.stockpile).map(([k,v])=>k+':'+Math.round(v)).join(' '));
-  lines.push('- Researched: ' + (Object.keys(G.researched).join(', ') || 'none') + (G.activeResearch ? ' (researching: '+G.activeResearch.id+')' : ''));
-  lines.push('- Device: ' + (navigator.userAgent||'?').slice(0,110));
-  lines.push('- Screen: ' + view.w + 'x' + view.h + ' @' + canvasDPR + 'x · ' + (window.matchMedia('(orientation: landscape)').matches ? 'landscape' : 'portrait'));
-  if(errorLog.length){
-    lines.push('- Recent errors:');
-    for(const e of errorLog) lines.push('  · ['+e.kind+'] '+e.msg);
-  } else lines.push('- Recent errors: none');
-  return lines.join('\n');
-}
-async function copyFeedback(kind, text){
-  const head = kind==='bug' ? '### BUG REPORT' : '### FEATURE SUGGESTION';
-  const body = head + '\n' + (text.trim() || '(no description given)') + '\n\n' + buildDiagnostics()
-    + '\n\n_Paste this whole block to Claude to get it fixed/built._';
-  try {
-    await navigator.clipboard.writeText(body);
-    return true;
-  } catch(e){
-    // Fallback: legacy textarea copy
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = body; ta.style.position='fixed'; ta.style.opacity='0';
-      document.body.appendChild(ta); ta.select();
-      const ok = document.execCommand('copy');
-      document.body.removeChild(ta);
-      return ok;
-    } catch(e2){ return false; }
-  }
-}
-function renderFeedbackSheet(kind){
-  const isBug = kind==='bug';
-  sheetContent.innerHTML = `
-    <div class="sheet-sub">${isBug
-      ? 'Describe what went wrong and what you expected. Game state and recent errors attach automatically.'
-      : 'Describe your idea — what it does and why it would make the hold better.'}</div>
-    <textarea id="fb-text" placeholder="${isBug ? 'What happened? What did you expect?' : 'Your idea...'}"
-      style="width:100%;min-height:90px;margin-top:8px;background:#241a10;color:var(--parchment-text);
-             border:1px solid var(--panel-edge);border-radius:8px;padding:10px;font:inherit;font-size:14px;
-             resize:vertical;box-sizing:border-box;"></textarea>
-    <div class="row" style="margin-top:8px;gap:8px;">
-      <button class="action-btn primary" id="fb-copy">📮 Submit to GitHub</button>
-    </div>
-    <div class="sheet-sub" id="fb-status" style="margin-top:6px;"></div>
-    <div class="sheet-sub" style="margin-top:4px;opacity:0.7;">v${GAME_VERSION} · Files straight to the dev's GitHub — your hold's state is attached automatically so fixes land faster.</div>
-  `;
-  document.getElementById('fb-copy').addEventListener('click', async ()=>{
-    const text = document.getElementById('fb-text').value;
-    const statusEl = document.getElementById('fb-status');
-    const btn = document.getElementById('fb-copy');
-    const head = kind==='bug' ? '[Bug] ' : '[Suggestion] ';
-    const title = (head + (text.trim().split('\n')[0] || 'from in-game report')).slice(0, 70);
-    const bodyMd = (kind==='bug' ? '### BUG REPORT' : '### FEATURE SUGGESTION') + '\n'
-      + (text.trim() || '(no description given)') + '\n\n' + buildDiagnostics();
-
-    btn.disabled = true;
-    statusEl.textContent = '⏳ Filing it now...';
-    try {
-      const res = await fetch(FEEDBACK_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind, title, body: bodyMd })
-      });
-      const data = await res.json().catch(()=>({}));
-      if(!res.ok || !data.ok) throw new Error(data.error || ('status ' + res.status));
-      statusEl.innerHTML = '✅ Filed as <a href="' + data.url + '" target="_blank" rel="noopener">issue #' + data.number + '</a> — thank you!';
-      document.getElementById('fb-text').value = '';
-      sfx('coin');
-    } catch(e){
-      logError('feedback-submit', e && e.message || e);
-      const ok = await copyFeedback(kind, text);
-      statusEl.innerHTML = ok
-        ? '⚠️ Couldn\'t auto-file (offline or server issue). Copied instead — paste it into the Claude chat or ' +
-          '<a href="' + REPO_URL.replace(/\/$/,'') + '/issues/new" target="_blank" rel="noopener">open a GitHub issue</a> manually.'
-        : '⚠️ Couldn\'t auto-file or reach the clipboard — long-press the text above to copy manually.';
-    } finally {
-      btn.disabled = false;
-    }
-  });
-}
-
 // Trader's ledger — cumulative coin flow by category, for the economy view.
 const SHOP_ITEMS = [
   { id:'festival', ic:'🎉', name:'Feast Day',        cost:30, desc:'Begin a festival at once — the hold works 25% faster for a while.' },
@@ -1428,6 +1273,7 @@ const ctx = canvas.getContext('2d');
    canvas context, and a few callbacks back into main.ts's own UI state. */
 initIsoKit(ctx);
 initSprites({ ctx });
+initFeedback({ sheetContent: ()=>sheetContent, gameModeId: ()=>gameModeId });
 initFX({ ctx });
 initScenery({ ctx, windAt });
 initLighting({ ctx, canvas });
