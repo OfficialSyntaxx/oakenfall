@@ -30,6 +30,8 @@ import { tileAt, genMap, reindexTiles } from './mapgen';
 import { tileWalkable, nearestWalkable, pathFind } from './pathfind';
 import { initVillagers, moveToward, effMultiplier, findResourceTarget, updateVillager,
   resetFrozenFisherNotice } from './villager';
+import { initRaiders, raidEntryPoint, launchRaid, raiderTick, wolfTick, banditTick,
+  setWolfRisk, resetRaidTimers, hastenRaid } from './raiders';
 import { initFire, FLAMMABLE, igniteBuilding, fireTick, fireDrynessMul } from './fire';
 import { initProgress, techAvailable, startResearch, computeTierIdx, checkTierUp,
   getTier, resetTier } from './progress';
@@ -179,7 +181,6 @@ function blitSprite(type, cx, baseY){
   }
 }
 
-let wolfRiskMul = 1;
 // GAME_MODES now arrives as a module import, so it is initialised before any of
 // this file runs — the old ordering hazard (it used to be declared far below,
 // making a boot-time call throw) no longer exists.
@@ -194,7 +195,7 @@ function applyDifficulty(cfg){
   G.MAP_SIZE = cfg.mapSize;
   G.TC_X = Math.floor(G.MAP_SIZE/2)-1; G.TC_Y = Math.floor(G.MAP_SIZE/2)-1;
   G.TC_CX = G.TC_X+0.5; G.TC_CY = G.TC_Y+0.5;
-  wolfRiskMul = cfg.wolfMul * gameMode.wolfMul;
+  setWolfRisk(cfg.wolfMul * gameMode.wolfMul);
   G.stockpile = Object.assign({}, cfg.startRes);
   G.landId = cfg.landId || 'valley';
   G.scenarioId = cfg.goalId || 'endless';
@@ -239,7 +240,6 @@ function rollName(){
    the trees, filled their arms, dropped nothing, and went back for more. */
 let speedMode = 1; // 1, 2, 0(paused)
 let spawnTimer = 18;
-let wolfTimer = 60;
 // Lifetime journal — persists across sessions within a save; tracks bests for the stats page
 
 /* ── SCENARIOS ── an optional end-goal for the hold. These close over live game
@@ -562,47 +562,6 @@ function renderAdminSheet(){
 /* ── VISIBLE RAIDS ── the raid's outcome is decided by the defense math, but
    the raiders now march in and are met, so you SEE the hold hold or break.
    Purely a dramatization layer over the already-computed result. */
-function raidEntryPoint(openBridges){
-  if(openBridges && openBridges.length){ const b=openBridges[Math.floor(Math.random()*openBridges.length)]; return {gx:b.gx, gy:b.gy}; }
-  // else nearest map edge to a random side
-  const side = Math.floor(Math.random()*4);
-  const m = G.MAP_SIZE-1;
-  if(side===0) return {gx:Math.random()*m, gy:0};
-  if(side===1) return {gx:Math.random()*m, gy:m};
-  if(side===2) return {gx:0, gy:Math.random()*m};
-  return {gx:m, gy:Math.random()*m};
-}
-
-function launchRaid(n, didSteal, entry){
-  for(let i=0;i<n;i++){
-    G.raiders.push({ gx:clamp(entry.gx+(Math.random()-0.5)*2,0,G.MAP_SIZE-1), gy:clamp(entry.gy+(Math.random()-0.5)*2,0,G.MAP_SIZE-1),
-      state:'advance', didSteal, phase:Math.random()*6, spd:1.5+Math.random()*0.6, facing:1, life:34, _flee:null,
-      variant: RAIDER_VARIANTS[Math.floor(Math.random()*RAIDER_VARIANTS.length)] });
-  }
-}
-function raiderTick(dt){
-  if(!G.raiders.length) return;
-  const tc = { gx:G.TC_CX, gy:G.TC_CY+1 };
-  for(const r of G.raiders.slice()){
-    r.phase += dt*7; r.life -= dt;
-    if(r.life<=0){ G.raiders.splice(G.raiders.indexOf(r),1); continue; }
-    const tgt = r.state==='advance' ? tc : r._flee;
-    if(!tgt){ G.raiders.splice(G.raiders.indexOf(r),1); continue; }
-    const dx=tgt.gx-r.gx, dy=tgt.gy-r.gy, d=Math.hypot(dx,dy)||0.001;
-    if(r.state==='advance'){
-      const guard = G.villagers.find(v=>v.role==='guard' && !v.sick && v.stage!=='child' && dist2(v.gx,v.gy,r.gx,r.gy)<4.5);
-      const reach = r.didSteal ? 1.5 : 3.6; // thieves reach the stores; the rest are turned back short of it
-      if(guard || d < reach){
-        try{ spawnBoom(r.gx, r.gy); }catch(e){}
-        r.state='flee';
-        r._flee = { gx: r.gx + (r.gx<G.MAP_SIZE/2?-7:7), gy: r.gy + (r.gy<G.MAP_SIZE/2?-7:7) };
-        continue;
-      }
-    } else if(d < 0.6){ G.raiders.splice(G.raiders.indexOf(r),1); continue; }
-    r.gx += (dx/d)*r.spd*dt; r.gy += (dy/d)*r.spd*dt;
-    r.facing = dx<0?-1:1;
-  }
-}
 function drawRaider(r){
   const p = project(r.gx, r.gy);
   const bob = Math.abs(Math.sin(r.phase))*1.6;
@@ -682,7 +641,7 @@ const DECISIONS = [
     cond:()=>getTier()>=1 && (G.stockpile.food||0)>=25 && (gameMode.banditsEnabled!==false),
     choices:[
       {label:'Pay the tribute', outcome:'They take the food and melt back into the trees.', run:()=>{ G.stockpile.food-=25; changeMorale(-2); }},
-      {label:'Refuse them', outcome:'You bar the gate. The folk stand a little taller — but a raid may come.', run:()=>{ changeMorale(3); banditTimer=Math.min(banditTimer,25); }},
+      {label:'Refuse them', outcome:'You bar the gate. The folk stand a little taller — but a raid may come.', run:()=>{ changeMorale(3); hastenRaid(25); }},
     ]},
   { id:'scholar', ic:'📚', title:'A Wandering Scholar',
     text:'A scholar seeks shelter and offers, in thanks, to share what they know — if the hold can spare a meal.',
@@ -822,7 +781,6 @@ function checkDeeds(){
 }
 
 let eventTimer = 140; // world-seconds until the next random event roll
-let banditTimer = 200;
 
 /* ── VERSION & FEEDBACK SYSTEM ── */
 const GAME_VERSION = '1.82.0';
@@ -1577,87 +1535,11 @@ function update(rawDt){
     }
   }
 
-  // wolf threat events
-  wolfTimer -= dt;
-  if(wolfTimer<=0){
-    wolfTimer = 100 + Math.random()*70;
-    const riskMul = (hasBuildingType('watchtower') ? 0.3 : 1) * wolfRiskMul * decreeRaidMul();
-    if(Math.random() < 0.55*riskMul){
-      const exposed = G.villagers.filter(v=>(v.state==='walkingToResource'||v.state==='working') && v.targetTile && (v.targetTile.type==='forest'||v.targetTile.wilds));
-      if(exposed.length>0){
-        const v = exposed[Math.floor(Math.random()*exposed.length)];
-        releaseClaims(v); v.carrying=null; v.state='idle'; v.fatigue=clamp(v.fatigue+15,0,100);
-        toast('Wolves prowl the treeline — '+v.name+' flees home!', true);
-        G.wolfEvents++;
-      } else {
-        const loss = Math.min(G.stockpile.food, 4+Math.floor(Math.random()*8));
-        if(loss>0){
-          G.stockpile.food -= loss;
-          toast('A wolf pack raids the stores — '+loss+' food stolen!', true); sfx('raid');
-          G.wolfEvents++;
-        }
-      }
-    }
-  }
+  wolfTick(dt);
 
   updateSunShadows();
 
-  // Bandit raids — only once the hold is big enough to be worth robbing
-  banditTimer -= dt;
-  if(banditTimer<=0){
-    banditTimer = 160 + Math.random()*120;
-    if(!ADMIN.noRaids && gameMode.banditsEnabled && getTier()>=2 && Math.random()<0.5*decreeRaidMul()){
-      const guards = G.villagers.filter(v=>v.role==='guard' && !v.sick).length;
-      const palisades = G.buildings.filter(b=>b.type==='palisade').length;
-      const towers = G.buildings.filter(b=>b.type==='watchtower' && (b.condition===undefined||b.condition>=35)).length;
-      // The river is a natural moat — worth real defense while it stands
-      // uncrossed. Every bridge is a door: each one erodes the bonus, UNLESS
-      // a guard post stands within 3 tiles of it (a watched crossing).
-      const allBridges = G.buildings.filter(b=>b.type==='bridge');
-      const guardPosts = G.buildings.filter(b=>b.type==='guardPost' && (b.condition===undefined||b.condition>=35));
-      const openBridges = allBridges.filter(br=> !guardPosts.some(gp=> Math.max(Math.abs(gp.gx-br.gx), Math.abs(gp.gy-br.gy)) <= 3));
-      const riverMoat = (G.waterTiles.length && !riverFrozen()) ? Math.max(0, 5 - openBridges.length*1.5) : 0;
-      const defense = guards*(G.researched.militia?8:4) + palisades*0.8 + towers*2 + riverMoat;
-      const strength = 10 + getTier()*6 + Math.random()*8;
-      const mitigation = Math.min(0.95, defense / (defense + strength));
-      const raidN = 2 + Math.floor(Math.random()*2) + (getTier()>=3?1:0);
-      launchRaid(raidN, mitigation <= 0.72, raidEntryPoint(openBridges));
-      if(mitigation > 0.72){
-        G.journal.raidsRepelled = (G.journal.raidsRepelled||0) + 1;
-        toast('🛡️ Bandits probed the walls — your guards drove them off!'); sfx('raid');
-      } else {
-        const stealFrac = (1 - mitigation) * 0.35;
-        const stolen = [];
-        for(const k of ['food','wood','planks','bread']){
-          const amt = Math.floor((G.stockpile[k]||0) * stealFrac * (0.5+Math.random()*0.5));
-          if(amt>0){ G.stockpile[k]-=amt; stolen.push(amt+' '+k); }
-        }
-        if(stolen.length){
-          const tcB = findTC();
-          if(tcB){ const c0 = buildingCenter(tcB); spawnBoom(c0.gx-0.6, c0.gy); spawnBoom(c0.gx+0.7, c0.gy+0.4); }
-          // Narrate the crossing: raiders come over an unwatched bridge if one exists
-          if(openBridges.length){
-            const br = openBridges[Math.floor(Math.random()*openBridges.length)];
-            spawnBoom(br.gx, br.gy);
-            toast('🌉 Raiders poured across the unwatched bridge!', true);
-          }
-          toast('🏴 Bandits raid the hold — lost '+stolen.join(', ')+'!', true); sfx('raid');
-          G.villagers.forEach(v=>{ if(v.morale!==undefined){ let hit=(v.trait&&v.trait.id==='brave')?4:8; if(G.festivalBoon==='courage') hit*=0.5; v.morale=clamp(v.morale-hit,0,100); } });
-          // Surviving a raid can steel a settler for life
-          if(Math.random()<0.3 && G.villagers.length){
-            const cand = G.villagers.filter(v=>!v.trait || (v.trait.id!=='brave' && v.trait.id!=='steadfast'));
-            if(cand.length){
-              const vv = cand[Math.floor(Math.random()*cand.length)];
-              vv.trait = LEGACY_TRAITS.brave;
-              toast('🦁 '+vv.name+' stood firm through the raid — they are Brave now.');
-            }
-          }
-        } else {
-          toast('🏴 Bandits found nothing worth taking.');
-        }
-      }
-    }
-  }
+  banditTick(dt);
 
   familyTick(dt);
   relationsTick(dt);
@@ -2085,6 +1967,8 @@ initSkills({ toast, chron });
 initWork({ hasActiveBuilding, reassignRole });
 initBuildings({ onRemoved: (b)=>{ if(selection && selection.ref===b) deselectAll(); } });
 initProgress({ toast });
+initRaiders({ toast, spawnBoom, raidsEnabled: ()=>gameMode.banditsEnabled!==false,
+  decreeRaidMul });
 initFire({ toast, chron, hazardsEnabled: ()=>gameMode.banditsEnabled!==false,
   decayMul: ()=>(gameMode.decayMul||1) });
 initEconomy({ toast, decayMul: ()=>(gameMode && gameMode.decayMul!==undefined) ? gameMode.decayMul : 1 });
@@ -5905,7 +5789,7 @@ function resetHoldState(){
   // Full state reset
   G.grid=[]; G.forestTiles=[]; G.stoneTiles=[]; G.waterTiles=[]; G.wildsTiles=[];
   G.buildings=[]; G.villagers=[]; G.memorials=[]; G.chronicle=[]; G.deeds={}; G.statHistory=[]; G.festivalBoon=null; G.lastFestivalYear=0; G.tradeRoutes=[]; G.routeOffers=[]; G.climate=null; G.plague=null; G.raiders=[];
-  G.worldTime=30; G.dayCount=1; wolfTimer=60; G.wolfEvents=0;
+  G.worldTime=30; G.dayCount=1; resetRaidTimers(); G.wolfEvents=0;
   spawnTimer=18; G.idleSlotCounter=0; G.usedNames=[];
   G.questsCompleted={}; lastSeenQuestCount=0;
   G.totals={wood:0,stone:0,food:0};
