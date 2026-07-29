@@ -145,3 +145,16 @@ export const LANDS = {
 export function roleLabel(r: string): string {
   return (ROLE_DEFS[r] && ROLE_DEFS[r].label) || r;
 }
+
+/** How fast a settler empties, per second at 1× speed. Hunger to starving in
+ *  about five and a half minutes; fatigue to exhausted in about seven. Tuned
+ *  so a day's work is a real span without the hold feeling like a treadmill. */
+export const HUNGER_RATE = 100 / 340;
+export const FATIGUE_RATE = 100 / 400;
+
+/** Traits a settler can only EARN, never be born with — they mark what someone
+ *  came through. Granted by the events that deserve them. */
+export const LEGACY_TRAITS: Record<string, any> = {
+  brave:     { id: 'brave',     label: 'Brave',     ic: '🦁', desc: 'Stood through a raid — loses only half morale to attacks.' },
+  steadfast: { id: 'steadfast', label: 'Steadfast', ic: '🕯️', desc: "Carries a loved one's memory — steadier morale." },
+};
