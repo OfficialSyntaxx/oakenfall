@@ -133,6 +133,13 @@ modules, (3) Capacitor wrap + native storage.
 - `npm run gameplay` / `npm run verify` — drives the real player flow (promo code
   → admin → Steward order) and asserts settlers self-employ and switch trades.
 - `npx tsc --noEmit` — typecheck.
+- `npm run freevars` (`tools/free-vars.mjs`) — the guard `main.ts` was missing.
+  It strips `@ts-nocheck` in a temp copy of `src/` and reports **only** TS2304
+  "Cannot find name", which is not a type complaint: the name is not there.
+  A free variable in `main.ts` throws at runtime, and a throw inside one of the
+  render try/catch blocks is swallowed in silence — that is how the sea stopped
+  drawing for five versions when `windPhase` moved into `terrain.ts`. Part of
+  `verify:sim`. Real host globals go in its KNOWN_GLOBALS with a reason.
 
 ## Hard constraints (never violate)
 - Assets are bundled **locally** — never fetched from a third-party CDN at
@@ -175,7 +182,8 @@ modules, (3) Capacitor wrap + native storage.
 ## Verification workflow (run before every commit)
 1. `npm run verify` — build + smoke + gameplay. This replaces the old
    extract-and-`node --check` dance; the build itself now catches syntax errors.
-2. `npx tsc --noEmit` when modules changed.
+2. `npx tsc --noEmit` when modules changed. `npm run freevars` after moving
+   ANY code out of `main.ts` — that is the move that creates free variables.
 3. Screenshot anything visual (`tools/shots.mjs`, `tools/weather-shots.mjs`) —
    the automated checks have passed while the UI looked wrong.
 4. Bump GAME_VERSION in `src/main.ts` + add a CHANGELOG.md entry for
