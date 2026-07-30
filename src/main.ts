@@ -70,6 +70,9 @@ import { initWork, roleNeedScores, seekWork, maybeSwitchTrade } from './work';
 import { chron, chronicleAdd } from './chronicle';
 import { initSheet, initSheetDrag, sheetWrap, sheetContent, sheetNav, openSheet, closeSheet,
          isSheetOpen, sheetContains, miniBar, statBar } from './sheet';
+import { initInput } from './input';
+import { initSelection, selection, clearSelection, deselectAll, selectVillager, selectBuilding,
+         selectTile, ensureSelectionVisible, pickAt, isSelected } from './selection';
 import { initShop, renderShopSheet } from './shop';
 import { initEvents, rollRandomEvent, eventTick, startEvent, clearEvent, isFestivalOn,
          isMerchantHere, eventTradeBonus, eventSpeedBonus } from './events';
@@ -273,6 +276,13 @@ function renderRedeemSheet(){
    not land on window, so this is the only way for the automated tests (and the
    report/diagnostics tooling) to see what the simulation is actually doing.
    Deliberately a copy — nothing here can be used to mutate game state. */
+/* Where a map tile lands on screen right now, read-only. The gesture suite has
+   to put a finger on a real building, and it cannot do the projection itself —
+   that depends on the live camera. */
+window.__oakScreenAt = function(gx, gy){
+  const p = project(gx, gy);
+  return worldToScreen(p.x, p.y);
+};
 window.__oakDebug = function(){
   const roles = {};
   for(const v of G.villagers) roles[v.role] = (roles[v.role]||0) + 1;
@@ -304,6 +314,12 @@ window.__oakDebug = function(){
     stockpile: Object.assign({}, G.stockpile),
     coins: G.coins, tier: getTier(),
     routes: G.tradeRoutes.length, routeOffers: G.routeOffers.length,
+    /* Where the player is looking and what they have tapped. The gesture suite
+       has nothing else to assert against — a pan or a pinch leaves no trace in
+       the world, only in the camera. */
+    zoom: Math.round(camera.scale*1000)/1000,
+    pan: { x: Math.round(camera.panX), y: Math.round(camera.panY) },
+    selected: selection.type,
     needs: (typeof roleNeedScores==='function') ? roleNeedScores().slice(0,3) : [],
     critters: (typeof G.critters!=='undefined') ? G.critters.length : 0,
     raiders: G.raiders.length,
@@ -530,7 +546,7 @@ function rollDecision(){
   if(!pool.length) return;
   const d = pool[Math.floor(Math.random()*pool.length)];
   _lastDecision = d.id;
-  selection = {type:null, ref:null};
+  clearSelection();
   openSheet(); sheetNav.reset();
   sheetNav.push({ id:'decision', title:d.ic+' '+d.title, render:()=>renderDecisionSheet(d) });
   if(typeof sfx==='function') sfx('open');
@@ -659,7 +675,6 @@ function backstoryFor(v){
 }
 
 
-let selection = { type:null, ref:null }; // type: 'villager'|'building'|'tile'
 let buildMode = { active:false, key:null, movingBuilding:null };
 
 
@@ -933,6 +948,10 @@ const ctx = canvas.getContext('2d');
 initIsoKit(ctx);
 initSprites({ ctx });
 initFeedback({ gameModeId: ()=>gameModeId });
+initInput({ canvas, editing: ()=>editorOn, beginStroke: pushUndo,
+  paintTile: (gx,gy)=>{ paintAt(gx,gy); if(editBrush==='tc') editorTitle(); } });
+initSelection({ renderVillager: renderVillagerSheet, renderBuilding: renderBuildingSheet,
+  renderTile: renderTileSheet, exitBuildMode: exitBuildModeIfActive });
 initShop({ reopenShop: ()=>renderHubSheet('shop') });
 initEvents({ merchantOften: ()=>!!gameMode.merchantOften, tradeMul: ()=>gameMode.tradeMul||1 });
 initSheet({ deselectAll: ()=>deselectAll() });
@@ -944,7 +963,7 @@ initFX({ ctx });
 initBackdrop({ ctx });
 initScenery({ ctx, windAt });
 initLighting({ ctx, canvas });
-initVillagerRender({ ctx, isSelected: (v)=>!!(selection && selection.type==='villager' && selection.ref===v) });
+initVillagerRender({ ctx });
 initBuildingRender({ ctx, windAt, drawRoad });
 initTerrain({ ctx });
 
@@ -1266,7 +1285,7 @@ function renderDecreesSheet(){
   }));
 }
 document.getElementById('quest-btn').addEventListener('click', ()=>{
-  exitBuildModeIfActive(); selection={type:null,ref:null};
+  exitBuildModeIfActive(); clearSelection();
   renderHubSheet('goals');
 });
 // Resource row expand/collapse. Collapsed it is a compact scrolling row; expanded
@@ -1294,7 +1313,7 @@ document.getElementById('quest-btn').addEventListener('click', ()=>{
 })();
 
 document.getElementById('steward-btn').addEventListener('click', ()=>{
-  exitBuildModeIfActive(); selection={type:null,ref:null};
+  exitBuildModeIfActive(); clearSelection();
   sheetNav.replace({ id:'steward', title:'🗣️ Give an Order', render:renderStewardSheet });
 });
 function renderStewardSheet(){
@@ -1526,7 +1545,7 @@ function renderRosterSheet(){
   sheetContent.querySelectorAll('[data-sort]').forEach(b=>b.addEventListener('click', ()=>{ rosterSort=b.dataset.sort; renderHubSheet('folk'); }));
   sheetContent.querySelectorAll('.roster-row').forEach(b=>b.addEventListener('click', ()=>{
     const v = list[+b.dataset.i]; if(!v) return;
-    selection = { type:'villager', ref:v };
+    selection.type='villager'; selection.ref=v;
     sheetNav.push({ id:'sel-villager', render:()=>renderVillagerSheet(v) });
     const p = project(v.gx, v.gy); panCameraTo(p.x, p.y);
   }));
@@ -1693,56 +1712,10 @@ function openFestivalChoice(){
 
 // If the freshly-opened sheet (or the HUD) covers the selection, pan the
 // camera just enough to bring it back into the uncovered part of the screen.
-function ensureSelectionVisible(){
-  if(!selection.type || !selection.ref) return;
-  const g = selection.type==='building' ? buildingCenter(selection.ref)
-          : { gx:selection.ref.gx, gy:selection.ref.gy };
-  if(g.gx===undefined || g.gy===undefined) return;
-  const p = project(g.gx, g.gy);
-  const s = worldToScreen(p.x, p.y);
-  const sideDock = matchMedia('(orientation: landscape) and (max-height: 520px)').matches;
-  const top = 130, left = 40;
-  // Measure the real sheet (offsetHeight ignores the slide-in transform)
-  const sheetEl = document.getElementById('bottom-sheet');
-  const sheetH = sheetEl ? Math.min(sheetEl.offsetHeight, view.h*0.5) : view.h*0.5;
-  const bottom = sideDock ? view.h - 50 : view.h - sheetH - 30;
-  const right = sideDock ? view.w - Math.min(view.w*0.46, 380) - 40 : view.w - 40;
-  let dx = 0, dy = 0;
-  if(s.x < left) dx = left - s.x; else if(s.x > right) dx = right - s.x;
-  if(s.y < top) dy = top - s.y; else if(s.y > bottom) dy = bottom - s.y;
-  if(dx || dy){ camera.panX += dx; camera.panY += dy; clampCamera(); }
-}
 document.getElementById('sheet-close').addEventListener('click', ()=>{
   deselectAll();
 });
 
-function deselectAll(){
-  selection = {type:null, ref:null};
-  if(buildMode.active) exitBuildMode();
-  closeSheet();
-  buildFab.classList.remove('active');
-}
-
-function selectVillager(v){
-  sfx('tap');
-  exitBuildModeIfActive();
-  selection = { type:'villager', ref:v };
-  sheetNav.replace({ id:'sel-villager', render:()=>renderVillagerSheet(v) });
-  ensureSelectionVisible();
-}
-function selectBuilding(b){
-  sfx('tap');
-  exitBuildModeIfActive();
-  selection = { type:'building', ref:b };
-  sheetNav.replace({ id:'sel-building', render:()=>renderBuildingSheet(b) });
-  ensureSelectionVisible();
-}
-function selectTile(t){
-  exitBuildModeIfActive();
-  selection = { type:'tile', ref:t };
-  sheetNav.replace({ id:'sel-tile', render:()=>renderTileSheet(t) });
-  ensureSelectionVisible();
-}
 function exitBuildModeIfActive(){ if(buildMode.active) exitBuildMode(); }
 
 function renderVillagerSheet(v){
@@ -2092,192 +2065,13 @@ function confirmPlacement(){
   deselectAll();
 }
 
-document.getElementById('shop-pill').addEventListener('click', ()=>{ exitBuildModeIfActive(); selection={type:null,ref:null}; renderHubSheet('shop'); });
+document.getElementById('shop-pill').addEventListener('click', ()=>{ exitBuildModeIfActive(); clearSelection(); renderHubSheet('shop'); });
 buildFab.addEventListener('click', ()=>{
   if(buildMode.active){ deselectAll(); return; }
   exitBuildModeIfActive();
-  selection = {type:null, ref:null};
+  clearSelection();
   sheetNav.replace({ id:'build', render:renderBuildPalette });
 });
-
-/* =========================================================================
-   INPUT: pan / pinch / tap
-========================================================================= */
-let touchState = { mode:null, startX:0, startY:0, startPanX:0, startPanY:0, startDist:0, startScale:1, lastMidX:0, lastMidY:0, moved:false, startTime:0 };
-
-/* Paint from a screen point. In the editor one finger paints; two fingers still
-   pinch/pan, so the map stays navigable while you work. */
-function paintScreen(sx, sy){
-  const wp = screenToWorldPixel(sx, sy);
-  const g = inProject(wp.x, wp.y);
-  paintAt(g.gx, g.gy);
-  if(editBrush==='tc') editorTitle();
-}
-
-function getTouchDist(t0,t1){ return Math.hypot(t1.clientX-t0.clientX, t1.clientY-t0.clientY); }
-function getTouchMid(t0,t1){ return {x:(t0.clientX+t1.clientX)/2, y:(t0.clientY+t1.clientY)/2}; }
-
-canvas.addEventListener('touchstart', (e)=>{
-  e.preventDefault();
-  if(e.touches.length===1){
-    panVel.active = false; panVel.x=0; panVel.y=0; camGlide.active = false;
-    const t = e.touches[0];
-    touchState.mode='pan';
-    touchState.startX=t.clientX; touchState.startY=t.clientY;
-    touchState.startPanX=camera.panX; touchState.startPanY=camera.panY;
-    touchState.moved=false; touchState.startTime=performance.now();
-    if(editorOn){ touchState.mode='paint'; pushUndo(); paintScreen(t.clientX, t.clientY); }
-  } else if(e.touches.length>=2){
-    const mid = getTouchMid(e.touches[0], e.touches[1]);
-    touchState.mode='pinch';
-    touchState.startDist = getTouchDist(e.touches[0], e.touches[1]);
-    touchState.startScale = camera.scale;
-    touchState.lastMidX = mid.x; touchState.lastMidY = mid.y;
-    touchState.panStartX = camera.panX; touchState.panStartY = camera.panY;
-    touchState.midStartX = mid.x; touchState.midStartY = mid.y;
-    // Capture the world point under the fingers ONCE. Recomputing it each move
-    // (against a camera we just mutated) fed back on itself and sent the view
-    // flying — this is the anchor the pinch pivots around.
-    touchState.pinchWorld = screenToWorldPixel(mid.x, mid.y);
-    touchState.moved=true;
-  }
-}, {passive:false});
-
-canvas.addEventListener('touchmove', (e)=>{
-  e.preventDefault();
-  if(touchState.mode==='paint' && e.touches.length===1){
-    paintScreen(e.touches[0].clientX, e.touches[0].clientY);
-    return;
-  }
-  if(touchState.mode==='pan' && e.touches.length===1){
-    const t = e.touches[0];
-    const dx = t.clientX-touchState.startX, dy = t.clientY-touchState.startY;
-    if(Math.hypot(dx,dy) > 6) touchState.moved = true;
-    const now = performance.now();
-    const prevX = camera.panX, prevY = camera.panY;
-    camera.panX = touchState.startPanX + dx;
-    camera.panY = touchState.startPanY + dy;
-    clampCamera();
-    // Track velocity (px/ms) for release inertia — gives the pan a natural glide
-    const dtMs = Math.max(1, now - (touchState.lastMoveT||now));
-    panVel.x = (camera.panX - prevX)/dtMs; panVel.y = (camera.panY - prevY)/dtMs;
-    touchState.lastMoveT = now;
-  } else if(touchState.mode==='pinch' && e.touches.length>=2){
-    const dist = getTouchDist(e.touches[0], e.touches[1]);
-    const mid = getTouchMid(e.touches[0], e.touches[1]);
-    let newScale = clamp(touchState.startScale * (dist/touchState.startDist), ZOOM_MIN, ZOOM_MAX);
-    // Pin the world point captured at pinch start under the current midpoint, so
-    // the map zooms about your fingers and can be dragged with two down.
-    const anchor = touchState.pinchWorld || screenToWorldPixel(touchState.midStartX, touchState.midStartY);
-    camera.scale = newScale;
-    camera.panX = mid.x - view.w/2 - anchor.x*newScale;
-    camera.panY = mid.y - view.h/2 - anchor.y*newScale;
-    clampCamera();
-  }
-}, {passive:false});
-
-let _lastTapT = 0, _lastTapX = 0, _lastTapY = 0;
-canvas.addEventListener('touchend', (e)=>{
-  e.preventDefault();
-  if(e.touches.length===0){
-    // Double-tap: zoom toward tap point (or back out if already zoomed in)
-    if(touchState.mode==='pan' && !touchState.moved){
-      const now2 = performance.now();
-      const tx = touchState.startX, ty = touchState.startY;
-      if(now2 - _lastTapT < 300 && Math.hypot(tx-_lastTapX, ty-_lastTapY) < 40){
-        const target = camera.scale < 1.5 ? 1.9 : 1.0;
-        const wu = screenToWorldPixel(tx, ty);
-        camera.scale = target;
-        camera.panX = tx - view.w/2 - wu.x*target;
-        camera.panY = ty - view.h/2 - wu.y*target;
-        clampCamera();
-        _lastTapT = 0;
-        return;
-      }
-      _lastTapT = now2; _lastTapX = tx; _lastTapY = ty;
-    }
-    // Launch glide if the finger was moving fast enough on release
-    if(touchState.mode==='pan' && Math.hypot(panVel.x, panVel.y) > 0.15) panVel.active = true;
-    const dt = performance.now()-touchState.startTime;
-    if(touchState.mode==='pan' && !touchState.moved && dt<400){
-      handleTap(touchState.startX, touchState.startY);
-    }
-    touchState.mode=null;
-  } else if(e.touches.length===1){
-    // transitioned from pinch to single touch - restart pan baseline
-    const t = e.touches[0];
-    touchState.mode='pan';
-    touchState.startX=t.clientX; touchState.startY=t.clientY;
-    touchState.startPanX=camera.panX; touchState.startPanY=camera.panY;
-    touchState.moved=true;
-  }
-}, {passive:false});
-canvas.addEventListener('touchend', ()=>{ if(editorOn) drawMinimap(); }, {passive:true});
-canvas.addEventListener('touchcancel', ()=>{ touchState.mode=null; }, {passive:false});
-
-// Mouse fallback (desktop testing convenience)
-let mouseDown=false, mouseMoved=false, mouseStart={x:0,y:0}, mouseStartPan={x:0,y:0}, mouseStartTime=0;
-canvas.addEventListener('mousedown', (e)=>{
-  if(editorOn && e.button===0){ mouseDown=false; editPaintDrag=true; pushUndo(); paintScreen(e.clientX, e.clientY); return; }
-  mouseDown=true; mouseMoved=false; mouseStart={x:e.clientX,y:e.clientY};
-  mouseStartPan={x:camera.panX,y:camera.panY}; mouseStartTime=performance.now(); camGlide.active=false;
-});
-let editPaintDrag = false;
-window.addEventListener('mousemove', (e)=>{
-  if(editPaintDrag){ paintScreen(e.clientX, e.clientY); return; }
-  if(!mouseDown) return;
-  const dx=e.clientX-mouseStart.x, dy=e.clientY-mouseStart.y;
-  if(Math.hypot(dx,dy)>6) mouseMoved=true;
-  camera.panX = mouseStartPan.x+dx; camera.panY = mouseStartPan.y+dy;
-  clampCamera();
-});
-window.addEventListener('mouseup', (e)=>{
-  if(editPaintDrag){ editPaintDrag = false; drawMinimap(); return; }
-  if(!mouseDown) return;
-  mouseDown=false;
-  if(!mouseMoved && performance.now()-mouseStartTime<400){ handleTap(e.clientX, e.clientY); }
-});
-canvas.addEventListener('wheel', (e)=>{
-  e.preventDefault();
-  camGlide.active=false;
-  const newScale = clamp(camera.scale * (e.deltaY<0?1.08:0.93), ZOOM_MIN, ZOOM_MAX);
-  const worldUnderMouse = screenToWorldPixel(e.clientX, e.clientY);
-  camera.scale = newScale;
-  camera.panX = e.clientX - view.w/2 - worldUnderMouse.x*newScale;
-  camera.panY = e.clientY - view.h/2 - worldUnderMouse.y*newScale;
-  clampCamera();
-}, {passive:false});
-
-function handleTap(sx, sy){
-  const wp = screenToWorldPixel(sx, sy);
-  // 1) villager hit test
-  let hitV = null, hitVD = 22*22;
-  for(const v of G.villagers){
-    const p = project(v.gx, v.gy);
-    const d = dist2(wp.x, wp.y-10, p.x, p.y-12);
-    if(d < hitVD){ hitVD = d; hitV = v; }
-  }
-  if(hitV){ selectVillager(hitV); return; }
-
-  // 2) building hit test (bounding box around footprint)
-  let hitB = null;
-  for(const b of G.buildings){
-    const c = buildingCenter(b);
-    const p = project(c.gx, c.gy);
-    const halfW = TILE_W*0.55*b.w, halfH = (TILE_H*0.55*b.h) + 50; // extend up for roof
-    if(wp.x > p.x-halfW && wp.x < p.x+halfW && wp.y > p.y-halfH && wp.y < p.y+30){
-      hitB = b; break;
-    }
-  }
-  if(hitB){ selectBuilding(hitB); return; }
-
-  // 3) tile hit test
-  const g = inProject(wp.x, wp.y);
-  const t = tileAt(Math.round(g.gx), Math.round(g.gy));
-  if(t && (t.type==='forest' || t.type==='stone' || t.type==='water' || t.wilds)){ selectTile(t); return; }
-
-  deselectAll();
-}
 
 /* =========================================================================
    SPEED / DAY CONTROLS
@@ -2301,7 +2095,7 @@ if(onboardX) onboardX.addEventListener('click', ()=>{
 const redeemBtn = document.getElementById('redeem-btn');
 if(redeemBtn) redeemBtn.addEventListener('click', ()=>{
   document.getElementById('more-menu').classList.add('hidden');
-  selection = {type:null, ref:null};
+  clearSelection();
   openSheet();
   sheetNav.reset();
   sheetNav.push({ id:'redeem', title:'🎁 Redeem a Code', render:()=>renderRedeemSheet() });

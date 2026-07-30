@@ -6,6 +6,7 @@
  * stands on them, which makes them part of this pass rather than the buildings.
  */
 import { G } from './state';
+import { isSelected } from './selection';
 import { SPRITES, SPRITE_SCALE, VANIM, villagerAnimFor, decorImg, roadTileStamp } from './sprites';
 import { buildingCenter } from './buildings';
 import { clamp, dist2, hash2, hashStr, project, TILE_W, TILE_H } from './math';
@@ -17,9 +18,8 @@ import { shade, shadeColor, drawShadow, roundRect, tileDiamond, tintedFrame } fr
 type Deps = {
   ctx: any;
   /** Is this settler the one the player has open? Drawn with a ring. */
-  isSelected: (v: any) => boolean;
 };
-let dep: Deps = { ctx: null, isSelected: () => false };
+let dep: Deps = { ctx: null };
 export function initVillagerRender(deps: Deps): void { dep = deps; }
 function villagerTint(v){
   if(v._tint !== undefined) return v._tint;
@@ -162,7 +162,7 @@ export function drawVillager(v){
   dep.ctx.restore(); // pop globalAlpha
 
   // Selection ring
-  if(dep.isSelected(v)){
+  if(isSelected(v)){
     dep.ctx.strokeStyle='rgba(231,162,61,0.9)'; dep.ctx.lineWidth=1.6;
     dep.ctx.beginPath(); dep.ctx.ellipse(cx,p.y+6,11,5,0,0,7); dep.ctx.stroke();
   }
