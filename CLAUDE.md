@@ -22,7 +22,7 @@ modules, (3) Capacitor wrap + native storage.
   went 15.3MB → ~395KB.
 - **Step 2 in progress** — `index.html` is now a shell; code lives in `src/`,
   built by Vite (`npm run build` = `vite build && node site/build.js`).
-  Forty modules now, and `main.ts` is down from 7,826 lines to under 3,500.
+  Forty-eight modules now, and `main.ts` is down from 7,826 lines to under 2,600.
   Everything except `critters.ts` and `main.ts` itself
   typechecks WITHOUT `@ts-nocheck`, which is the property worth protecting: a
   name that stops resolving in a typed module fails the build, where the same
@@ -42,11 +42,15 @@ modules, (3) Capacitor wrap + native storage.
   - **Drawing** — `terrain`, `scenery`, `backdrop` (the void, the sea and the
     island skirt), `buildrender`, `villagerrender`, `critters`, `lighting`,
     `minimap`, `fx`.
+  - **UI** — `hud` (pills, clock, toasts), `sheet` (the one bottom sheet and the
+    stack over it), `selection` (what is tapped, and the hit test), `input` (the
+    gestures), `build` (palette, placement mark, placement rules), `shop`.
   - **Simulation** — `mapgen`, `pathfind`, `weather`, `skills`, `lives`
     (friendship/marriage/aging/death/idling), `work` (the utility-AI trade
     scoring), `buildings`, `villager` (the state machine), `steward`, `economy`
     (stores + ledger), `progress` (study + hold tiers), `fire`, `raiders`,
-    `contracts`, `chronicle` (the hold's own history), `unlocks` (offline code
+    `contracts`, `chronicle` (the hold's own history), `goals` (the goal list
+    and the deeds), `events` (merchant/festival/healer), `unlocks` (offline code
     verification + the banner palette).
 
   **Extract the module others already depend on FIRST.** Doing `buildings`

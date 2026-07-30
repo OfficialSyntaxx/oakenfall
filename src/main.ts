@@ -71,6 +71,8 @@ import { chron, chronicleAdd } from './chronicle';
 import { initSheet, initSheetDrag, sheetWrap, sheetContent, sheetNav, openSheet, closeSheet,
          isSheetOpen, sheetContains, miniBar, statBar } from './sheet';
 import { initInput } from './input';
+import { initBuild, buildMode, drawGhost, isValidBuildSpot, enterMoveMode, exitBuildMode,
+         exitBuildModeIfActive, renderBuildPalette, openBuildPalette, resetBuildWarnings } from './build';
 import { initSelection, selection, clearSelection, deselectAll, selectVillager, selectBuilding,
          selectTile, ensureSelectionVisible, pickAt, isSelected } from './selection';
 import { initShop, renderShopSheet } from './shop';
@@ -675,7 +677,6 @@ function backstoryFor(v){
 }
 
 
-let buildMode = { active:false, key:null, movingBuilding:null };
 
 
 // Pick a starting zoom that fits a comfortable slice of the hold on whatever
@@ -948,6 +949,7 @@ const ctx = canvas.getContext('2d');
 initIsoKit(ctx);
 initSprites({ ctx });
 initFeedback({ gameModeId: ()=>gameModeId });
+initBuild({ ctx, bulkAssignIdle: ()=>bulkAssignIdle() });
 initInput({ canvas, editing: ()=>editorOn, beginStroke: pushUndo,
   paintTile: (gx,gy)=>{ paintAt(gx,gy); if(editBrush==='tc') editorTitle(); } });
 initSelection({ renderVillager: renderVillagerSheet, renderBuilding: renderBuildingSheet,
@@ -1032,73 +1034,6 @@ window.addEventListener('orientationchange', requestResize);
 // Asset URLs (files, not inlined base64) — bundled locally, cached by the
 // service worker, so offline play is unaffected. Procedural fallbacks still
 // cover a failed or slow load.
-
-function drawGhost(){
-  if(!buildMode.active) return;
-  const wp = screenToWorldPixel(view.w/2, view.h/2);
-  const g = inProject(wp.x, wp.y);
-  const gx = Math.round(g.gx), gy = Math.round(g.gy);
-  buildMode.ghostGX = gx; buildMode.ghostGY = gy;
-  const valid = isValidBuildSpot(gx,gy);
-  const p = project(gx,gy);
-
-  // Main ghost tile
-  const pulse=0.6+Math.sin(G.worldTime*4)*0.25;
-  ctx.fillStyle = valid
-    ? `rgba(120,200,120,${pulse*0.38})`
-    : `rgba(220,80,60,${pulse*0.40})`;
-  tileDiamond(p.x,p.y,TILE_W,TILE_H); ctx.fill();
-
-  // Outer stroke — double line for clarity
-  ctx.lineWidth = 2.5/camera.scale;
-  ctx.strokeStyle = valid? `rgba(160,240,160,${pulse*0.95})` : `rgba(240,120,100,${pulse*0.95})`;
-  tileDiamond(p.x,p.y,TILE_W,TILE_H); ctx.stroke();
-  ctx.lineWidth = 1/camera.scale;
-  ctx.strokeStyle = valid? 'rgba(80,160,80,0.4)' : 'rgba(160,60,40,0.4)';
-  tileDiamond(p.x,p.y,TILE_W+4,TILE_H+2); ctx.stroke();
-
-  // Corner tick marks
-  const tick=5/camera.scale;
-  const corners=[[0,-TILE_H/2],[TILE_W/2,0],[0,TILE_H/2],[-TILE_W/2,0]];
-  ctx.strokeStyle = valid? 'rgba(120,230,120,0.9)' : 'rgba(240,100,80,0.9)';
-  ctx.lineWidth=2/camera.scale;
-  for(const [ox,oy] of corners){
-    const ang=Math.atan2(oy,ox);
-    ctx.beginPath();
-    ctx.moveTo(p.x+ox, p.y+oy);
-    ctx.lineTo(p.x+ox-Math.cos(ang)*tick, p.y+oy-Math.sin(ang)*tick);
-    ctx.stroke();
-  }
-}
-
-// Resource buildings must be raised beside the terrain they work — a fishing
-// hut on the riverbank, a forestry camp at the treeline, a mining post by a
-// stone outcrop, a hunting cabin along the wilds. Maps a build key to a test
-// run over the 8 neighboring tiles, plus the label shown when none is found.
-// Returns null if the spot is valid, else a short reason for the toast.
-function buildSpotReason(gx,gy){
-  const t = tileAt(gx,gy);
-  if(!t) return 'Off the map.';
-  if(buildMode.key==='bridge'){
-    return (t.type==='water' && !t.building) ? null : 'Bridges span the river — place one on water.';
-  }
-  if(t.type==='water') return 'Cannot build on water.';
-  if(t.type!=='grass' && t.type!=='dirt') return 'Clear ground only — not on '+t.type+'.';
-  if(t.building) return 'That tile is already occupied.';
-  if(buildMode.movingBuilding && buildMode.movingBuilding.gx===gx && buildMode.movingBuilding.gy===gy) return 'Already here.';
-  const adj = BUILD_NEEDS_ADJ[buildMode.key];
-  if(adj){
-    let ok=false;
-    for(let dy=-1;dy<=1&&!ok;dy++) for(let dx=-1;dx<=1;dx++){
-      if(!dx&&!dy) continue;
-      const nt = tileAt(gx+dx,gy+dy);
-      if(nt && adj.test(nt)){ ok=true; break; }
-    }
-    if(!ok) return BUILD_DEFS[buildMode.key].name+' must be raised '+adj.need+'.';
-  }
-  return null;
-}
-function isValidBuildSpot(gx,gy){ return buildSpotReason(gx,gy)===null; }
 
 function render(){
   // Always re-apply DPR scale cleanly — never rely on ctx.getTransform() across frames
@@ -1480,7 +1415,6 @@ document.getElementById('mm-zoom').addEventListener('click', (e)=>{
    SELECTION / SHEET UI
 ========================================================================= */
 const buildFab = document.getElementById('build-fab');
-const crosshair = document.getElementById('crosshair');
 
 /* ── Research panel: extracted from the Town Center sheet so the hub's
    Research tab and the building sheet share one implementation ── */
@@ -1716,7 +1650,6 @@ document.getElementById('sheet-close').addEventListener('click', ()=>{
   deselectAll();
 });
 
-function exitBuildModeIfActive(){ if(buildMode.active) exitBuildMode(); }
 
 function renderVillagerSheet(v){
   const roles = Object.keys(ROLE_DEFS).map(key=>{
@@ -1950,127 +1883,10 @@ function bulkAssignIdle(){
   for(const v of idle){ reassignRole(v, ordered[i % ordered.length]); i++; }
   toast('⚒️ '+idle.length+' settler'+(idle.length>1?'s':'')+' put to work.');
 }
-function renderBuildPalette(){
-  const keys = Object.keys(BUILD_DEFS).filter(k=>{
-    const d = BUILD_DEFS[k];
-    return !d.needsTech || G.researched[d.needsTech];
-  });
-  sheetContent.innerHTML = `
-    <div class="sheet-title">🔨 Raise a Building</div>
-    <div class="sheet-sub">Choose a structure, then position it and confirm.</div>
-    ${G.villagers.some(v=>v.role==='idle'&&v.state!=='spawning') ? `<button class="action-btn primary" id="bulk-assign-btn" style="margin:4px 0 8px;">⚒️ Put all idle settlers to work</button>` : ''}
-    ${(()=>{
-      const CAT = { home:'🏠 Homes', food:'🌾 Food & Provisions', industry:'🪓 Industry', trade:'⚖️ Trade & Hall', defense:'🛡️ Defense', road:'🛤️ Roadworks' };
-      const CATOF = {
-        house:'home', manor:'home',
-        farm:'food', fishingHut:'food', huntingCabin:'food', bakery:'food', windmill:'food', granary:'food', pasture:'food',
-        forestCamp:'industry', miningPost:'industry', sawmill:'industry', forester:'industry',
-        tradingPost:'trade', tavern:'trade',
-        watchtower:'defense', guardPost:'defense', palisade:'defense', well:'defense',
-        road:'road', bridge:'road', lampPost:'road',
-      };
-      const card = (k)=>{
-        const d = BUILD_DEFS[k];
-        const afford = Object.entries(d.cost).every(([kk,amt])=>!amt || (G.stockpile[kk]||0)>=amt);
-        return `<button class="build-card ${afford?'':'disabled'}" data-key="${k}" ${afford?'':'disabled'}>
-          <span class="ic">${d.icon}</span>
-          <span class="name">${d.name}</span>
-          <div class="cost">${d.cost.wood?('🪵 '+d.cost.wood+' '):''}${d.cost.stone?('🪨 '+d.cost.stone+' '):''}${d.cost.planks?('🪚 '+d.cost.planks):''}</div>
-        </button>`;
-      };
-      return ['home','food','industry','trade','defense','road'].map(cat=>{
-        const inCat = keys.filter(k=>(CATOF[k]||'trade')===cat);
-        return inCat.length ? `<div class="build-cat">${CAT[cat]}</div><div class="build-grid">${inCat.map(card).join('')}</div>` : '';
-      }).join('');
-    })()}
-  `;
-  const bulkBtn = document.getElementById('bulk-assign-btn');
-  if(bulkBtn) bulkBtn.addEventListener('click', ()=>{ bulkAssignIdle(); deselectAll(); });
-  sheetContent.querySelectorAll('.build-card').forEach(btn=>{
-    btn.addEventListener('click', ()=>{
-      if(btn.disabled) return;
-      enterBuildMode(btn.dataset.key);
-    });
-  });
-}
-
-function enterBuildMode(key){
-  buildMode.active = true;
-  buildMode.key = key;
-  buildMode.movingBuilding = null;
-  buildFab.classList.add('active');
-  crosshair.classList.add('show');
-  renderPlacementSheet();
-  openSheet();
-}
-function enterMoveMode(b){
-  buildMode.active = true;
-  buildMode.key = b.type;
-  buildMode.movingBuilding = b;
-  buildFab.classList.add('active');
-  crosshair.classList.add('show');
-  renderPlacementSheet();
-  openSheet();
-}
-function exitBuildMode(){
-  buildMode.active = false;
-  buildMode.key = null;
-  buildMode.movingBuilding = null;
-  buildFab.classList.remove('active');
-  crosshair.classList.remove('show');
-}
-function renderPlacementSheet(){
-  const d = BUILD_DEFS[buildMode.key];
-  const moving = !!buildMode.movingBuilding;
-  sheetContent.innerHTML = `
-    <div class="sheet-title">${d.icon} ${moving?'Moving':'Placing'}: ${d.name}</div>
-    <div class="sheet-sub">${moving?'Pan the map to its new home, then confirm. No cost to relocate.':d.desc+' Pan the map to position the mark, then confirm.'}</div>
-    <div class="row placement-bar">
-      <button class="action-btn" id="cancel-place-btn">✕ Cancel</button>
-      <button class="action-btn primary" id="confirm-place-btn">✓ ${moving?'Set Down Here':'Place Here'}</button>
-    </div>
-  `;
-  document.getElementById('cancel-place-btn').addEventListener('click', deselectAll);
-  document.getElementById('confirm-place-btn').addEventListener('click', confirmPlacement);
-}
-function confirmPlacement(){
-  const gx = buildMode.ghostGX, gy = buildMode.ghostGY;
-  const reason = buildSpotReason(gx,gy);
-  if(reason){ toast(reason, true); return; }
-  if(buildMode.movingBuilding){
-    const b = buildMode.movingBuilding;
-    for(let yy=b.gy; yy<b.gy+b.h; yy++) for(let xx=b.gx; xx<b.gx+b.w; xx++){ if(G.grid[yy] && G.grid[yy][xx]) G.grid[yy][xx].building=null; }
-    b.gx = gx; b.gy = gy;
-    G.grid[gy][gx].building = b;
-    toast(BUILD_DEFS[b.type].name+' relocated.');
-    exitBuildMode();
-    deselectAll();
-    return;
-  }
-  const d = BUILD_DEFS[buildMode.key];
-  const costOf = (k,amt)=> (k==='stone' && G.researched.masonry) ? Math.ceil(amt*0.85) : amt;
-  for(const [k,amt] of Object.entries(d.cost)){ if(amt>0 && (G.stockpile[k]||0)<costOf(k,amt)){ toast('Not enough '+k+'.', true); return; } }
-  for(const [k,amt] of Object.entries(d.cost)){ if(amt>0) G.stockpile[k]-=costOf(k,amt); }
-  addBuilding(buildMode.key, gx, gy);
-  spawnDust(gx+0.5, gy+0.5);
-  G.journal.buildingsRaised++;
-  if(G.dailyProgress.built!==undefined) G.dailyProgress.built++;
-  sfx('build'); buzz(18);
-  toast(d.name+' constructed!');
-  if(buildMode.key==='palisade' && !window._palisadeWarned){
-    window._palisadeWarned = true;
-    toast('⚠️ Settlers cannot cross palisades — mind you leave a gate gap.', true);
-  }
-  exitBuildMode();
-  deselectAll();
-}
-
 document.getElementById('shop-pill').addEventListener('click', ()=>{ exitBuildModeIfActive(); clearSelection(); renderHubSheet('shop'); });
 buildFab.addEventListener('click', ()=>{
   if(buildMode.active){ deselectAll(); return; }
-  exitBuildModeIfActive();
-  clearSelection();
-  sheetNav.replace({ id:'build', render:renderBuildPalette });
+  openBuildPalette();
 });
 
 /* =========================================================================
@@ -2671,7 +2487,7 @@ function resetHoldState(){
   spawnTimer=18; G.idleSlotCounter=0; G.usedNames=[];
   G.questsCompleted={}; lastSeenQuestCount=0;
   G.totals={wood:0,stone:0,food:0};
-  resetCapWarnings(); clearEvent();
+  resetCapWarnings(); resetBuildWarnings(); clearEvent();
   G.researched={}; G.activeResearch=null; resetTier(); setWeather('clear');
   G.coins=0; G.bannerIdx=G.crestChoice; G.onboardDone=false; G.decrees={curfew:false,tithe:false,openGates:false,rationing:false}; decisionTimer=3.2; _lastDecision=''; G.ledger={in:{bounties:0,deeds:0,routes:0,quests:0,tithe:0},out:{shop:0}}; rollDailyBounties();
   applyDifficulty(readDifficultyConfig());
