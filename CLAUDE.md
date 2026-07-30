@@ -22,7 +22,8 @@ modules, (3) Capacitor wrap + native storage.
   went 15.3MB → ~395KB.
 - **Step 2 in progress** — `index.html` is now a shell; code lives in `src/`,
   built by Vite (`npm run build` = `vite build && node site/build.js`).
-  Twenty-one modules now. Everything except `critters.ts` and `main.ts` itself
+  Forty modules now, and `main.ts` is down from 7,826 lines to under 3,500.
+  Everything except `critters.ts` and `main.ts` itself
   typechecks WITHOUT `@ts-nocheck`, which is the property worth protecting: a
   name that stops resolving in a typed module fails the build, where the same
   mistake in `main.ts` throws into a frame loop that swallows it. When moving
@@ -30,21 +31,23 @@ modules, (3) Capacitor wrap + native storage.
   dependency at once — a regex scan over the block finds some and misses others
   (it missed `activeEvent` where tsc named it immediately).
 
-  Extracted so far: `src/math.ts` (typed), `src/assets.ts`, `src/defs.ts`,
-  `src/isokit.ts` (typed — the hand-drawn iso primitives, colour and shadow
-  helpers; takes the canvas via `initIsoKit(ctx)` and its clock via
-  `setKitTime(worldTime)` once per frame), `src/audio.ts` (typed — samples +
-  synth fallback + music, owns its own on/off state), `src/storage.ts` (typed —
-  host KV / Capacitor Preferences / localStorage), `src/time.ts` (typed — the
-  day/night cycle and the seasons, pure over `G.worldTime`; told about Endless
-  Winter via `setForceWinter` because it cannot import a mutable), and
-  `src/critters.ts` (the wilds — first drawing code out, taking its canvas and
-  sprite tables through `initCritters({ctx, sprites, spriteScale, waterDrop})`),
-  and then the simulation proper: `pathfind`, `weather`, `skills`, `lives`
-  (friendship/marriage/aging/death/idling), `work` (the utility-AI trade
-  scoring), `buildings`, `villager` (the state machine), `steward`, `economy`
-  (stores + ledger), `progress` (study + hold tiers), `fire`, `raiders`, and
-  `admin` (the debug toggles, a const object with mutable contents like `G`).
+  Extracted so far, in rough dependency order:
+  - **Foundations** — `math`, `defs`, `assets`, `state` (`G`), `version`,
+    `storage`, `audio`, `time`, `landcode`, `admin`.
+  - **Presentation plumbing** — `camera` (the camera, the viewport and the
+    screen↔world projection, all const objects with mutable contents so seven
+    modules import them instead of being handed them), `sprites`, `isokit` (the
+    hand-drawn iso primitives; takes the canvas via `initIsoKit(ctx)` and its
+    clock via `setKitTime(worldTime)` once per frame), `feedback`.
+  - **Drawing** — `terrain`, `scenery`, `backdrop` (the void, the sea and the
+    island skirt), `buildrender`, `villagerrender`, `critters`, `lighting`,
+    `minimap`, `fx`.
+  - **Simulation** — `mapgen`, `pathfind`, `weather`, `skills`, `lives`
+    (friendship/marriage/aging/death/idling), `work` (the utility-AI trade
+    scoring), `buildings`, `villager` (the state machine), `steward`, `economy`
+    (stores + ledger), `progress` (study + hold tiers), `fire`, `raiders`,
+    `contracts`, `chronicle` (the hold's own history), `unlocks` (offline code
+    verification + the banner palette).
 
   **Extract the module others already depend on FIRST.** Doing `buildings`
   before `villager` turned seven injected callbacks into ordinary imports;
