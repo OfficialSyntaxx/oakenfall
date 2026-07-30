@@ -11,7 +11,9 @@ import { BUILD_DEFS, ROLE_DEFS } from './defs';
 import { riverFrozen } from './time';
 import { capFor } from './economy';
 import { getTier } from './progress';
-import { remember } from './lives';
+import { remember, releaseClaims } from './lives';
+import { hasActiveBuilding } from './buildings';
+import { toast } from './hud';
 
 export interface RoleNeed {
   role: string;
@@ -23,16 +25,22 @@ export interface RoleNeed {
   byHand?: boolean;
 }
 
-type Deps = {
-  /** Is there a working building of this type — not just a ruin? */
-  hasActiveBuilding: (type: string) => boolean;
-  /** Put a settler into a trade. Handles the walk and the claim release. */
-  reassignRole: (v: any, role: string) => void;
-};
-let dep: Deps = {
-  hasActiveBuilding: () => false, reassignRole: () => {},
-};
-export function initWork(deps: Deps): void { dep = deps; }
+/** Put a settler into a trade.
+ *
+ * A settler mid-haul is left to finish it — interrupting a carry drops the load
+ * and the walk was already paid for. Anything else releases its claim on the
+ * tile it had, or that tile stays claimed by someone who has wandered off and
+ * the hold slowly runs out of places to work. */
+export function reassignRole(v: any, role: string): void {
+  if (v.stage === 'child') { toast(v.name + ' is too young for such work.', true); return; }
+  const hauling = ['walkingToDropoff', 'seekingFood', 'eating', 'seekingSleep', 'sleeping'];
+  if (!hauling.includes(v.state)) {
+    releaseClaims(v);
+    v.state = 'idle';
+  }
+  v.role = role;
+  v.idleCooldown = 0;
+}
 
 /* Recomputed at most once a second: every idle settler asks the same question
    in the same frame, and the answer cannot have changed between them. */
@@ -49,7 +57,7 @@ export function roleNeedScores(): RoleNeed[] {
 
   const out: RoleNeed[] = [];
   const add = (role: string, workplace: string, score: number) => {
-    if (!dep.hasActiveBuilding(workplace)) return;        // nowhere to do the work
+    if (!hasActiveBuilding(workplace)) return;        // nowhere to do the work
     out.push({ role, score: score / (1 + (count[role] || 0)), raw: score, workers: count[role] || 0 });
   };
 
@@ -94,7 +102,7 @@ export function seekWork(v: any): boolean {
   if (G.buildings.some((b: any) => b._fire > 0)) return false;
   const best = roleNeedScores()[0];
   if (!best || best.score < 0.35) return false;
-  dep.reassignRole(v, best.role);
+  reassignRole(v, best.role);
   v.ambientEmote = '💡';
   return true;
 }
@@ -137,7 +145,7 @@ export function maybeSwitchTrade(v: any): boolean {
   const worthIt = minePressure <= 0.05 ? true : pickPressure > minePressure * 1.8;
   if (!worthIt) return false;
 
-  dep.reassignRole(v, pick.role);
+  reassignRole(v, pick.role);
   v.ambientEmote = '🔁';
   remember(v, 'took up ' + (ROLE_DEFS[pick.role] ? ROLE_DEFS[pick.role].label : pick.role));
   return true;

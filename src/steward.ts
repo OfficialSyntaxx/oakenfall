@@ -15,6 +15,7 @@
  */
 import { G } from './state';
 import { toast } from './hud';
+import { reassignRole } from './work';
 import { BUILD_DEFS, ROLE_DEFS, TECH_TREE, NUM_WORDS, roleLabel } from './defs';
 import { dist2 } from './math';
 import { tileAt } from './mapgen';
@@ -29,14 +30,12 @@ import { spawnDust } from './fx';
 
 type Deps = {
   /** Put a settler into a trade — handles the walk and the claim release. */
-  reassignRole: (v: any, role: string) => void;
   /** Begin a study by tech id. */
   startResearch: (id: string) => void;
   /** Tear a building down, refunding half its timber. */
   demolishBuilding: (b: any) => void;
 };
 let dep: Deps = {
-  reassignRole: () => {},
   startResearch: () => {}, demolishBuilding: () => {},
 };
 export function initSteward(deps: Deps): void { dep = deps; }
@@ -163,7 +162,7 @@ function stewardAssignGatherers(res){
 function stewardStaff(role, count){
   let moved = 0;
   const free = G.villagers.filter(v=>v.role==='idle' && v.stage!=='child' && v.state!=='spawning');
-  for(const v of free){ if(moved>=count) break; dep.reassignRole(v, role); moved++; }
+  for(const v of free){ if(moved>=count) break; reassignRole(v, role); moved++; }
   if(moved >= count) return moved;
   const counts = {};
   for(const v of G.villagers){ if(v.stage!=='child' && v.state!=='spawning') counts[v.role] = (counts[v.role]||0)+1; }
@@ -176,7 +175,7 @@ function stewardStaff(role, count){
     if(!from) break;
     const v = G.villagers.find(x=>x.role===from && x.stage!=='child' && x.state!=='spawning');
     if(!v){ counts[from] = 0; continue; }
-    dep.reassignRole(v, role);
+    reassignRole(v, role);
     counts[from]--; counts[role] = (counts[role]||0)+1; moved++;
   }
   return moved;
