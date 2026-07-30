@@ -5,14 +5,10 @@
  * become on its own.
  */
 import { G } from './state';
+import { toast } from './hud';
 import { TECH_TREE, HOLD_TIERS } from './defs';
 import { sfx, buzz } from './audio';
 
-type Deps = {
-  toast: (msg: string, urgent?: boolean) => void;
-};
-let dep: Deps = { toast: () => {} };
-export function initProgress(deps: Deps): void { dep = deps; }
 
 /* ── STUDY ── one project at a time, begun from the Town Centre. */
 
@@ -22,17 +18,17 @@ export function techAvailable(t: any): boolean {
 }
 
 export function startResearch(id: string): void {
-  if (G.activeResearch) { dep.toast('Research is already underway.', true); return; }
+  if (G.activeResearch) { toast('Research is already underway.', true); return; }
   const t = TECH_TREE.find((x: any) => x.id === id);
   if (!t || G.researched[id]) return;
   // Check the whole cost before spending any of it — a half-paid study that
   // fails on the second resource would quietly rob the stores.
   for (const [k, amt] of Object.entries(t.cost) as [string, number][]) {
-    if ((G.stockpile[k] || 0) < amt) { dep.toast('Not enough ' + k + ' for ' + t.name + '.', true); return; }
+    if ((G.stockpile[k] || 0) < amt) { toast('Not enough ' + k + ' for ' + t.name + '.', true); return; }
   }
   for (const [k, amt] of Object.entries(t.cost) as [string, number][]) G.stockpile[k] -= amt;
   G.activeResearch = { id, remaining: t.time, total: t.time };
-  dep.toast('🔬 Research begun: ' + t.name);
+  toast('🔬 Research begun: ' + t.name);
 }
 
 /* ── HOLD TIERS ── Outpost, Hamlet, Village and up. Derived from population
@@ -60,7 +56,7 @@ export function checkTierUp(): void {
   if (idx > currentTierIdx) {
     currentTierIdx = idx;
     const t = HOLD_TIERS[idx];
-    dep.toast(t.ic + ' Your hold has grown into a ' + t.name + '!');
+    toast(t.ic + ' Your hold has grown into a ' + t.name + '!');
     sfx('tier');
     buzz([20, 40, 20]);
   } else if (idx < currentTierIdx) {

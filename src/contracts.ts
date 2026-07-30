@@ -6,19 +6,19 @@
  * twice. Both are the reason to produce a surplus rather than just enough.
  */
 import { G } from './state';
+import { toast } from './hud';
 import { clamp } from './math';
 import { hasActiveBuilding } from './buildings';
 import { logCoinIn } from './economy';
 import { sfx, buzz } from './audio';
 
 type Deps = {
-  toast: (msg: string, urgent?: boolean) => void;
   /** Game-mode multiplier on bounty payouts. */
   bountyCoinMul: () => number;
   /** Redraw the routes sheet when a route is taken up or dissolved. */
   refreshRoutesSheet: () => void;
 };
-let dep: Deps = { toast: () => {}, bountyCoinMul: () => 1, refreshRoutesSheet: () => {} };
+let dep: Deps = { bountyCoinMul: () => 1, refreshRoutesSheet: () => {} };
 export function initContracts(deps: Deps): void { dep = deps; }
 
 /* ── DAILY BOUNTIES ── two a day, rolled at dawn, paid on completion. */
@@ -56,7 +56,7 @@ export function checkBounties(): void {
     logCoinIn('bounties', paid);
     sfx('coin');
     buzz(12);
-    dep.toast('💰 Bounty complete: ' + b.name + ' — +' + paid + ' coins!');
+    toast('💰 Bounty complete: ' + b.name + ' — +' + paid + ' coins!');
   }
 }
 
@@ -92,8 +92,8 @@ export function refreshRouteOffers(): void {
 }
 
 export function acceptRoute(id: string): void {
-  if (!hasActiveBuilding('tradingPost')) { dep.toast('Build a Trading Post to broker caravan routes.', true); return; }
-  if (G.tradeRoutes.length >= 3) { dep.toast('You can hold at most three trade routes.', true); return; }
+  if (!hasActiveBuilding('tradingPost')) { toast('Build a Trading Post to broker caravan routes.', true); return; }
+  if (G.tradeRoutes.length >= 3) { toast('You can hold at most three trade routes.', true); return; }
   const i = G.routeOffers.findIndex((o: any) => o.id === id);
   if (i < 0) return;
   const o = G.routeOffers.splice(i, 1)[0];
@@ -101,7 +101,7 @@ export function acceptRoute(id: string): void {
   o.missed = 0;
   G.tradeRoutes.push(o);
   const label = ROUTE_GOODS.find((g) => g.type === o.giveType)!.label;
-  dep.toast(o.ic + ' Caravan route to ' + o.name + ' agreed — ' + o.giveAmt + ' ' + label +
+  toast(o.ic + ' Caravan route to ' + o.name + ' agreed — ' + o.giveAmt + ' ' + label +
     ' every ' + o.everyDays + ' days.');
   refreshRouteOffers();
   dep.refreshRoutesSheet();
@@ -111,7 +111,7 @@ export function cancelRoute(id: string): void {
   const i = G.tradeRoutes.findIndex((r: any) => r.id === id);
   if (i < 0) return;
   const r = G.tradeRoutes.splice(i, 1)[0];
-  dep.toast('🐫 The route to ' + r.name + ' is dissolved.');
+  toast('🐫 The route to ' + r.name + ' is dissolved.');
   dep.refreshRoutesSheet();
 }
 
@@ -125,18 +125,18 @@ export function processTradeRoutes(): void {
       G.coins += r.coins;
       logCoinIn('routes', r.coins);
       r.missed = 0;
-      dep.toast(r.ic + ' Caravan to ' + r.name + ' paid 💰' + r.coins + ' for ' + r.giveAmt + ' ' + g.label + '.');
+      toast(r.ic + ' Caravan to ' + r.name + ' paid 💰' + r.coins + ' for ' + r.giveAmt + ' ' + g.label + '.');
     } else {
       r.missed = (r.missed || 0) + 1;
       // One miss is a warning; two breaks the contract and the hold's word
       // with it, which is why it costs morale rather than only coin.
       if (r.missed >= 2) {
         G.tradeRoutes.splice(G.tradeRoutes.indexOf(r), 1);
-        dep.toast('🐫 The route to ' + r.name + ' was broken — the caravan left empty twice.', true);
+        toast('🐫 The route to ' + r.name + ' was broken — the caravan left empty twice.', true);
         G.villagers.forEach((v: any) => { if (v.morale !== undefined) v.morale = clamp(v.morale - 4, 0, 100); });
         continue;
       }
-      dep.toast('⚠️ No ' + g.label + ' ready for the ' + r.name + ' caravan — one more miss ends the route.', true);
+      toast('⚠️ No ' + g.label + ' ready for the ' + r.name + ' caravan — one more miss ends the route.', true);
     }
     r.nextDay = G.dayCount + r.everyDays;
   }

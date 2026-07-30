@@ -8,6 +8,7 @@
  * which is the mechanic that makes bridge placement a real decision.
  */
 import { G } from './state';
+import { toast } from './hud';
 import { ADMIN } from './admin';
 import { clamp, dist2 } from './math';
 import { RAIDER_VARIANTS, LEGACY_TRAITS } from './defs';
@@ -19,13 +20,12 @@ import { sfx } from './audio';
 import { spawnBoom } from './fx';
 
 type Deps = {
-  toast: (msg: string, urgent?: boolean) => void;
   /** Are bandits enabled at all — Peaceful mode says no. */
   raidsEnabled: () => boolean;
   /** Curfew and open-gates decrees change how often trouble comes. */
   decreeRaidMul: () => number;
 };
-let dep: Deps = { toast: () => {}, raidsEnabled: () => true, decreeRaidMul: () => 1 };
+let dep: Deps = { raidsEnabled: () => true, decreeRaidMul: () => 1 };
 export function initRaiders(deps: Deps): void { dep = deps; }
 
 /** Difficulty and game mode together set how dangerous the wilds are. */
@@ -91,13 +91,13 @@ export function wolfTick(dt: number): void {
       if(exposed.length>0){
         const v = exposed[Math.floor(Math.random()*exposed.length)];
         releaseClaims(v); v.carrying=null; v.state='idle'; v.fatigue=clamp(v.fatigue+15,0,100);
-        dep.toast('Wolves prowl the treeline — '+v.name+' flees home!', true);
+        toast('Wolves prowl the treeline — '+v.name+' flees home!', true);
         G.wolfEvents++;
       } else {
         const loss = Math.min(G.stockpile.food, 4+Math.floor(Math.random()*8));
         if(loss>0){
           G.stockpile.food -= loss;
-          dep.toast('A wolf pack raids the stores — '+loss+' food stolen!', true); sfx('raid');
+          toast('A wolf pack raids the stores — '+loss+' food stolen!', true); sfx('raid');
           G.wolfEvents++;
         }
       }
@@ -130,7 +130,7 @@ export function banditTick(dt: number): void {
       launchRaid(raidN, mitigation <= 0.72, raidEntryPoint(openBridges));
       if(mitigation > 0.72){
         G.journal.raidsRepelled = (G.journal.raidsRepelled||0) + 1;
-        dep.toast('🛡️ Bandits probed the walls — your guards drove them off!'); sfx('raid');
+        toast('🛡️ Bandits probed the walls — your guards drove them off!'); sfx('raid');
       } else {
         const stealFrac = (1 - mitigation) * 0.35;
         const stolen = [];
@@ -145,9 +145,9 @@ export function banditTick(dt: number): void {
           if(openBridges.length){
             const br = openBridges[Math.floor(Math.random()*openBridges.length)];
             spawnBoom(br.gx, br.gy);
-            dep.toast('🌉 Raiders poured across the unwatched bridge!', true);
+            toast('🌉 Raiders poured across the unwatched bridge!', true);
           }
-          dep.toast('🏴 Bandits raid the hold — lost '+stolen.join(', ')+'!', true); sfx('raid');
+          toast('🏴 Bandits raid the hold — lost '+stolen.join(', ')+'!', true); sfx('raid');
           G.villagers.forEach(v=>{ if(v.morale!==undefined){ let hit=(v.trait&&v.trait.id==='brave')?4:8; if(G.festivalBoon==='courage') hit*=0.5; v.morale=clamp(v.morale-hit,0,100); } });
           // Surviving a raid can steel a settler for life
           if(Math.random()<0.3 && G.villagers.length){
@@ -155,11 +155,11 @@ export function banditTick(dt: number): void {
             if(cand.length){
               const vv = cand[Math.floor(Math.random()*cand.length)];
               vv.trait = LEGACY_TRAITS.brave;
-              dep.toast('🦁 '+vv.name+' stood firm through the raid — they are Brave now.');
+              toast('🦁 '+vv.name+' stood firm through the raid — they are Brave now.');
             }
           }
         } else {
-          dep.toast('🏴 Bandits found nothing worth taking.');
+          toast('🏴 Bandits found nothing worth taking.');
         }
       }
     }

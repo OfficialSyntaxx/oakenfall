@@ -9,6 +9,7 @@
  * anything else. This module only decides what is burning and how fast.
  */
 import { G } from './state';
+import { toast } from './hud';
 import { chron } from './chronicle';
 import { clamp, dist2 } from './math';
 import { BUILD_DEFS } from './defs';
@@ -18,13 +19,12 @@ import { buildingCenter, removeBuilding } from './buildings';
 import { sfx } from './audio';
 
 type Deps = {
-  toast: (msg: string, urgent?: boolean) => void;
   /** Peaceful mode has no fires, the same flag that turns off bandits. */
   hazardsEnabled: () => boolean;
   /** Game-mode decay multiplier — a harsher hold burns more readily. */
   decayMul: () => number;
 };
-let dep: Deps = { toast: () => {}, hazardsEnabled: () => true, decayMul: () => 1 };
+let dep: Deps = { hazardsEnabled: () => true, decayMul: () => 1 };
 export function initFire(deps: Deps): void { dep = deps; }
 
 /** Stone and earth do not burn: wells, roads, bridges, palisades and the mining
@@ -53,7 +53,7 @@ export function igniteBuilding(b: any, announce?: boolean){
   if(b.condition!==undefined && b.condition<=0) return;
   b._fire = 20 + Math.random()*14;
   if(announce){
-    dep.toast('🔥 Fire! Your '+(BUILD_DEFS[b.type]?BUILD_DEFS[b.type].name:b.type)+' is ablaze — tap it and send a bucket brigade!', true);
+    toast('🔥 Fire! Your '+(BUILD_DEFS[b.type]?BUILD_DEFS[b.type].name:b.type)+' is ablaze — tap it and send a bucket brigade!', true);
     sfx('fire');
   }
 }
@@ -87,14 +87,14 @@ export function fireTick(dt){
     b.condition = Math.max(0, b.condition - b._fire*0.05*dt);
     if(b._fire <= 0.5){
       delete b._fire; delete b._bucket;
-      dep.toast('💧 The fire at your '+(BUILD_DEFS[b.type]?BUILD_DEFS[b.type].name:b.type)+' is out.');
+      toast('💧 The fire at your '+(BUILD_DEFS[b.type]?BUILD_DEFS[b.type].name:b.type)+' is out.');
       G.villagers.forEach(v=>{ if(dist2(v.gx,v.gy,c.gx,c.gy)<9 && v.morale!==undefined) v.morale=clamp(v.morale+3,0,100); });
       continue;
     }
     if(b.condition <= 0){
       const nm = BUILD_DEFS[b.type]?BUILD_DEFS[b.type].name:b.type;
       removeBuilding(b);
-      dep.toast('🔥 Your '+nm+' has burned to the ground!', true);
+      toast('🔥 Your '+nm+' has burned to the ground!', true);
       chron('fire', nm);
       G.villagers.forEach(v=>{ if(v.morale!==undefined) v.morale=clamp(v.morale-6,0,100); });
       continue;
@@ -106,7 +106,7 @@ export function fireTick(dt){
         const oc = buildingCenter(o);
         if(dist2(c.gx,c.gy,oc.gx,oc.gy) < 5.8 && Math.random() < 0.13*dt){
           igniteBuilding(o);
-          dep.toast('🔥 The fire spreads to your '+(BUILD_DEFS[o.type]?BUILD_DEFS[o.type].name:o.type)+'!', true);
+          toast('🔥 The fire spreads to your '+(BUILD_DEFS[o.type]?BUILD_DEFS[o.type].name:o.type)+'!', true);
         }
       }
     }

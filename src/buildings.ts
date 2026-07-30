@@ -5,6 +5,7 @@
  * really made of, so they need to be importable rather than pushed in.
  */
 import { G } from './state';
+import { toast } from './hud';
 import { chron } from './chronicle';
 import { BUILD_DEFS } from './defs';
 import { dist2 } from './math';
@@ -13,11 +14,10 @@ import { tileAt } from './mapgen';
 type Deps = {
   /** Called when a building is removed, so a sheet showing it can close. */
   onRemoved: (b: any) => void;
-  toast: (msg: string, urgent?: boolean) => void;
   /** Game-mode decay multiplier. Peaceful is 0 — nothing ever wears out. */
   decayMul: () => number;
 };
-let dep: Deps = { onRemoved: () => {}, toast: () => {}, decayMul: () => 1 };
+let dep: Deps = { onRemoved: () => {}, decayMul: () => 1 };
 export function initBuildings(deps: Deps): void { dep = deps; }
 
 /** The town hall: every hauler's fallback drop-off, and the anchor for the
@@ -174,7 +174,7 @@ export function decayTick(dt: number): void {
     // threshold does not nag every frame.
     if (b.condition < 35 && !b._wornWarned) {
       b._wornWarned = true;
-      dep.toast('⚠️ Your ' + (BUILD_DEFS[b.type] ? BUILD_DEFS[b.type].name : b.type) +
+      toast('⚠️ Your ' + (BUILD_DEFS[b.type] ? BUILD_DEFS[b.type].name : b.type) +
         ' is falling into disrepair! (Tap it to repair — or 🔧 Mend the Hold in the coin shop.)', true);
     }
     if (b.condition >= 35) b._wornWarned = false;

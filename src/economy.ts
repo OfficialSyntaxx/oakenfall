@@ -6,15 +6,15 @@
  * these need to be importable rather than pushed in.
  */
 import { G } from './state';
+import { toast } from './hud';
 import { clamp } from './math';
 import { CYCLE_LEN } from './time';
 
 type Deps = {
-  toast: (msg: string, urgent?: boolean) => void;
   /** Game-mode decay multiplier. Peaceful sets it to 0 and nothing spoils. */
   decayMul: () => number;
 };
-let dep: Deps = { toast: () => {}, decayMul: () => 1 };
+let dep: Deps = { decayMul: () => 1 };
 export function initEconomy(deps: Deps): void { dep = deps; }
 
 /** What the hold can hold before a granary. Crafted goods are deliberately
@@ -57,7 +57,7 @@ export function foodSpoilTick(dt: number): void {
   // Mention it about once a day, and only once it is worth mentioning.
   if (G.dayCount !== _spoilDay && _spoilAcc >= 5) {
     _spoilDay = G.dayCount;
-    dep.toast('🐀 ' + Math.round(_spoilAcc) + ' food has spoiled for want of storage — raise a Granary.', true);
+    toast('🐀 ' + Math.round(_spoilAcc) + ' food has spoiled for want of storage — raise a Granary.', true);
     _spoilAcc = 0;
   }
 }
@@ -86,7 +86,7 @@ export function gainResource(type: string, amount: number): number {
   if (G.stockpile[type] >= cap && amount > 0) {
     if (!_capWarned[type]) {
       _capWarned[type] = true;
-      dep.toast(type[0].toUpperCase() + type.slice(1) + ' storage is full! Build a Granary.', true);
+      toast(type[0].toUpperCase() + type.slice(1) + ' storage is full! Build a Granary.', true);
     }
   } else {
     _capWarned[type] = false;

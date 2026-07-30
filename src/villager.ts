@@ -12,6 +12,7 @@
  * drops what they are carrying to go and eat loses the load.
  */
 import { G } from './state';
+import { toast } from './hud';
 import { ADMIN } from './admin';
 import { clamp, dist2, hashStr } from './math';
 import { BUILD_DEFS, ROLE_DEFS, HUNGER_RATE, FATIGUE_RATE, LEGACY_TRAITS } from './defs';
@@ -30,7 +31,6 @@ import { gainResource, harvestBoonMul } from './economy';
 import { spawnFly } from './fx';
 
 type Deps = {
-  toast: (msg: string, urgent?: boolean) => void;
   /** Multipliers owned by systems that have not moved out of main.ts yet. */
   decreeHungerMul: () => number;
   decreeWorkMul: () => number;
@@ -39,7 +39,6 @@ type Deps = {
   festivalOn: () => boolean;
 };
 let dep: Deps = {
-  toast: () => {},
   decreeHungerMul: () => 1, decreeWorkMul: () => 1, eventSpeedBonus: () => 1, festivalOn: () => false,
 };
 export function initVillagers(deps: Deps): void { dep = deps; }
@@ -154,11 +153,11 @@ export function updateVillager(v, dt){
     if(v.moraleLowT > 60){
       releaseClaims(v);
       G.villagers.splice(G.villagers.indexOf(v), 1);
-      dep.toast('💔 '+v.name+' has lost heart and left the hold...', true);
+      toast('💔 '+v.name+' has lost heart and left the hold...', true);
       // A left-behind partner carries their memory — and steadier resolve
       if(v.partner){
         const p = G.villagers.find(o=>o.name===v.partner);
-        if(p){ p.trait = LEGACY_TRAITS.steadfast; dep.toast('🕯️ '+p.name+' keeps '+v.name+'\'s memory close — Steadfast.'); }
+        if(p){ p.trait = LEGACY_TRAITS.steadfast; toast('🕯️ '+p.name+' keeps '+v.name+'\'s memory close — Steadfast.'); }
       }
       return;
     }
@@ -167,16 +166,16 @@ export function updateVillager(v, dt){
   // illness: triggered by prolonged hunger (>85) or winter + frail
   if(!v.sick){
     const illnessRisk = (v.hunger>85 ? 0.004 : 0) + ((seasonIndex()===3 && v.trait && v.trait.id==='frail') ? 0.003 : 0);
-    if(Math.random() < illnessRisk * (G.researched.herbs?0.6:1) * dt){ v.sick=true; v.sickTimer = (25+Math.random()*20)*(G.researched.herbs?0.6:1); dep.toast(v.name+' has fallen ill!', true); }
+    if(Math.random() < illnessRisk * (G.researched.herbs?0.6:1) * dt){ v.sick=true; v.sickTimer = (25+Math.random()*20)*(G.researched.herbs?0.6:1); toast(v.name+' has fallen ill!', true); }
   } else {
     v.sickTimer -= dt;
-    if(v.sickTimer<=0){ v.sick=false; dep.toast(v.name+' has recovered.'); }
+    if(v.sickTimer<=0){ v.sick=false; toast(v.name+' has recovered.'); }
   }
 
   // famine: if food is out AND hungry, villager's speed drops sharply (already via effMultiplier),
   // but if hunger hits 100 for >20s, trigger a critical crisis toast once
   if(v.hunger>=99.9){
-    if(!v._famineWarned){ v._famineWarned=true; dep.toast(v.name+' is starving!', true); }
+    if(!v._famineWarned){ v._famineWarned=true; toast(v.name+' is starving!', true); }
   } else { v._famineWarned=false; }
 
 
@@ -246,7 +245,7 @@ export function updateVillager(v, dt){
           if(t){ t.workers++; v.targetTile=t; v.state='walkingToResource'; v.resKind='stone'; }
         } else if(v.role==='fisher'){
           if(riverFrozen()){
-            if(!_frozenFisherToldOnce){ _frozenFisherToldOnce = true; dep.toast('❄️ The river is frozen over — the fishers wait for thaw.', true); }
+            if(!_frozenFisherToldOnce){ _frozenFisherToldOnce = true; toast('❄️ The river is frozen over — the fishers wait for thaw.', true); }
           } else {
             const t = findResourceTarget(v, G.waterTiles);
             if(t){ t.workers++; v.targetTile=t; v.state='walkingToResource'; v.resKind='fish'; }

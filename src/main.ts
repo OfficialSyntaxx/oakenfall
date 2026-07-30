@@ -51,7 +51,7 @@ import { initContracts, rollDailyBounties, checkBounties, makeRouteOffer, refres
 import { initRaiders, raidEntryPoint, launchRaid, raiderTick, wolfTick, banditTick,
   setWolfRisk, resetRaidTimers, hastenRaid } from './raiders';
 import { initFire, FLAMMABLE, igniteBuilding, fireTick, fireDrynessMul } from './fire';
-import { initProgress, techAvailable, startResearch, computeTierIdx, checkTierUp,
+import { techAvailable, startResearch, computeTierIdx, checkTierUp,
   getTier, resetTier } from './progress';
 import { initEconomy, BASE_CAP, capFor, foodSafeCap, foodSpoilTick, gainResource,
   harvestBoonMul, logCoinIn, logCoinOut, resetCapWarnings } from './economy';
@@ -68,10 +68,11 @@ import { initLives, familyTick, ambientIdle, hasTrait, relTo, remember, bumpRel,
   AGE_YEAR, ADULT_AGE, ELDER_BEFORE, LIFESPAN_BASE } from './lives';
 import { initWork, roleNeedScores, seekWork, maybeSwitchTrade } from './work';
 import { chron, chronicleAdd } from './chronicle';
+import { initHud, toast, eventLog, updateHud, updateDayTint, updateHudReserve } from './hud';
 import { initBackdrop, voidBackdrop, drawSea, drawIslandSkirt } from './backdrop';
 import { initUnlocks, ADMIN_PROMO, hasUnlock, isPatron, redeemCode, saveUnlocks, loadUnlocks,
          applyPatronBanners, bannerPalette, BANNER_COLORS, bannerColor } from './unlocks';
-import { initSkills, SKILL_TIERS, skillTier, skillMul, gainSkill, hasNearbyMentor,
+import { SKILL_TIERS, skillTier, skillMul, gainSkill, hasNearbyMentor,
   GUILD_DEFS, guildBonusVal, recomputeGuilds, guildMulRes, guildFarmMul } from './skills';
 import { initWeather, getWeather, setWeather, rollWeather, rollClimate, rollPlague, plagueTick,
   climateFarmMul, climateFireMul, climateHungerMul, climateFatigueMul,
@@ -1143,6 +1144,8 @@ initIsoKit(ctx);
 initSprites({ ctx });
 initFeedback({ sheetContent: ()=>sheetContent, gameModeId: ()=>gameModeId });
 initUnlocks({ saveIfRunning: ()=>{ if(started) saveGame(); } });
+initHud({ gameModeId: ()=>gameModeId,
+  questProgress: ()=>({ done: questsDoneCount(), seen: lastSeenQuestCount }) });
 initFX({ ctx });
 initBackdrop({ ctx });
 initScenery({ ctx, windAt });
@@ -1157,11 +1160,9 @@ initCritters({ ctx });
    chronicle directly — the module stays pure simulation that way, and can be
    reasoned about without a DOM. */
 initWeather({ toast, sfx, forceWinter: ()=>!!gameMode.forceWinter });
-initSkills({ toast });
 initWork({ hasActiveBuilding, reassignRole });
 initBuildings({ toast, decayMul: ()=>gameMode.decayMul,
   onRemoved: (b)=>{ if(selection && selection.ref===b) deselectAll(); } });
-initProgress({ toast });
 initContracts({ toast, bountyCoinMul: ()=>(gameMode.bountyCoinMul||1),
   refreshRoutesSheet: ()=>renderTradeRoutesSheet() });
 initRaiders({ toast, raidsEnabled: ()=>gameMode.banditsEnabled!==false,
@@ -1205,32 +1206,6 @@ function resizeCanvas(){
   } finally {
     _resizing = false;
   }
-}
-// Measure the right-hand HUD cluster (and the clock/minimap beneath it) and
-// reserve exactly that much room for the scrolling resource row. Hard-coded
-// values silently broke whenever a HUD button was added — this can't.
-function updateHudReserve(){
-  try{
-    const right = document.getElementById('hud-right');
-    if(!right) return;
-    const rw = right.getBoundingClientRect().width || 0;
-    const mm = document.getElementById('minimap-wrap');
-    const mw = (mm && !mm.classList.contains('hidden')) ? (mm.getBoundingClientRect().width||0) : 0;
-    // In landscape the minimap sits beside the buttons; in portrait it's below.
-    const landscape = window.matchMedia('(orientation: landscape)').matches;
-    const reserve = Math.ceil(Math.max(rw, landscape ? Math.max(rw, mw) : rw) + 16);
-    document.documentElement.style.setProperty('--hud-reserve', reserve+'px');
-    // Publish where the stores actually end, so the clock and minimap can sit
-    // below them — the row's height changes when it wraps or is expanded, and
-    // fixed offsets used to drive the clock straight through the pills.
-    const bar = document.getElementById('hud-top');
-    if(bar){
-      const pills = bar.querySelectorAll('.pill');
-      let bottom = bar.getBoundingClientRect().bottom;
-      for(const p of pills){ bottom = Math.max(bottom, p.getBoundingClientRect().bottom); }
-      document.documentElement.style.setProperty('--hud-bottom', Math.ceil(bottom)+'px');
-    }
-  }catch(e){}
 }
 function requestResize(){
   // Debounce: coalesce rapid-fire resize events (common during iframe/viewport
@@ -1439,27 +1414,6 @@ function drawDebugOverlay(){
   lines.forEach((l,i)=> ctx.fillText(l, x+8, y+6+i*15));
   ctx.restore();
 }
-const daytintEl = document.getElementById('daytint');
-const phaseLabelEl = document.getElementById('phase-label');
-const clockDayEl = document.querySelector('#clock');
-function updateDayTint(){
-  const f = dayPhaseFrac();
-  let color, label;
-  if(f < DAY_LEN/CYCLE_LEN){
-    const df = f/(DAY_LEN/CYCLE_LEN);
-    if(df<0.12){ color='rgba(120,90,150,0.30)'; label='Dawn'; }
-    else if(df<0.8){ color='rgba(255,255,255,0)'; label='Day'; }
-    else { color='rgba(200,110,60,0.18)'; label='Dusk'; }
-  } else {
-    color='rgba(10,16,40,0.18)'; label='Night';
-  }
-  daytintEl.style.backgroundColor = color;
-  phaseLabelEl.textContent = label;
-  clockDayEl.childNodes[0].nodeValue = (G.holdName && G.holdName!=='Oakenfall' ? G.holdName+' · ' : '')+(gameModeId!=='settler' ? GAME_MODES[gameModeId].name+' · ' : '')+HOLD_TIERS[getTier()].ic+' '+HOLD_TIERS[getTier()].name+' · Day '+G.dayCount+' · '+seasonName()+' '+getWeather().ic+(G.climate?' '+G.climate.ic:'')+' · ';
-  const qd = questsDoneCount();
-  document.getElementById('quest-dot').classList.toggle('hidden', qd>=lastSeenQuestCount);
-}
-
 let lastSeenQuestCount = 0;
 
 function renderQuestSheet(){
@@ -1712,79 +1666,6 @@ document.getElementById('mm-zoom').addEventListener('click', (e)=>{
   e.stopPropagation();
   document.getElementById('minimap-wrap').classList.toggle('mm-big');
 });
-
-/* =========================================================================
-   HUD UPDATE
-========================================================================= */
-const elWood=document.getElementById('res-wood'), elStone=document.getElementById('res-stone'),
-      elFood=document.getElementById('res-food'), elPop=document.getElementById('res-pop'),
-      elCap=document.getElementById('res-cap');
-function updateHud(){
-  elWood.textContent = fmt(G.stockpile.wood);
-  elStone.textContent = fmt(G.stockpile.stone);
-  elFood.textContent = fmt(G.stockpile.food);
-  document.getElementById('cap-wood').textContent = '/'+capFor('wood');
-  document.getElementById('cap-stone').textContent = '/'+capFor('stone');
-  document.getElementById('cap-food').textContent = '/'+capFor('food');
-  if(!window._hudRefs){
-    window._hudRefs = {
-      planks: document.getElementById('res-planks'), capPlanks: document.getElementById('cap-planks'),
-      bread: document.getElementById('res-bread'),  capBread: document.getElementById('cap-bread'),
-      flour: document.getElementById('res-flour'),  capFlour: document.getElementById('cap-flour'),
-      coins: document.getElementById('res-coins'),  badge: document.getElementById('idle-badge'),
-    };
-  }
-  const R = window._hudRefs;
-  R.planks.textContent = fmt(G.stockpile.planks||0);
-  R.capPlanks.textContent = '/'+capFor('planks');
-  if(R.flour){ R.flour.textContent = fmt(G.stockpile.flour||0); R.capFlour.textContent = '/'+capFor('flour'); }
-  R.bread.textContent = fmt(G.stockpile.bread||0);
-  R.capBread.textContent = '/'+capFor('bread');
-  R.coins.textContent = fmt(G.coins);
-  elPop.textContent = G.villagers.length;
-  elCap.textContent = '/'+popCapacity();
-  // Attention badge: idle villagers who could be working
-  const idleCount = G.villagers.filter(v=>v.role==='idle' && v.state!=='spawning').length;
-  const badge = R.badge;
-  if(badge){
-    if(idleCount>0){ badge.style.display='block'; badge.textContent = idleCount; }
-    else badge.style.display='none';
-  }
-  updateDayTint();
-}
-
-/* =========================================================================
-   TOASTS
-========================================================================= */
-const toastContainer = document.getElementById('toast-container');
-const eventLog = []; // recent toasts, re-readable from the Journal → Events inbox
-// Sort a toast into an inbox category from its content (keeps toast() callers
-// unchanged — no need to tag ~100 call sites by hand).
-function eventCategory(msg){
-  if(/🏴|🐺|bandit|raid|wolves|wolf/i.test(msg)) return 'raid';
-  if(/🔥|🪣|💧|fire|ablaze|blaze|burned|burns/i.test(msg)) return 'build';
-  if(/🔨|🏗|raise|disrepair|repair|building|bridge|granary|tower|palisade|manor|house|tavern|bakery/i.test(msg)) return 'build';
-  if(/joins|left|lost heart|has fallen ill|wed|married|born|of age|passed|grieic|💔|💞|👶|🕯|settler|villager|elder/i.test(msg)) return 'folk';
-  return 'general';
-}
-function toast(msg, warn){
-  eventLog.push({ msg, warn:!!warn, day:G.dayCount, cat:eventCategory(msg) });
-  if(eventLog.length>40) eventLog.shift();
-  if(warn && typeof sfx==="function") sfx("warn");
-  const el = document.createElement('div');
-  el.className = 'toast'+(warn?' warn':'');
-  el.textContent = msg;
-  toastContainer.appendChild(el);
-  // Keep the stack short and compact — drop the oldest beyond 3.
-  while(toastContainer.children.length > 3) toastContainer.removeChild(toastContainer.firstChild);
-  requestAnimationFrame(()=>el.classList.add('show'));
-  let dismissed = false;
-  const dismiss = ()=>{ if(dismissed) return; dismissed = true; el.classList.remove('show'); setTimeout(()=>el.remove(),300); };
-  // Tap/click to dismiss immediately; otherwise auto-clear well within 3s.
-  el.style.cursor = 'pointer';
-  el.addEventListener('click', dismiss);
-  setTimeout(dismiss, 2200);
-}
 
 /* =========================================================================
    SELECTION / SHEET UI

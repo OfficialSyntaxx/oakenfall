@@ -14,6 +14,7 @@
  * queue and nothing else reads it.
  */
 import { G } from './state';
+import { toast } from './hud';
 import { BUILD_DEFS, ROLE_DEFS, TECH_TREE, NUM_WORDS, roleLabel } from './defs';
 import { dist2 } from './math';
 import { tileAt } from './mapgen';
@@ -27,7 +28,6 @@ import { sfx } from './audio';
 import { spawnDust } from './fx';
 
 type Deps = {
-  toast: (msg: string, urgent?: boolean) => void;
   /** Put a settler into a trade — handles the walk and the claim release. */
   reassignRole: (v: any, role: string) => void;
   /** Begin a study by tech id. */
@@ -36,7 +36,7 @@ type Deps = {
   demolishBuilding: (b: any) => void;
 };
 let dep: Deps = {
-  toast: () => {}, reassignRole: () => {},
+  reassignRole: () => {},
   startResearch: () => {}, demolishBuilding: () => {},
 };
 export function initSteward(deps: Deps): void { dep = deps; }
@@ -226,59 +226,59 @@ export function processStewardOrders(dt){
   _stewardT -= dt; if(_stewardT>0) return; _stewardT = 1.0;   // act about once a second
   const o = stewardOrders[0];
   if(o.kind==='build'){
-    if(o.placed>=o.count){ dep.toast('📜 The '+o.count+' '+o.label+' '+(o.count>1?'stand':'stands')+' raised, as you ordered.'); stewardOrders.shift(); return; }
+    if(o.placed>=o.count){ toast('📜 The '+o.count+' '+o.label+' '+(o.count>1?'stand':'stands')+' raised, as you ordered.'); stewardOrders.shift(); return; }
     if(stewardAfford(o.bkey)){
       const spot = stewardFindSpot(o.bkey);
-      if(!spot){ dep.toast('📜 There is no room to raise the '+o.label+' near the hold.', true); stewardOrders.shift(); return; }
+      if(!spot){ toast('📜 There is no room to raise the '+o.label+' near the hold.', true); stewardOrders.shift(); return; }
       const def: any = BUILD_DEFS[o.bkey];
       for(const [k, amt] of Object.entries(def.cost) as [string, number][]){ if(amt>0) G.stockpile[k]-=amt; }
       addBuilding(o.bkey, spot.gx, spot.gy); spawnDust(spot.gx+0.5, spot.gy+0.5); sfx('build');
       o.placed++; o.stall = 0;
-      if(o.placed>=o.count){ dep.toast('📜 The '+o.count+' '+o.label+' '+(o.count>1?'stand':'stands')+' raised, as you ordered.'); stewardOrders.shift(); }
+      if(o.placed>=o.count){ toast('📜 The '+o.count+' '+o.label+' '+(o.count>1?'stand':'stands')+' raised, as you ordered.'); stewardOrders.shift(); }
     } else {
       const def: any = BUILD_DEFS[o.bkey]; let blocked=null;
       for(const [k, amt] of Object.entries(def.cost) as [string, number][]){ if(amt>0 && (G.stockpile[k]||0) < amt){ const st=stewardAssignGatherers(k); if(st!=='ok') blocked={res:k,why:st}; } }
-      if(blocked && !o._warned){ o._warned=true; dep.toast(stewardBlockMsg(blocked.res, blocked.why), true); }
+      if(blocked && !o._warned){ o._warned=true; toast(stewardBlockMsg(blocked.res, blocked.why), true); }
       stewardStall(o);
     }
   } else if(o.kind==='gather'){
-    if((G.stockpile[o.res]||0) >= o.target){ dep.toast('📜 We have gathered the '+o.res+' you asked for.'); stewardOrders.shift(); return; }
+    if((G.stockpile[o.res]||0) >= o.target){ toast('📜 We have gathered the '+o.res+' you asked for.'); stewardOrders.shift(); return; }
     const st = stewardAssignGatherers(o.res);
-    if(st!=='ok'){ if(!o._warned){ o._warned=true; dep.toast(stewardBlockMsg(o.res, st), true); } stewardOrders.shift(); }
+    if(st!=='ok'){ if(!o._warned){ o._warned=true; toast(stewardBlockMsg(o.res, st), true); } stewardOrders.shift(); }
     else stewardStall(o);   // gathering takes time; rotate so other orders run too
   } else if(o.kind==='assign'){
     const n = stewardStaff(o.role, o.count);
-    dep.toast(n ? ('📜 '+n+' settler'+(n!==1?'s':'')+' set to '+ROLE_DEFS[o.role].label+'.') : '📜 No one can be spared for that.', !n);
+    toast(n ? ('📜 '+n+' settler'+(n!==1?'s':'')+' set to '+ROLE_DEFS[o.role].label+'.') : '📜 No one can be spared for that.', !n);
     stewardOrders.shift();
   } else if(o.kind==='demolish'){
     const match = G.buildings.filter(b=>b.type===o.bkey);
     if(!match.length || o.done>=o.count){
-      dep.toast(o.done ? ('📜 '+o.done+' '+o.label+' torn down.') : ('📜 There is no '+o.label+' to tear down.'), !o.done);
+      toast(o.done ? ('📜 '+o.done+' '+o.label+' torn down.') : ('📜 There is no '+o.label+' to tear down.'), !o.done);
       stewardOrders.shift(); return;
     }
     // Farthest from the hold first — you rarely mean the one at your gate.
     match.sort((a,b)=> dist2(b.gx,b.gy,G.TC_CX,G.TC_CY) - dist2(a.gx,a.gy,G.TC_CX,G.TC_CY));
     dep.demolishBuilding(match[0]); o.done++;
-    if(o.done>=o.count){ dep.toast('📜 '+o.done+' '+o.label+' torn down.'); stewardOrders.shift(); }
+    if(o.done>=o.count){ toast('📜 '+o.done+' '+o.label+' torn down.'); stewardOrders.shift(); }
   } else if(o.kind==='repair'){
     const worn = G.buildings.filter(b=>b.condition!==undefined && b.condition<WORN_ENOUGH);
-    if(!worn.length){ dep.toast(o.done ? ('🔧 '+o.done+' building'+(o.done!==1?'s':'')+' mended.') : '🔧 Nothing is in need of mending.'); stewardOrders.shift(); return; }
+    if(!worn.length){ toast(o.done ? ('🔧 '+o.done+' building'+(o.done!==1?'s':'')+' mended.') : '🔧 Nothing is in need of mending.'); stewardOrders.shift(); return; }
     worn.sort((a,b)=>a.condition-b.condition);
     const b = worn[0];
     const cost = Math.max(2, Math.ceil((100-b.condition)/10));
     if((G.stockpile.wood||0) < cost){
-      if(!o._warned){ o._warned=true; dep.toast('🔧 Not enough wood to mend the hold — '+cost+' needed.', true); }
+      if(!o._warned){ o._warned=true; toast('🔧 Not enough wood to mend the hold — '+cost+' needed.', true); }
       stewardStall(o); return;
     }
     G.stockpile.wood -= cost; b.condition = 100; o.done++; o.stall = 0;
     if(typeof sfx==='function') sfx('repair');
   } else if(o.kind==='research'){
-    if(G.researched[o.id]){ dep.toast('🔬 '+o.name+' is already known.'); stewardOrders.shift(); return; }
+    if(G.researched[o.id]){ toast('🔬 '+o.name+' is already known.'); stewardOrders.shift(); return; }
     if(G.activeResearch){ stewardStall(o); return; }
     const t = TECH_TREE.find(x=>x.id===o.id);
     const short = t && Object.entries(t.cost).find(([k,amt])=>(G.stockpile[k]||0) < amt);
     if(short){
-      if(!o._warned){ o._warned=true; dep.toast('🔬 We lack the '+short[0]+' to study '+o.name+'.', true); }
+      if(!o._warned){ o._warned=true; toast('🔬 We lack the '+short[0]+' to study '+o.name+'.', true); }
       stewardStall(o); return;
     }
     dep.startResearch(o.id); stewardOrders.shift();

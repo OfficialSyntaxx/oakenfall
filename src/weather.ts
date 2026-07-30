@@ -14,6 +14,7 @@
  * back into the storm they just left.
  */
 import { G } from './state';
+import { toast } from './hud';
 import { chron } from './chronicle';
 import { dist2 } from './math';
 import { WEATHER_TABLE } from './defs';
@@ -47,12 +48,11 @@ export function setWeather(type: string): void {
 }
 
 type Deps = {
-  toast: (msg: string, urgent?: boolean) => void;
   sfx: (name: string) => void;
   /** Iron Winter runs its own weather and skips climate spells entirely. */
   forceWinter: () => boolean;
 };
-let dep: Deps = { toast: () => {}, sfx: () => {}, forceWinter: () => false };
+let dep: Deps = { sfx: () => {}, forceWinter: () => false };
 export function initWeather(deps: Deps): void { dep = deps; }
 
 /** Rolled each dawn, weighted by the season. */
@@ -69,14 +69,14 @@ export function rollWeather(): void {
       storm: '⛈️ A storm batters the hold — stay near shelter!',
       snow: '🌨️ Snow falls softly over Oakenfall.',
     };
-    dep.toast(msgs[weather.type]);
+    toast(msgs[weather.type]);
   }
 }
 
 export function rollClimate(): void {
   if (G.climate) {
     if (G.dayCount >= G.climate.endsDay) {
-      dep.toast(G.climate.ic + ' The ' + CLIMATE_DEFS[G.climate.type].name.toLowerCase() + ' has broken.');
+      toast(G.climate.ic + ' The ' + CLIMATE_DEFS[G.climate.type].name.toLowerCase() + ' has broken.');
       G.climate = null;
     }
     return;
@@ -94,7 +94,7 @@ export function rollClimate(): void {
     coldsnap: '🥶 A cold snap grips the hold — folk burn through food and tire fast. Keep the stores full.',
     fair: '🌤️ A spell of fair weather blesses the valley — crops thrive and hearts lift.',
   };
-  dep.toast(blurb[type], type !== 'fair');
+  toast(blurb[type], type !== 'fair');
   chron('climate', def.name);
 }
 
@@ -105,7 +105,7 @@ export function rollPlague(): void {
   if (G.plague) {
     if (G.dayCount >= G.plague.endsDay) {
       G.plague = null;
-      dep.toast('🌿 The sickness has run its course — the hold breathes easier.');
+      toast('🌿 The sickness has run its course — the hold breathes easier.');
     }
     return;
   }
@@ -122,7 +122,7 @@ export function rollPlague(): void {
     v.sickTimer = (25 + Math.random() * 20) * (G.researched.herbs ? 0.6 : 1);
     n++;
   }
-  dep.toast('🤢 A blight sweeps the hold — ' + n + ' settler' + (n > 1 ? 's' : '') +
+  toast('🤢 A blight sweeps the hold — ' + n + ' settler' + (n > 1 ? 's' : '') +
     ' have fallen ill! Seek a healer, and keep the sick from crowding.', true);
   dep.sfx('blight');
   chron('plague');

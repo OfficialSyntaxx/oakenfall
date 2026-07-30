@@ -11,6 +11,7 @@
  * anything the UI is holding onto them for has to let go.
  */
 import { G } from './state';
+import { toast } from './hud';
 import { chron } from './chronicle';
 import { clamp, dist2 } from './math';
 import { roleLabel } from './defs';
@@ -19,7 +20,6 @@ import { getWeather } from './weather';
 import { skillTier } from './skills';
 
 type Deps = {
-  toast: (msg: string, urgent?: boolean) => void;
   /** Called after a settler is removed, so the sheet showing them can close. */
   onPassed: (v: any) => void;
   /** How many settlers the hold's housing can hold. */
@@ -30,7 +30,7 @@ type Deps = {
   /** Middle of a building's footprint — where a bucket brigade runs to. */
   buildingCenter: (b: any) => { gx: number; gy: number };
 };
-let dep: Deps = { toast: () => {}, onPassed: () => {}, popCapacity: () => 0, spawnVillager: () => null,
+let dep: Deps = { onPassed: () => {}, popCapacity: () => 0, spawnVillager: () => null,
   buildingCenter: (b: any) => ({ gx: b.gx, gy: b.gy }) };
 export function initLives(deps: Deps): void { dep = deps; }
 
@@ -76,13 +76,13 @@ export function bumpRel(v: any, o: any, amount: number): void {
   const key = [v.name, o.name].sort().join('|');
   if (r.type === 'friend' && r.s > 40 && !_relMoments.has('fr' + key)) {
     _relMoments.add('fr' + key);
-    dep.toast('🤝 ' + v.name + ' and ' + o.name + ' became fast friends.');
+    toast('🤝 ' + v.name + ' and ' + o.name + ' became fast friends.');
     chron('friends', v.name, o.name);
     remember(v, 'became friends with ' + o.name);
     remember(o, 'became friends with ' + v.name);
   } else if (r.type === 'rival' && r.s < -25 && !_relMoments.has('rv' + key)) {
     _relMoments.add('rv' + key);
-    dep.toast('😤 ' + v.name + ' and ' + o.name + " can't abide each other's pace of work.", true);
+    toast('😤 ' + v.name + ' and ' + o.name + " can't abide each other's pace of work.", true);
     chron('rivals', v.name, o.name);
   }
 }
@@ -134,7 +134,7 @@ export function agingTick(dt: number): void {
     v.age += dy;
     if (v.stage === 'child' && v.age >= ADULT_AGE) {
       v.stage = 'adult';
-      dep.toast('🌿 ' + v.name + ' has come of age and joins the work.');
+      toast('🌿 ' + v.name + ' has come of age and joins the work.');
       chron('ofage', v.name);
       remember(v, 'came of age');
     } else if (v.stage === 'adult' && v.age >= v.lifespan - ELDER_BEFORE) {
@@ -168,12 +168,12 @@ export function passVillager(v: any): void {
 
   const seasons = Math.floor((v.age || 2) * 4);
   if (skillTier(v, v.role).label === 'Master') {
-    dep.toast('🕊️ ' + v.name + ', a Master ' + roleLabel(v.role) + ', has passed at ' + seasons +
+    toast('🕊️ ' + v.name + ', a Master ' + roleLabel(v.role) + ', has passed at ' + seasons +
       ' seasons — a grievous loss to the hold.');
     // The whole hold mourns a master.
     G.villagers.forEach((o: any) => { if (o.morale !== undefined) o.morale = clamp(o.morale - 3, 0, 100); });
   } else {
-    dep.toast('🕊️ ' + v.name + ' passed peacefully at ' + seasons + ' seasons — laid to rest in the grove.');
+    toast('🕊️ ' + v.name + ' passed peacefully at ' + seasons + ' seasons — laid to rest in the grove.');
   }
   chron('passed', v.name, null, seasons);
 }
@@ -200,7 +200,7 @@ export function familyTick(dt: number): void {
         remember(a, 'wed ' + b.name); remember(b, 'wed ' + a.name);
         a.morale = clamp(a.morale + 15, 0, 100);
         b.morale = clamp(b.morale + 15, 0, 100);
-        dep.toast('💞 ' + a.name + ' and ' + b.name + ' have wed beneath the pines!');
+        toast('💞 ' + a.name + ' and ' + b.name + ' have wed beneath the pines!');
         chron('wed', a.name, b.name);
         G.journal.weddings++;
       }
@@ -223,7 +223,7 @@ export function familyTick(dt: number): void {
     child.parents = [parent.name, parent.partner];
     child.age = 0;
     child.stage = 'child';
-    dep.toast('👶 A child is born to ' + parent.name + ' and ' + parent.partner + ' — welcome, ' + child.name + '!');
+    toast('👶 A child is born to ' + parent.name + ' and ' + parent.partner + ' — welcome, ' + child.name + '!');
     chron('born', child.name, parent.name + ' and ' + parent.partner);
     G.journal.childrenBorn++;
   }

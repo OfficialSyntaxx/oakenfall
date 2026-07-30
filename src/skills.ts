@@ -5,19 +5,15 @@
  * two are one system: guilds are built out of skill tiers, and mastery is what
  * makes a mentor.
  *
- * Reports through initSkills() rather than reaching for main.ts's toast and
- * chronicle, so the progression can be reasoned about without a DOM.
+ * Reports straight to the toast row and the chronicle by importing both, and
+ * depends on nothing else — the progression can be reasoned about on its own.
  */
 import { G } from './state';
+import { toast } from './hud';
 import { chron } from './chronicle';
 import { dist2 } from './math';
 import { roleLabel } from './defs';
 
-type Deps = {
-  toast: (msg: string, urgent?: boolean) => void;
-};
-let dep: Deps = { toast: () => {} };
-export function initSkills(deps: Deps): void { dep = deps; }
 
 /** Experience is measured in seconds worked, so the thresholds are roughly
  *  "half a day" and "a day and a half" of steady work in one trade. */
@@ -59,7 +55,7 @@ export function gainSkill(v: any, dt: number): void {
   v.skills[v.role] = (v.skills[v.role] || 0) + dt * (mentored ? 2 : 1);
   const after = skillTier(v, v.role);
   if (after.label && after.label !== before.label) {
-    dep.toast(after.ic + ' ' + v.name + ' is now a ' + after.label + ' ' + roleLabel(v.role) +
+    toast(after.ic + ' ' + v.name + ' is now a ' + after.label + ' ' + roleLabel(v.role) +
       (mentored ? ' (well taught)' : '') + '.');
   }
 }
@@ -89,7 +85,7 @@ export function recomputeGuilds(announce?: boolean): void {
     const active = (count[role] || 0) >= 2;
     if (active && !G.guilds[role] && announce) {
       const g = GUILD_DEFS[role];
-      dep.toast(g.ic + ' The ' + g.name + ' has formed — ' + g.blurb + ' (+' + Math.round(guildBonusVal() * 100) + '%).');
+      toast(g.ic + ' The ' + g.name + ' has formed — ' + g.blurb + ' (+' + Math.round(guildBonusVal() * 100) + '%).');
       chron('guild', g.name);
     }
     G.guilds[role] = active;
