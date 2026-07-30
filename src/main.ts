@@ -71,6 +71,8 @@ import { chron, chronicleAdd } from './chronicle';
 import { initSheet, initSheetDrag, sheetWrap, sheetContent, sheetNav, openSheet, closeSheet,
          isSheetOpen, sheetContains, miniBar, statBar } from './sheet';
 import { initInput } from './input';
+import { initDecisions, rollDecision, decisionCountdown, resetDecisionTimer, resetDecisions,
+         updateOnboard, updateStatuses } from './decisions';
 import { renderVillagerSheet, renderBuildingSheet, renderTileSheet, demolishBuilding,
          bulkAssignIdle } from './inspect';
 import { initHoldMenu, FESTIVAL_BOONS, renderHubSheet, renderQuestSheet, renderJournalSheet,
@@ -496,109 +498,6 @@ function drawRaider(r){
 /* Each kind keeps its own temperament: how far it lets you approach, how hard it
    bolts, and how restless it is when left alone. Boar stand their ground far
    longer than deer; rabbits spook at almost anything. */
-/* ── DECISION EVENTS ── periodic dilemmas with real, lasting choices. Fire only
-   when no sheet is open (so they never interrupt), a few in-game days apart. */
-let decisionTimer = 3.2; // in-game days until the first
-let _lastDecision = '';
-function changeMorale(delta){ G.villagers.forEach(v=>{ if(v.morale!==undefined) v.morale=clamp(v.morale+delta,0,100); }); }
-const DECISIONS = [
-  { id:'refugees', ic:'🚪', title:'Strangers at the Gate',
-    text:'A ragged family stands at the palisade — three souls, footsore and hungry, asking to join the hold.',
-    choices:[
-      {label:'Take them in', outcome:'The family joins the hold, grateful.', run:()=>{ let n=0; const room=popCapacity()-G.villagers.length; for(let i=0;i<Math.min(2,Math.max(0,room));i++){ spawnVillager(); n++; } G.stockpile.food=Math.max(0,(G.stockpile.food||0)-10); toast(n>0?('👪 '+n+' newcomer'+(n>1?'s':'')+' join the hold.'):'👪 No room — but you shared what you could.'); changeMorale(4); }},
-      {label:'Share food, send them on', outcome:'You give them provisions for the road.', run:()=>{ G.stockpile.food=Math.max(0,(G.stockpile.food||0)-8); changeMorale(2); }},
-      {label:'Turn them away', outcome:'The gate stays shut. The folk mutter.', run:()=>{ changeMorale(-5); }},
-    ]},
-  { id:'peddler', ic:'🎁', title:'The Peddler\'s Crate',
-    text:'A travelling peddler offers a sealed crate, sight unseen, for 15 coins. "Could be treasure, could be turnips," he grins.',
-    cond:()=>G.coins>=15,
-    choices:[
-      {label:'Buy the crate (15c)', outcome:'You pry it open...', run:()=>{ G.coins-=15; const r=Math.random(); if(r<0.45){ const g=gainResource('planks',12); toast('📦 Fine planks! +'+g); } else if(r<0.8){ const g=gainResource('food',20); toast('📦 Salted stores. +'+g+' food'); } else { toast('📦 ...turnips. Mostly air.'); } }},
-      {label:'Decline', outcome:'The peddler shrugs and moves on.', run:()=>{}},
-    ]},
-  { id:'tribute', ic:'🏴', title:'A Bandit Ultimatum',
-    text:'A rider bears a crude banner: pay 25 food in tribute, or the bandits will come for far more.',
-    cond:()=>getTier()>=1 && (G.stockpile.food||0)>=25 && (gameMode.banditsEnabled!==false),
-    choices:[
-      {label:'Pay the tribute', outcome:'They take the food and melt back into the trees.', run:()=>{ G.stockpile.food-=25; changeMorale(-2); }},
-      {label:'Refuse them', outcome:'You bar the gate. The folk stand a little taller — but a raid may come.', run:()=>{ changeMorale(3); hastenRaid(25); }},
-    ]},
-  { id:'scholar', ic:'📚', title:'A Wandering Scholar',
-    text:'A scholar seeks shelter and offers, in thanks, to share what they know — if the hold can spare a meal.',
-    cond:()=>!!G.activeResearch && (G.stockpile.food||0)>=12,
-    choices:[
-      {label:'Host them (12 food)', outcome:'By lamplight they hasten your studies.', run:()=>{ G.stockpile.food-=12; if(G.activeResearch) G.activeResearch.remaining=Math.max(0,G.activeResearch.remaining-25); toast('📚 Research hastened.'); changeMorale(2); }},
-      {label:'No food to spare', outcome:'They understand, and move on.', run:()=>{}},
-    ]},
-  { id:'feast', ic:'🍲', title:'The Folk Ask for a Feast',
-    text:'The hold has worked hard, and the elders propose a feast to lift every heart — if you can spare the stores.',
-    cond:()=>(G.stockpile.food||0)>=20,
-    choices:[
-      {label:'Hold the feast (20 food)', outcome:'Song and firelight late into the night.', run:()=>{ G.stockpile.food-=20; changeMorale(10); }},
-      {label:'Not this time', outcome:'The stores stay full; the mood dips a little.', run:()=>{ changeMorale(-3); }},
-    ]},
-  { id:'ruins', ic:'🗿', title:'Old Stones in the Wood',
-    text:'Foragers report tumbled ruins at the treeline — mossy, half-buried, and possibly worth digging.',
-    choices:[
-      {label:'Send diggers', outcome:'They set to the old stones...', run:()=>{ const r=Math.random(); if(r<0.55){ const g=gainResource('stone',18); toast('🗿 Dressed stone salvaged! +'+g); } else if(r<0.8){ G.coins+=12; toast('🗿 A cache of old coin! +12'); } else { toast('🗿 The dig collapses — a fright, no more.'); changeMorale(-3); } }},
-      {label:'Leave them be', outcome:'Some things are best left sleeping.', run:()=>{}},
-    ]},
-];
-function rollDecision(){
-  if(sheetWrap.classList.contains('open')) return; // never interrupt an open panel
-  const pool = DECISIONS.filter(d=>d.id!==_lastDecision && (!d.cond || (()=>{ try{return d.cond();}catch(e){return false;} })()));
-  if(!pool.length) return;
-  const d = pool[Math.floor(Math.random()*pool.length)];
-  _lastDecision = d.id;
-  clearSelection();
-  openSheet(); sheetNav.reset();
-  sheetNav.push({ id:'decision', title:d.ic+' '+d.title, render:()=>renderDecisionSheet(d) });
-  if(typeof sfx==='function') sfx('open');
-}
-function renderDecisionSheet(d){
-  sheetContent.innerHTML = `
-    <div class="sheet-sub" style="font-style:italic;line-height:1.5;">${d.text}</div>
-    <div class="roster-list" style="margin-top:10px;">
-      ${d.choices.map((c,i)=>`<button class="action-btn list-row" data-choice="${i}"><span style="flex:1;text-align:left;">${c.label}</span></button>`).join('')}
-    </div>`;
-  sheetContent.querySelectorAll('[data-choice]').forEach(btn=>btn.addEventListener('click', ()=>{
-    const c = d.choices[+btn.dataset.choice];
-    try{ c.run(); }catch(e){}
-    if(typeof chron==='function') chron('decision', d.title);
-    sheetContent.innerHTML = `<div class="sheet-sub" style="line-height:1.5;">${c.outcome}</div>
-      <button class="action-btn primary" id="decision-done" style="margin-top:10px;">Continue</button>`;
-    document.getElementById('decision-done').addEventListener('click', ()=>deselectAll());
-  }));
-}
-const ONBOARD_STEPS = [
-  {hint:'👋 Welcome, steward. Tap 🔨 and raise a House to make room for more settlers.',
-   done:()=>G.buildings.some(b=>b.type==='house')},
-  {hint:'🪓 Build a Forestry Camp, then tap a settler and set them to Lumberjack — timber builds everything.',
-   done:()=>G.buildings.some(b=>b.type==='forestCamp') && G.villagers.some(v=>v.role==='lumberjack')},
-  {hint:'🌾 Food is life. Build a Farm and assign a Farmer before the cold comes.',
-   done:()=>G.buildings.some(b=>b.type==='farm') && G.villagers.some(v=>v.role==='farmer')},
-  {hint:'❄️ Now stock food and firewood — and survive your first winter.',
-   done:()=>(G.journal.wintersEndured||0)>=1},
-];
-function updateOnboard(){
-  const el=document.getElementById('onboard-ribbon'); if(!el) return;
-  if(G.onboardDone){ el.classList.add('hidden'); return; }
-  let step=null;
-  for(const s of ONBOARD_STEPS){ let d=false; try{ d=s.done(); }catch(e){} if(!d){ step=s; break; } }
-  if(!step){ G.onboardDone=true; el.classList.add('hidden'); toast('✓ You\'ve found your feet, steward — the hold is yours.'); return; }
-  const t=document.getElementById('onboard-text'); if(t) t.textContent=step.hint;
-  el.classList.remove('hidden');
-}
-function updateStatuses(){
-  const el=document.getElementById('statuses'); if(!el) return;
-  const pills=[];
-  if(typeof G.climate!=='undefined' && G.climate){ const c=CLIMATE_DEFS[G.climate.type]; pills.push({t:G.climate.ic+' '+c.name, c: G.climate.type==='fair'?'good':'warn'}); }
-  if(typeof G.festivalBoon!=='undefined' && G.festivalBoon){ const b=FESTIVAL_BOONS.find(x=>x.id===G.festivalBoon); if(b) pills.push({t:b.ic+' '+b.name, c:'good'}); }
-  if(typeof G.tradeRoutes!=='undefined' && G.tradeRoutes.length) pills.push({t:'🐫 '+G.tradeRoutes.length+' route'+(G.tradeRoutes.length>1?'s':''), c:''});
-  if(G.buildings.some(b=>b._fire)) pills.push({t:'🔥 Fire!', c:'warn'});
-  if(typeof G.plague!=='undefined' && G.plague) pills.push({t:'🤢 Blight', c:'warn'});
-  el.innerHTML = pills.map(p=>`<span class="status-pill ${p.c}">${p.t}</span>`).join('');
-}
 let eventTimer = 140; // world-seconds until the next random event roll
 
 // Ring buffer of recent errors — auto-attached to bug reports
@@ -727,8 +626,7 @@ function update(rawDt){
   const newCycle = Math.floor(G.worldTime/CYCLE_LEN);
   if(newCycle>prevCycle){ G.dayCount++; rollWeather(); rollClimate(); rollPlague(); rollDailyBounties(); captureStatSnapshot(); processTradeRoutes();
     if(G.decrees.tithe){ const t = Math.max(1, Math.round(G.villagers.length*0.8)); G.coins += t; logCoinIn('tithe', t); }
-    decisionTimer -= 1;
-    if(decisionTimer<=0 && G.dayCount>3){ decisionTimer = 3 + Math.floor(Math.random()*3); rollDecision(); }
+    if(decisionCountdown(1) && G.dayCount>3){ resetDecisionTimer(); rollDecision(); }
   }
   const newSeason = seasonIndex();
   if(newSeason !== prevSeason){
@@ -919,6 +817,7 @@ const ctx = canvas.getContext('2d');
 initIsoKit(ctx);
 initSprites({ ctx });
 initFeedback({ gameModeId: ()=>gameModeId });
+initDecisions({ banditsEnabled: ()=>gameMode.banditsEnabled!==false, spawnVillager });
 initHoldMenu({ renderVillager: renderVillagerSheet, exportHoldCard });
 initBuild({ ctx, bulkAssignIdle: ()=>bulkAssignIdle() });
 initInput({ canvas, editing: ()=>editorOn, beginStroke: pushUndo,
@@ -1961,7 +1860,7 @@ function resetHoldState(){
   G.totals={wood:0,stone:0,food:0};
   resetCapWarnings(); resetBuildWarnings(); clearEvent();
   G.researched={}; G.activeResearch=null; resetTier(); setWeather('clear');
-  G.coins=0; G.bannerIdx=G.crestChoice; G.onboardDone=false; G.decrees={curfew:false,tithe:false,openGates:false,rationing:false}; decisionTimer=3.2; _lastDecision=''; G.ledger={in:{bounties:0,deeds:0,routes:0,quests:0,tithe:0},out:{shop:0}}; rollDailyBounties();
+  G.coins=0; G.bannerIdx=G.crestChoice; G.onboardDone=false; G.decrees={curfew:false,tithe:false,openGates:false,rationing:false}; resetDecisions(); G.ledger={in:{bounties:0,deeds:0,routes:0,quests:0,tithe:0},out:{shop:0}}; rollDailyBounties();
   applyDifficulty(readDifficultyConfig());
 }
 /* A fresh hold names its slot after itself. Founding over an old hold replaces
