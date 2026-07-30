@@ -71,6 +71,7 @@ import { chron, chronicleAdd } from './chronicle';
 import { initSheet, initSheetDrag, sheetWrap, sheetContent, sheetNav, openSheet, closeSheet,
          isSheetOpen, sheetContains, miniBar, statBar } from './sheet';
 import { initInput } from './input';
+import { initScenarios, SCENARIOS, checkScenario } from './scenarios';
 import { initAdminPanel, renderRedeemSheet } from './adminpanel';
 import { initDecisions, rollDecision, decisionCountdown, resetDecisionTimer, resetDecisions,
          updateOnboard, updateStatuses } from './decisions';
@@ -176,59 +177,6 @@ let speedMode = 1; // 1, 2, 0(paused)
 let spawnTimer = 18;
 // Lifetime journal — persists across sessions within a save; tracks bests for the stats page
 
-/* ── SCENARIOS ── an optional end-goal for the hold. These close over live game
-   state, so unlike LANDS they stay here rather than in defs.ts. Reaching one is
-   never an ending unless you want it to be: the victory notice offers to conclude
-   the tale or to carry on with the hold exactly as it stands. */
-const SCENARIOS = {
-  endless:  { name:'Endless',        ic:'♾️', desc:'No set goal. Build the hold you want, for as long as you like.',
-              done:()=>false, progress:()=>'' },
-  winters:  { name:'Five Winters',   ic:'❄️', desc:'Endure five winters. The cold is the oldest enemy.',
-              done:()=>G.journal.wintersEndured>=5, progress:()=>G.journal.wintersEndured+'/5 winters' },
-  town:     { name:'Rise to a Town', ic:'🏰', desc:'Grow the hold from outpost to town.',
-              done:()=>getTier()>=3, progress:()=>HOLD_TIERS[getTier()].name+' → Town' },
-  timber:   { name:'Timber Trade',   ic:'🪚', desc:'Saw 300 planks — a hold that exports is a hold that lasts.',
-              done:()=>(G.totals.planks||0)>=300, progress:()=>Math.floor(G.totals.planks||0)+'/300 planks' },
-  bulwark:  { name:'Bulwark',        ic:'🛡️', desc:'Drive off eight raids without losing the hold.',
-              done:()=>(G.journal.raidsRepelled||0)>=8, progress:()=>(G.journal.raidsRepelled||0)+'/8 raids repelled' },
-};
-function checkScenario(){
-  if(G.scenarioWon || G.scenarioId==='endless') return;
-  const sc = SCENARIOS[G.scenarioId];
-  if(!sc || !sc.done()) return;
-  G.scenarioWon = true;
-  showVictory(sc);
-}
-/* Reaching the goal is a moment, not a wall. The notice congratulates, offers a
-   chronicle card to keep, and then either bows out or gets out of the way — the
-   hold is never taken away from you. */
-function showVictory(sc){
-  try{ sfx('tier'); }catch(e){}
-  chron('goal', sc.name);
-  toast('🏆 '+sc.ic+' '+sc.name+' — achieved!');
-  const wrap = document.createElement('div');
-  wrap.id = 'victory-wrap';
-  wrap.innerHTML = `
-    <div id="victory-card">
-      <div class="v-ic">${sc.ic}</div>
-      <div class="v-title">${sc.name}</div>
-      <div class="v-sub">Achieved on day ${G.dayCount}, ${seasonName()} — ${G.holdName||'Oakenfall'} stands.</div>
-      <div class="v-stats">
-        <span>👥 ${G.villagers.length} settlers</span>
-        <span>🏗️ ${G.journal.buildingsRaised} raised</span>
-        <span>❄️ ${G.journal.wintersEndured} winters</span>
-        <span>${HOLD_TIERS[getTier()].ic} ${HOLD_TIERS[getTier()].name}</span>
-      </div>
-      <button class="action-btn primary" id="v-continue">Carry on with the hold</button>
-      <button class="action-btn" id="v-card">🖼️ Keep a chronicle card</button>
-      <div class="v-note">Your hold continues exactly as it stands. Nothing is ended unless you choose it.</div>
-    </div>`;
-  document.body.appendChild(wrap);
-  const close = ()=>{ wrap.remove(); };
-  wrap.querySelector('#v-continue').addEventListener('click', close);
-  wrap.querySelector('#v-card').addEventListener('click', ()=>{ try{ exportHoldCard(); }catch(e){} });
-  wrap.addEventListener('click', (e)=>{ if(e.target===wrap) close(); });
-}
 /* ── STATS ── per-day snapshots for the Statistics view; capped, persists */
 function captureStatSnapshot(){
   G.statHistory.push({ day:G.dayCount, pop:G.villagers.length,
@@ -691,6 +639,7 @@ const ctx = canvas.getContext('2d');
 initIsoKit(ctx);
 initSprites({ ctx });
 initFeedback({ gameModeId: ()=>gameModeId });
+initScenarios({ exportHoldCard });
 initAdminPanel({ spawnVillager, saveIfRunning: ()=>{ if(started) saveGame(); } });
 initDecisions({ banditsEnabled: ()=>gameMode.banditsEnabled!==false, spawnVillager });
 initHoldMenu({ renderVillager: renderVillagerSheet, exportHoldCard });

@@ -22,7 +22,9 @@ modules, (3) Capacitor wrap + native storage.
   went 15.3MB → ~395KB.
 - **Step 2 in progress** — `index.html` is now a shell; code lives in `src/`,
   built by Vite (`npm run build` = `vite build && node site/build.js`).
-  Forty-eight modules now, and `main.ts` is down from 7,826 lines to under 2,600.
+  Fifty-four modules now, and `main.ts` is down from 7,826 lines to under 1,800 —
+  what is left is genuinely the entry point: boot, save and slots, the world
+  tick, the render loop and the land editor that drives boot.
   Everything except `critters.ts` and `main.ts` itself
   typechecks WITHOUT `@ts-nocheck`, which is the property worth protecting: a
   name that stops resolving in a typed module fails the build, where the same
@@ -43,15 +45,19 @@ modules, (3) Capacitor wrap + native storage.
     island skirt), `buildrender`, `villagerrender`, `critters`, `lighting`,
     `minimap`, `fx`.
   - **UI** — `hud` (pills, clock, toasts), `sheet` (the one bottom sheet and the
-    stack over it), `selection` (what is tapped, and the hit test), `input` (the
-    gestures), `build` (palette, placement mark, placement rules), `shop`.
+    stack over it), `selection` (what is tapped, and the hit test), `inspect`
+    (the settler/building/tile panels), `input` (the gestures), `build`
+    (palette, placement mark, placement rules), `holdmenu` (the five-tab hub
+    and everything it opens onto), `shop`, `decisions` (the dilemmas and the
+    onboarding ribbon), `adminpanel`.
   - **Simulation** — `mapgen`, `pathfind`, `weather`, `skills`, `lives`
     (friendship/marriage/aging/death/idling), `work` (the utility-AI trade
     scoring), `buildings`, `villager` (the state machine), `steward`, `economy`
     (stores + ledger), `progress` (study + hold tiers), `fire`, `raiders`,
     `contracts`, `chronicle` (the hold's own history), `goals` (the goal list
-    and the deeds), `events` (merchant/festival/healer), `unlocks` (offline code
-    verification + the banner palette).
+    and the deeds), `decrees` (standing policy + its three multipliers),
+    `events` (merchant/festival/healer), `scenarios` (the optional end-goals),
+    `unlocks` (offline code verification + the banner palette).
 
   **Extract the module others already depend on FIRST.** Doing `buildings`
   before `villager` turned seven injected callbacks into ordinary imports;
