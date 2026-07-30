@@ -10,6 +10,7 @@
  * bonus, which is meant to be readable at a glance rather than only in a sheet.
  */
 import { G } from './state';
+import { bannerColor } from './unlocks';
 import { SPRITES, SPRITE_SCALE, SPRITE_ANCHOR_Y, decorImg, blitSprite } from './sprites';
 import { buildingCenter } from './buildings';
 import { clamp, dist2, hash2, hashStr, project, TILE_W, TILE_H } from './math';
@@ -26,12 +27,11 @@ type Deps = {
   /** Wind lean, so banners and smoke move with the same gust as the grass. */
   windAt: (gx: number, gy: number) => number;
   /** The hold's current banner colour. */
-  bannerColor: () => string;
   /** Roads are drawn beneath buildings that sit on them. */
   drawRoad: (gx: number, gy: number) => void;
 };
 let dep: Deps = {
-  ctx: null, windAt: () => 0, bannerColor: () => '#a4402c', drawRoad: () => {},
+  ctx: null, windAt: () => 0, drawRoad: () => {},
 };
 export function initBuildingRender(deps: Deps): void { dep = deps; }
 
@@ -97,7 +97,7 @@ export function drawBuilding(b){
     dep.ctx.strokeStyle='#1a1108'; dep.ctx.lineWidth=2.6;
     dep.ctx.beginPath(); dep.ctx.moveTo(cx, peak-2); dep.ctx.lineTo(cx, peak-26); dep.ctx.stroke();
     const wave=Math.sin(G.worldTime*2)*3;
-    dep.ctx.fillStyle=dep.bannerColor();
+    dep.ctx.fillStyle=bannerColor();
     dep.ctx.beginPath();
     dep.ctx.moveTo(cx, peak-26); dep.ctx.lineTo(cx+19+wave, peak-21); dep.ctx.lineTo(cx+16+wave*0.5, peak-17); dep.ctx.lineTo(cx, peak-15);
     dep.ctx.closePath(); dep.ctx.fill();

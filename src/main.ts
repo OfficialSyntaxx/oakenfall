@@ -68,6 +68,8 @@ import { initLives, familyTick, ambientIdle, hasTrait, relTo, remember, bumpRel,
   AGE_YEAR, ADULT_AGE, ELDER_BEFORE, LIFESPAN_BASE } from './lives';
 import { initWork, roleNeedScores, seekWork, maybeSwitchTrade } from './work';
 import { chron, chronicleAdd } from './chronicle';
+import { initUnlocks, ADMIN_PROMO, hasUnlock, isPatron, redeemCode, saveUnlocks, loadUnlocks,
+         applyPatronBanners, bannerPalette, BANNER_COLORS, bannerColor } from './unlocks';
 import { initSkills, SKILL_TIERS, skillTier, skillMul, gainSkill, hasNearbyMentor,
   GUILD_DEFS, guildBonusVal, recomputeGuilds, guildMulRes, guildFarmMul } from './skills';
 import { initWeather, getWeather, setWeather, rollWeather, rollClimate, rollPlague, plagueTick,
@@ -216,50 +218,6 @@ const FESTIVAL_BOONS = [
   {id:'courage', ic:'🛡️', name:'Rite of Courage', desc:'Spirits stay higher (+8 morale) and raids sting less.'},
   {id:'craft',   ic:'🔨', name:'Craftsmen\'s Fair', desc:'Every settler works +15% faster for the year.'},
 ];
-/* ── UNLOCKS / REDEEM ── cosmetic packs bought on the website redeem here via
-   a signed code, verified OFFLINE against this embedded public key (the game
-   never makes a network request). The private signing key lives only in the
-   website's Netlify function — codes cannot be forged from this public key. */
-const REDEEM_PUBKEY_SPKI = 'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAERa+HGQmoarIV601nzvFQOQDNa9nAJDdY8ZOSjedDrMTvfEDGKFlzBIUNc6RTQl/qMlRAXzxeW5F9mhLFTo6auQ==';
-
-function hasUnlock(sku){ return !!G.unlocks[sku]; }
-function isPatron(){ return !!G.unlocks.supporter; }
-let _redeemKeyPromise = null;
-function redeemPubKey(){
-  if(!_redeemKeyPromise){
-    const raw = Uint8Array.from(atob(REDEEM_PUBKEY_SPKI), c=>c.charCodeAt(0));
-    _redeemKeyPromise = crypto.subtle.importKey('spki', raw, {name:'ECDSA', namedCurve:'P-256'}, false, ['verify']);
-  }
-  return _redeemKeyPromise;
-}
-function _b64uToBytes(s){
-  s = String(s).replace(/-/g,'+').replace(/_/g,'/'); while(s.length%4) s+='=';
-  return Uint8Array.from(atob(s), c=>c.charCodeAt(0));
-}
-// Verify a "payload.signature" code offline. Returns {ok, sku, name} | {ok:false, reason}.
-// Promo code that unlocks the hidden developer/admin panel from the Redeem sheet.
-const ADMIN_PROMO = 'Joy904';
-async function redeemCode(codeStr){
-  try {
-    const parts = String(codeStr||'').trim().split('.');
-    if(parts.length!==2) return {ok:false, reason:'That doesn\'t look like an Oakenfall code.'};
-    const payloadBytes = _b64uToBytes(parts[0]);
-    const sigBytes = _b64uToBytes(parts[1]);
-    const key = await redeemPubKey();
-    const ok = await crypto.subtle.verify({name:'ECDSA', hash:'SHA-256'}, key, sigBytes, payloadBytes);
-    if(!ok) return {ok:false, reason:'This code could not be verified.'};
-    const data = JSON.parse(new TextDecoder().decode(payloadBytes));
-    const sku = data.s;
-    if(!UNLOCK_SKUS[sku]) return {ok:false, reason:'This code is for content this version doesn\'t know.'};
-    const already = !!G.unlocks[sku];
-    G.unlocks[sku] = true;
-    applyPatronBanners();
-    if(data.n) G.unlocks._patronName = String(data.n).slice(0,24);
-    saveUnlocks();
-    if(typeof started!=='undefined' && started) saveGame && saveGame();
-    return {ok:true, sku, name:UNLOCK_SKUS[sku].name, already};
-  } catch(e){ return {ok:false, reason:'Something went wrong reading that code.'}; }
-}
 function renderRedeemSheet(){
   const owned = Object.keys(UNLOCK_SKUS).filter(hasUnlock);
   sheetContent.innerHTML = `
@@ -399,7 +357,7 @@ function adminGrant(kind){
     case 'maxout': ['wood','stone','food','planks','flour','bread'].forEach(k=>{ G.stockpile[k] = capFor ? capFor(k) : 999; }); toast('🛠️ Stores filled to capacity.'); break;
     // ── Progress / unlocks ──
     case 'tech': TECH_TREE.forEach(t=>{ G.researched[t.id] = true; }); G.activeResearch = null; toast('🛠️ All research unlocked.'); break;
-    case 'cosmetics': Object.keys(UNLOCK_SKUS).forEach(s=>{ G.unlocks[s]=true; }); applyPatronBanners && applyPatronBanners(); saveUnlocks(); toast('🛠️ All cosmetic packs unlocked.'); break;
+    case 'cosmetics': Object.keys(UNLOCK_SKUS).forEach(s=>{ G.unlocks[s]=true; }); applyPatronBanners(); saveUnlocks(); toast('🛠️ All cosmetic packs unlocked.'); break;
     // ── Population ──
     case 'settlers': for(let i=0;i<5;i++) spawnVillager(); toast('🛠️ +5 settlers summoned.'); break;
     case 'settler1': spawnVillager(); toast('🛠️ A settler joins.'); break;
@@ -685,22 +643,6 @@ const SHOP_ITEMS = [
   { id:'rations',  ic:'🥖', name:'Emergency Rations',cost:15, desc:'A cart of 25 food arrives at the stores.' },
   { id:'banner',   ic:'🚩', name:'New Banner Dye',   cost:12, desc:'Re-dye the hold banner in a new colour (cycles red → blue → green → gold).' },
 ];
-const BANNER_COLORS = ['#a4402c','#2c5a8a','#3a7a3a','#c8982c'];
-// Premium banner dyes unlocked by supporter packs (cosmetic only).
-const BANNER_UNLOCK_COLORS = {
-  supporter: ['#6b3fa0','#b8862c'],   // royal purple, antique gold
-  frost:     ['#3a8fb0','#7fb0c4'],   // glacier, frostlight
-  ember:     ['#c2451f','#e08a2c'],   // ember red, forge orange
-};
-let bannerPalette = BANNER_COLORS.slice();
-function applyPatronBanners(){
-  bannerPalette = BANNER_COLORS.slice();
-  for(const sku of Object.keys(BANNER_UNLOCK_COLORS)){
-    if(typeof G.unlocks!=='undefined' && G.unlocks[sku]) bannerPalette = bannerPalette.concat(BANNER_UNLOCK_COLORS[sku]);
-  }
-  if(G.bannerIdx >= bannerPalette.length) G.bannerIdx = 0;
-}
-
 function renderLedgerSheet(){
   const IN = { bounties:['🎯','Daily bounties'], quests:['📜','Goals'], deeds:['🏅','Deeds'], routes:['🐫','Trade routes'], tithe:['💰','Tithe'] };
   const OUT = { shop:['🛒','Hold Shop'] };
@@ -1199,12 +1141,12 @@ const ctx = canvas.getContext('2d');
 initIsoKit(ctx);
 initSprites({ ctx });
 initFeedback({ sheetContent: ()=>sheetContent, gameModeId: ()=>gameModeId });
+initUnlocks({ saveIfRunning: ()=>{ if(started) saveGame(); } });
 initFX({ ctx });
 initScenery({ ctx, windAt });
 initLighting({ ctx, canvas });
 initVillagerRender({ ctx, isSelected: (v)=>!!(selection && selection.type==='villager' && selection.ref===v) });
-initBuildingRender({ ctx, windAt, drawRoad,
-  bannerColor: ()=>bannerPalette[G.bannerIdx]||BANNER_COLORS[0] });
+initBuildingRender({ ctx, windAt, drawRoad });
 initTerrain({ ctx });
 
 initCritters({ ctx });
@@ -1799,7 +1741,7 @@ async function exportHoldCard(){
     // vignette + border
     x.strokeStyle='#5a4a2c'; x.lineWidth=3; x.strokeRect(24,24,W-48,H-48);
     x.strokeStyle='rgba(232,161,60,0.25)'; x.lineWidth=1; x.strokeRect(32,32,W-64,H-64);
-    const crest = bannerPalette[G.bannerIdx] || BANNER_COLORS[G.crestChoice] || '#a4402c';
+    const crest = bannerColor();
     // crest diamond
     const ccx=W/2, ccy=150;
     x.fillStyle=crest; x.beginPath(); x.moveTo(ccx,ccy-46); x.lineTo(ccx+40,ccy); x.lineTo(ccx,ccy+46); x.lineTo(ccx-40,ccy); x.closePath(); x.fill();
@@ -3014,21 +2956,6 @@ if(isNative()){
 }
 
 let _loadedSavedAt = 0;
-// Unlocks (cosmetic entitlements) live in their OWN storage key as well as the
-// save, so redeemed packs survive a save wipe or a fresh hold.
-async function saveUnlocks(){
-  try{ await window.storage.set('oakenfall-unlocks', JSON.stringify(G.unlocks||{}), false); }catch(e){}
-}
-async function loadUnlocks(){
-  try{
-    const res = await window.storage.get('oakenfall-unlocks', false);
-    if(res && res.value){
-      const u = JSON.parse(res.value);
-      G.unlocks = Object.assign({}, u, G.unlocks); // in-memory (e.g. just-redeemed) wins
-      applyPatronBanners();
-    }
-  }catch(e){}
-}
 async function loadGame(){
   try{
     const res = await window.storage.get(slotKey(currentSlot), false);
