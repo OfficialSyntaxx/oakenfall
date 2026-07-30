@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.84.0
+A feast day no longer follows you into a new hold. If you founded a settlement
+while a festival or a merchant visit was underway, the bonus carried across into
+the new hold and sat there until it expired. Events now end with the hold that
+held them.
+
 ## 1.83.0
 The sea is back. The deep water the island sits in and the pale rim of shallows
 along its shore had stopped drawing at all, so the hold was floating on the

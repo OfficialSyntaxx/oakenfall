@@ -70,6 +70,7 @@ import { initWork, roleNeedScores, seekWork, maybeSwitchTrade } from './work';
 import { chron, chronicleAdd } from './chronicle';
 import { initSheet, initSheetDrag, sheetWrap, sheetContent, sheetNav, openSheet, closeSheet,
          isSheetOpen, sheetContains, miniBar, statBar } from './sheet';
+import { initShop, renderShopSheet } from './shop';
 import { initEvents, rollRandomEvent, eventTick, startEvent, clearEvent, isFestivalOn,
          isMerchantHere, eventTradeBonus, eventSpeedBonus } from './events';
 import { QUESTS, checkQuests, questsDoneCount, DEED_DEFS, rewardText, grantReward, checkDeeds } from './goals';
@@ -302,6 +303,7 @@ window.__oakDebug = function(){
     orders: stewardOrders.map(o=>o.kind),
     stockpile: Object.assign({}, G.stockpile),
     coins: G.coins, tier: getTier(),
+    routes: G.tradeRoutes.length, routeOffers: G.routeOffers.length,
     needs: (typeof roleNeedScores==='function') ? roleNeedScores().slice(0,3) : [],
     critters: (typeof G.critters!=='undefined') ? G.critters.length : 0,
     raiders: G.raiders.length,
@@ -591,99 +593,6 @@ let eventTimer = 140; // world-seconds until the next random event roll
 
 // Ring buffer of recent errors — auto-attached to bug reports
 // Trader's ledger — cumulative coin flow by category, for the economy view.
-const SHOP_ITEMS = [
-  { id:'festival', ic:'🎉', name:'Feast Day',        cost:30, desc:'Begin a festival at once — the hold works 25% faster for a while.' },
-  { id:'merchant', ic:'🧳', name:'Summon Merchant',  cost:25, desc:'A merchant arrives immediately with improved trade rates.' },
-  { id:'healer',   ic:'🌿', name:'Healer\'s Visit',  cost:20, desc:'Cure every sick settler in the hold instantly.' },
-  { id:'repairs',  ic:'🔧', name:'Mend the Hold',    cost:18, desc:'Instantly repair every building to full condition.' },
-  { id:'rations',  ic:'🥖', name:'Emergency Rations',cost:15, desc:'A cart of 25 food arrives at the stores.' },
-  { id:'banner',   ic:'🚩', name:'New Banner Dye',   cost:12, desc:'Re-dye the hold banner in a new colour (cycles red → blue → green → gold).' },
-];
-function renderLedgerSheet(){
-  const IN = { bounties:['🎯','Daily bounties'], quests:['📜','Goals'], deeds:['🏅','Deeds'], routes:['🐫','Trade routes'], tithe:['💰','Tithe'] };
-  const OUT = { shop:['🛒','Hold Shop'] };
-  const totIn = Object.values(G.ledger.in).reduce((a,b)=>a+b,0);
-  const totOut = Object.values(G.ledger.out).reduce((a,b)=>a+b,0);
-  const row = (ic,label,amt,tot,sign)=>{
-    const pct = tot>0 ? Math.round(amt/tot*100) : 0;
-    return `<div class="ledger-row"><span class="lg-ic">${ic}</span><span class="lg-label">${label}</span>
-      <span class="mini-bar"><span style="display:block;height:100%;width:${pct}%;background:${sign>0?'#6a9a4a':'#a4402c'}"></span></span>
-      <span class="lg-amt">${sign>0?'+':'−'}${amt}</span></div>`;
-  };
-  sheetContent.innerHTML = `
-    <div class="sheet-sub">In the coffers now: <b>💰 ${G.coins}</b>.</div>
-    <div class="sheet-sub" style="margin-top:8px;"><b>Coin earned</b> — 💰${totIn} all-time</div>
-    <div class="roster-list">
-      ${Object.keys(IN).map(k=>row(IN[k][0], IN[k][1], G.ledger.in[k]||0, totIn, 1)).join('')}
-    </div>
-    <div class="sheet-sub" style="margin-top:10px;"><b>Coin spent</b> — 💰${totOut} all-time</div>
-    <div class="roster-list">
-      ${Object.keys(OUT).map(k=>row(OUT[k][0], OUT[k][1], G.ledger.out[k]||0, totOut, -1)).join('')}
-    </div>
-    <div class="sheet-sub" style="margin-top:10px;opacity:.8;">Net across the hold's life: <b>${totIn-totOut>=0?'+':'−'}${Math.abs(totIn-totOut)}</b> coins.</div>`;
-}
-function renderTradeRoutesSheet(){
-  refreshRouteOffers();
-  const hasPost = hasActiveBuilding('tradingPost');
-  const lbl = routeGoodLabel;
-  sheetContent.innerHTML = `
-    <div class="sheet-sub">Recurring caravan contracts — deliver goods on schedule for a steady flow of coins. Requires a Trading Post.</div>
-    ${!hasPost ? '<div class="sheet-sub" style="color:#e8b2a4;">⚠️ No active Trading Post — build one to broker routes.</div>' : ''}
-    <div class="sheet-sub" style="margin-top:8px;"><b>Active routes</b> (${G.tradeRoutes.length}/3)</div>
-    <div class="roster-list">
-      ${G.tradeRoutes.length ? G.tradeRoutes.map(r=>`<div class="route-row">
-        <span style="font-size:20px;">${r.ic}</span>
-        <span class="rr-main"><b>${r.name}</b><br><span class="rr-sub">${r.giveAmt} ${lbl(r.giveType)} every ${r.everyDays}d → 💰${r.coins} · next day ${r.nextDay}${r.missed?` · <span style="color:#e8b2a4;">missed once</span>`:''}</span></span>
-        <button class="chip" data-cancel="${r.id}">End</button>
-      </div>`).join('') : '<div class="sheet-sub" style="opacity:.7;">No active routes yet.</div>'}
-    </div>
-    <div class="sheet-sub" style="margin-top:10px;"><b>Caravans seeking contracts</b></div>
-    <div class="roster-list">
-      ${G.routeOffers.map(o=>`<button class="action-btn list-row${(!hasPost||G.tradeRoutes.length>=3)?' dim':''}" data-accept="${o.id}">
-        <span style="font-size:20px;">${o.ic}</span>
-        <span><b>${o.name}</b><br><span style="font-size:11.5px;opacity:.8;">${o.giveAmt} ${lbl(o.giveType)} every ${o.everyDays} days → 💰${o.coins} each run</span></span>
-      </button>`).join('')}
-    </div>`;
-  sheetContent.querySelectorAll('[data-accept]').forEach(b=>b.addEventListener('click', ()=>acceptRoute(b.dataset.accept)));
-  sheetContent.querySelectorAll('[data-cancel]').forEach(b=>b.addEventListener('click', ()=>cancelRoute(b.dataset.cancel)));
-}
-function buyShopItem(id){
-  const it = SHOP_ITEMS.find(x=>x.id===id);
-  if(!it) return;
-  if(G.coins < it.cost){ toast('Not enough coins — complete bounties and goals to earn more.', true); return; }
-  const _coinsBefore = G.coins;
-  if(id==='festival'){ if(!startEvent('festival',55)){ toast('An event is already underway.', true); return; } G.coins-=it.cost; toast('🎉 A feast day begins!'); }
-  else if(id==='merchant'){ if(!startEvent('merchant',70)){ toast('An event is already underway.', true); return; } G.coins-=it.cost; toast('🧳 A merchant arrives at your call!'); }
-  else if(id==='healer'){ const n=G.villagers.filter(v=>v.sick).length; if(!n){ toast('No one is sick.', true); return; } G.coins-=it.cost; G.villagers.forEach(v=>{v.sick=false;v.sickTimer=0;}); toast('🌿 The healer cures '+n+' settler'+(n>1?'s':'')+'.'); }
-  else if(id==='repairs'){ G.coins-=it.cost; let n=0; G.buildings.forEach(b=>{ if(b.condition!==undefined&&b.condition<100){b.condition=100;n++;} }); toast('🔧 '+n+' building'+(n!==1?'s':'')+' restored.'); }
-  else if(id==='rations'){ G.coins-=it.cost; const got=gainResource('food',25); toast('🥖 +'+got+' food delivered.'); }
-  else if(id==='banner'){ G.coins-=it.cost; G.bannerIdx=(G.bannerIdx+1)%bannerPalette.length; toast('🚩 The hold flies new colours!'+(bannerPalette.length>BANNER_COLORS.length?'':'')); }
-  if(_coinsBefore > G.coins) logCoinOut('shop', _coinsBefore - G.coins);
-  renderHubSheet('shop');
-}
-function renderShopSheet(){
-  sheetContent.innerHTML = `
-    <div class="sheet-sub">Coins: <b>${G.coins}</b> — earned from daily bounties and completed goals.</div>
-    ${SHOP_ITEMS.map(it=>`
-      <button class="action-btn list-row${G.coins<it.cost?' dim':''}" data-shop="${it.id}">
-        <div>${it.ic} <span class="rt">${it.name}</span> — 💰${it.cost}<br><span class="rd">${it.desc}</span></div>
-      </button>`).join('')}
-    <button class="action-btn list-row" id="routes-btn" style="margin-top:8px;">
-      <div>🐫 <span class="rt">Trade Routes</span>${G.tradeRoutes.length?` — ${G.tradeRoutes.length} active`:''}<br><span class="rd">Recurring caravan contracts for a steady coin income.</span></div>
-    </button>
-    <button class="action-btn list-row" id="ledger-btn" style="margin-top:6px;">
-      <div>📒 <span class="rt">Trader's Ledger</span><br><span class="rd">Where your coins come from and where they go.</span></div>
-    </button>
-  `;
-  sheetContent.querySelectorAll('[data-shop]').forEach(btn=>btn.addEventListener('click', ()=>buyShopItem(btn.dataset.shop)));
-  document.getElementById('routes-btn').addEventListener('click', ()=>{
-    sheetNav.push({ id:'routes', title:'🐫 Trade Routes', render:()=>renderTradeRoutesSheet() });
-  });
-  document.getElementById('ledger-btn').addEventListener('click', ()=>{
-    sheetNav.push({ id:'ledger', title:'📒 Trader\'s Ledger', render:()=>renderLedgerSheet() });
-  });
-}
-
 /* ── AMBIENT LIFE ── idle & young citizens don't just stand there: they gather
    at the hearth after dark, seek warmth in winter, drift toward friends, and
    the children play. Only steers idle wander targets + a mood bubble — never
@@ -1024,6 +933,7 @@ const ctx = canvas.getContext('2d');
 initIsoKit(ctx);
 initSprites({ ctx });
 initFeedback({ gameModeId: ()=>gameModeId });
+initShop({ reopenShop: ()=>renderHubSheet('shop') });
 initEvents({ merchantOften: ()=>!!gameMode.merchantOften, tradeMul: ()=>gameMode.tradeMul||1 });
 initSheet({ deselectAll: ()=>deselectAll() });
 initSheetDrag();
@@ -1040,26 +950,22 @@ initTerrain({ ctx });
 
 initCritters({ ctx });
 
-/* Weather reports what it did rather than reaching for main.ts's toast and
-   chronicle directly — the module stays pure simulation that way, and can be
-   reasoned about without a DOM. */
-initWeather({ toast, sfx, forceWinter: ()=>!!gameMode.forceWinter });
+initWeather({ forceWinter: ()=>!!gameMode.forceWinter });
 initWork({ hasActiveBuilding, reassignRole });
-initBuildings({ toast, decayMul: ()=>gameMode.decayMul,
+initBuildings({ decayMul: ()=>gameMode.decayMul,
   onRemoved: (b)=>{ if(selection && selection.ref===b) deselectAll(); } });
-initContracts({ toast, bountyCoinMul: ()=>(gameMode.bountyCoinMul||1),
-  refreshRoutesSheet: ()=>renderTradeRoutesSheet() });
-initRaiders({ toast, raidsEnabled: ()=>gameMode.banditsEnabled!==false,
+initContracts({ bountyCoinMul: ()=>(gameMode.bountyCoinMul||1) });
+initRaiders({ raidsEnabled: ()=>gameMode.banditsEnabled!==false,
   decreeRaidMul });
-initFire({ toast, hazardsEnabled: ()=>gameMode.banditsEnabled!==false,
+initFire({ hazardsEnabled: ()=>gameMode.banditsEnabled!==false,
   decayMul: ()=>(gameMode.decayMul||1) });
-initEconomy({ toast, decayMul: ()=>(gameMode && gameMode.decayMul!==undefined) ? gameMode.decayMul : 1 });
-initSteward({ toast, reassignRole, startResearch, demolishBuilding });
-initVillagers({ toast, decreeHungerMul, decreeWorkMul,
+initEconomy({ decayMul: ()=>(gameMode && gameMode.decayMul!==undefined) ? gameMode.decayMul : 1 });
+initSteward({ reassignRole, startResearch, demolishBuilding });
+initVillagers({ decreeHungerMul, decreeWorkMul,
   eventSpeedBonus, festivalOn: isFestivalOn });
 /* Lives needs one thing back: when a settler passes, whatever the UI was
    holding them open for has to let go. */
-initLives({ toast, popCapacity, spawnVillager, buildingCenter,
+initLives({ popCapacity, spawnVillager, buildingCenter,
   onPassed: (v)=>{ if(selection && selection.ref===v) deselectAll(); } });
 
 let canvasDPR = 1;

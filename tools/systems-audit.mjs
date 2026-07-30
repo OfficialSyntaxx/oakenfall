@@ -214,6 +214,42 @@ check('settlers reach mastery', guilded.masters >= 2, `${guilded.masters} master
 check('masters of a trade form a guild', guilded.guilds.length > 0,
   guilded.guilds.length ? guilded.guilds.join(', ') : 'no guild formed');
 
+/* ---- the coin economy's panels ----
+ * The shop, the ledger and the caravan routes were the largest stretch of UI
+ * with no coverage at all: nothing here is reachable without coins, so no
+ * ordinary test run ever opened them. Accepting a route is the interesting one —
+ * it is the only place a panel has to redraw itself in response to a change
+ * made from inside it. */
+await admin('coins');
+await order('build a trading post');
+await page.waitForTimeout(9000);
+await page.click('#sheet-close').catch(() => {});
+await page.click('#shop-pill');
+await page.waitForSelector('#routes-btn', { timeout: 3000 });
+const shopRows = await page.locator('[data-shop]').count();
+check('the shop offers its wares', shopRows >= 6, `${shopRows} items`);
+await page.click('#ledger-btn');
+await page.waitForTimeout(300);
+const ledgerRows = await page.locator('.ledger-row').count();
+check("the trader's ledger accounts for the coffers", ledgerRows >= 6, `${ledgerRows} rows`);
+await page.click('.sheet-back');
+await page.waitForTimeout(300);
+await page.click('#routes-btn');
+await page.waitForTimeout(400);
+const beforeRoutes = (await snap()).routes;
+const offers = await page.locator('[data-accept]').count();
+check('caravans are seeking contracts', offers > 0, `${offers} offers`);
+await page.locator('[data-accept]').first().click();
+await page.waitForTimeout(500);
+const afterSnap = await snap();
+check('a caravan route can be agreed', afterSnap.routes === beforeRoutes + 1,
+  `${beforeRoutes} → ${afterSnap.routes} routes`);
+// The sheet must redraw itself: the new route brings an End button with it.
+const endBtns = await page.locator('[data-cancel]').count();
+check('the routes sheet redraws when a route is agreed', endBtns > 0,
+  `${endBtns} active-route rows`);
+await page.click('#sheet-close').catch(() => {});
+
 // ---- seasons: a full year must turn, and winter must arrive ----
 const seasons = new Set();
 for (let i = 0; i < 5; i++) {

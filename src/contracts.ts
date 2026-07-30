@@ -7,6 +7,7 @@
  */
 import { G } from './state';
 import { toast } from './hud';
+import { sheetNav } from './sheet';
 import { clamp } from './math';
 import { hasActiveBuilding } from './buildings';
 import { logCoinIn } from './economy';
@@ -15,10 +16,8 @@ import { sfx, buzz } from './audio';
 type Deps = {
   /** Game-mode multiplier on bounty payouts. */
   bountyCoinMul: () => number;
-  /** Redraw the routes sheet when a route is taken up or dissolved. */
-  refreshRoutesSheet: () => void;
 };
-let dep: Deps = { bountyCoinMul: () => 1, refreshRoutesSheet: () => {} };
+let dep: Deps = { bountyCoinMul: () => 1 };
 export function initContracts(deps: Deps): void { dep = deps; }
 
 /* ── DAILY BOUNTIES ── two a day, rolled at dawn, paid on completion. */
@@ -104,7 +103,9 @@ export function acceptRoute(id: string): void {
   toast(o.ic + ' Caravan route to ' + o.name + ' agreed — ' + o.giveAmt + ' ' + label +
     ' every ' + o.everyDays + ' days.');
   refreshRouteOffers();
-  dep.refreshRoutesSheet();
+  // Accepting or ending a route only ever happens from the routes sheet, so
+  // redrawing whatever view is current redraws exactly that sheet.
+  sheetNav.rerender();
 }
 
 export function cancelRoute(id: string): void {
@@ -112,7 +113,7 @@ export function cancelRoute(id: string): void {
   if (i < 0) return;
   const r = G.tradeRoutes.splice(i, 1)[0];
   toast('🐫 The route to ' + r.name + ' is dissolved.');
-  dep.refreshRoutesSheet();
+  sheetNav.rerender();
 }
 
 /** Called at each dawn: fulfil or miss whatever caravans are due. */

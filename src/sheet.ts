@@ -107,6 +107,13 @@ export function initSheetDrag(): void {
   zone.addEventListener('click', () => { if (!('ontouchstart' in window)) sheet.classList.toggle('expanded'); });
 }
 
+/** The sheet body's elements, typed. Every panel binds its buttons by data
+ *  attribute right after writing its innerHTML, and `dataset` is not on the bare
+ *  Element that querySelectorAll hands back. */
+export function sheetAll(sel: string): HTMLElement[] {
+  return Array.from(sheetContent.querySelectorAll(sel)) as HTMLElement[];
+}
+
 /* ── GAUGES ── the two bar shapes every sheet uses. Both were hand-rolled with
    inline styles at a dozen call sites before they were helpers; keep them here
    so a change to either lands everywhere at once. */

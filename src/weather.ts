@@ -7,7 +7,7 @@
  *
  * Pure simulation: no canvas, no DOM. It reports what happened through the
  * callbacks handed to initWeather(), rather than reaching for main.ts's
- * toast/chron/sfx directly.
+ * the toast row, the chronicle and the sound bank directly.
  *
  * Today's weather is deliberately NOT saved. Reloading a hold gives it a fresh
  * sky, which is the existing behaviour and a kind one — nobody wants to reload
@@ -15,6 +15,7 @@
  */
 import { G } from './state';
 import { toast } from './hud';
+import { sfx } from './audio';
 import { chron } from './chronicle';
 import { dist2 } from './math';
 import { WEATHER_TABLE } from './defs';
@@ -48,11 +49,10 @@ export function setWeather(type: string): void {
 }
 
 type Deps = {
-  sfx: (name: string) => void;
   /** Iron Winter runs its own weather and skips climate spells entirely. */
   forceWinter: () => boolean;
 };
-let dep: Deps = { sfx: () => {}, forceWinter: () => false };
+let dep: Deps = { forceWinter: () => false };
 export function initWeather(deps: Deps): void { dep = deps; }
 
 /** Rolled each dawn, weighted by the season. */
@@ -124,7 +124,7 @@ export function rollPlague(): void {
   }
   toast('🤢 A blight sweeps the hold — ' + n + ' settler' + (n > 1 ? 's' : '') +
     ' have fallen ill! Seek a healer, and keep the sick from crowding.', true);
-  dep.sfx('blight');
+  sfx('blight');
   chron('plague');
 }
 
