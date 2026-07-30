@@ -1572,7 +1572,7 @@ function renderJournalSheet(){
     <div class="sheet-sub">📖 <b>Hold Journal</b> — Peak settlers: ${G.journal.peakPopulation} · Days: ${G.journal.daysSurvived} · Winters: ${G.journal.wintersEndured} · Buildings raised: ${G.journal.buildingsRaised} · Settlers welcomed: ${G.journal.settlersWelcomed} · Wolf raids survived: ${G.journal.wolvesSurvived}${G.journal.passed?' · Passed on: '+G.journal.passed:''}</div>
     ${(()=>{ const g=Object.keys(GUILD_DEFS).filter(r=>G.guilds[r]); return g.length?`<div class="sheet-sub" style="margin-top:6px;"><b>⚜️ Guilds</b> — ${g.map(r=>GUILD_DEFS[r].ic+' '+GUILD_DEFS[r].name).join(' · ')} <span style="opacity:.7">(+${Math.round(guildBonusVal()*100)}% each)</span></div>`:''; })()}
     <div class="sheet-sub" style="margin:8px 0 2px;"><b>🏅 Deeds</b> — ${Object.keys(G.deeds).length} of ${DEED_DEFS.length} earned</div>
-    <div class="deed-G.grid">
+    <div class="deed-grid">
       ${DEED_DEFS.map(d=>{
         const got = !!G.deeds[d.id];
         const rt = rewardText(d.reward);
@@ -1980,7 +1980,7 @@ function renderBuildPalette(){
       };
       return ['home','food','industry','trade','defense','road'].map(cat=>{
         const inCat = keys.filter(k=>(CATOF[k]||'trade')===cat);
-        return inCat.length ? `<div class="build-cat">${CAT[cat]}</div><div class="build-G.grid">${inCat.map(card).join('')}</div>` : '';
+        return inCat.length ? `<div class="build-cat">${CAT[cat]}</div><div class="build-grid">${inCat.map(card).join('')}</div>` : '';
       }).join('');
     })()}
   `;

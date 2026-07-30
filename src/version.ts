@@ -10,8 +10,10 @@
  * short, human half of CHANGELOG.md — the "what's new" a player reads, not the
  * full record.
  */
-export const GAME_VERSION = '1.84.0';
+export const GAME_VERSION = '1.85.0';
 export const CHANGELOG: [string, string][] = [
+  ['1.85.0', 'The build menu and the deeds board lay out in neat columns again — ' +
+    'both had lost their grid and were stacking one item per row.'],
   ['1.84.0', 'A festival or a merchant no longer follows you into a new hold — ' +
     'founding a settlement while one was underway used to carry its bonus across.'],
   ['1.83.0', 'The sea is back. The water the island sits in, and the pale rim of ' +

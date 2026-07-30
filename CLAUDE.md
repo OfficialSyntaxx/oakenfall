@@ -96,6 +96,10 @@ modules, (3) Capacitor wrap + native storage.
     (`let villagers = []`) cannot be rewritten in place; the script lists them.
   - A local may shadow a global of the same name (`const coins = …` inside
     `makeRouteOffer`). Those show up in the declaration list — revert them.
+  - A name inside a STRING is not a reference. `class="build-grid"` became
+    `class="build-G.grid"` and stayed broken for four versions: the cards still
+    rendered, unstyled, and every state assertion still passed. The systems
+    audit now asserts both grids reach the page.
   - The code/text scanner needs REAL template nesting. The UI is templates
     holding `${…}` holes holding further templates; close the outer backtick at
     the first inner one and the rest of the file desynchronises, the next
@@ -126,6 +130,11 @@ modules, (3) Capacitor wrap + native storage.
   so `npm run verify:sim` (build + smoke + gameplay + scenario + editor) and
   `npm run verify:hold` (slots + steward + health + systems + site) can be run
   separately when a tool or shell caps out at ten.
+- `node tools/gesture-test.mjs` — pan, flick inertia, pinch, double-tap and
+  tap-to-select, driven through CDP (Playwright's touchscreen is one finger; a
+  pinch needs two). Gestures change nothing in the world, so every other suite
+  passes with the input layer dead — this one asserts against the camera state
+  `__oakDebug` reports. Part of `verify:sim`.
 - `npm run smoke` — builds, serves `_site`, boots the real game in Chromium at
   phone/landscape/desktop and asserts the world renders, assets load, the canvas
   is sized, the HUD does not collide, and no console/request errors occur.

@@ -250,6 +250,30 @@ check('the routes sheet redraws when a route is agreed', endBtns > 0,
   `${endBtns} active-route rows`);
 await page.click('#sheet-close').catch(() => {});
 
+/* ---- the panels' own markup ----
+ * A class name is invisible when it breaks: the cards still render, just
+ * unstyled, and every assertion about the game's STATE still passes. Both grids
+ * below were silently broken for four versions by a search-and-replace that
+ * rewrote `grid` inside a class attribute while migrating state into G. What
+ * is asserted is that the styled container actually reaches the page. */
+await page.click('#sheet-close').catch(() => {});
+await page.click('#build-fab');
+await page.waitForSelector('.build-card', { timeout: 3000 });
+const buildGrids = await page.locator('.build-grid').count();
+const buildCards = await page.locator('.build-card').count();
+check('the build palette lays its cards out in a grid', buildGrids >= 3 && buildCards >= 10,
+  `${buildGrids} category grids, ${buildCards} cards`);
+// The FAB is covered while a sheet is open, so leave by the sheet's own close.
+await page.click('#sheet-close');
+await page.waitForTimeout(200);
+await page.click('#quest-btn');
+await page.waitForTimeout(300);
+await page.locator('[data-tab="journal"]').click();
+await page.waitForTimeout(300);
+const deedGrids = await page.locator('.deed-grid').count();
+check('the journal lays its deeds out in a grid', deedGrids === 1, `${deedGrids} deed grids`);
+await page.click('#sheet-close').catch(() => {});
+
 // ---- seasons: a full year must turn, and winter must arrive ----
 const seasons = new Set();
 for (let i = 0; i < 5; i++) {

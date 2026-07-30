@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.85.0
+The build menu and the deeds board are laid out properly again. Both had quietly
+lost the grid that arranges them in columns, so every building card and every
+deed badge was stacking one per row and the menus ran on far longer than they
+should. A search-and-replace during the code reorganisation had rewritten the
+layout's name inside the markup.
+
 ## 1.84.0
 A feast day no longer follows you into a new hold. If you founded a settlement
 while a festival or a merchant visit was underway, the bonus carried across into
