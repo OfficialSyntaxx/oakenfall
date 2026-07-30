@@ -27,13 +27,13 @@ import { sfx } from './audio';
 const FEEDBACK_ENDPOINT = '/.netlify/functions/submit-feedback';
 const REPO_URL = 'https://github.com/OfficialSyntaxx/oakenfall';
 
+import { sheetContent } from './sheet';
+
 type Deps = {
-  /** The sheet body to render into. */
-  sheetContent: () => any;
   /** Which game mode is running, for the report header. */
   gameModeId: () => string;
 };
-let dep: Deps = { sheetContent: () => null, gameModeId: () => 'settler' };
+let dep: Deps = { gameModeId: () => 'settler' };
 export function initFeedback(deps: Deps): void { dep = deps; }
 
 /* A ring of the last ten faults, kept because the frame loop swallows
@@ -84,7 +84,7 @@ export async function copyFeedback(kind, text){
 }
 export function renderFeedbackSheet(kind){
   const isBug = kind==='bug';
-  dep.sheetContent().innerHTML = `
+  sheetContent.innerHTML = `
     <div class="sheet-sub">${isBug
       ? 'Describe what went wrong and what you expected. Game state and recent errors attach automatically.'
       : 'Describe your idea — what it does and why it would make the hold better.'}</div>

@@ -68,6 +68,8 @@ import { initLives, familyTick, ambientIdle, hasTrait, relTo, remember, bumpRel,
   AGE_YEAR, ADULT_AGE, ELDER_BEFORE, LIFESPAN_BASE } from './lives';
 import { initWork, roleNeedScores, seekWork, maybeSwitchTrade } from './work';
 import { chron, chronicleAdd } from './chronicle';
+import { initSheet, initSheetDrag, sheetWrap, sheetContent, sheetNav, openSheet, closeSheet,
+         isSheetOpen, sheetContains, miniBar, statBar } from './sheet';
 import { initHud, toast, eventLog, updateHud, updateDayTint, updateHudReserve } from './hud';
 import { initBackdrop, voidBackdrop, drawSea, drawIslandSkirt } from './backdrop';
 import { initUnlocks, ADMIN_PROMO, hasUnlock, isPatron, redeemCode, saveUnlocks, loadUnlocks,
@@ -1142,7 +1144,9 @@ const ctx = canvas.getContext('2d');
    canvas context, and a few callbacks back into main.ts's own UI state. */
 initIsoKit(ctx);
 initSprites({ ctx });
-initFeedback({ sheetContent: ()=>sheetContent, gameModeId: ()=>gameModeId });
+initFeedback({ gameModeId: ()=>gameModeId });
+initSheet({ deselectAll: ()=>deselectAll() });
+initSheetDrag();
 initUnlocks({ saveIfRunning: ()=>{ if(started) saveGame(); } });
 initHud({ gameModeId: ()=>gameModeId,
   questProgress: ()=>({ done: questsDoneCount(), seen: lastSeenQuestCount }) });
@@ -1670,84 +1674,8 @@ document.getElementById('mm-zoom').addEventListener('click', (e)=>{
 /* =========================================================================
    SELECTION / SHEET UI
 ========================================================================= */
-const sheetWrap = document.getElementById('sheet-wrap');
-const sheetContent = document.getElementById('sheet-content');
 const buildFab = document.getElementById('build-fab');
 const crosshair = document.getElementById('crosshair');
-
-function openSheet(){ sheetWrap.classList.add('open'); sfx('open'); }
-function closeSheet(){
-  sheetWrap.classList.remove('open');
-  document.body.classList.remove('sheet-open');
-  document.getElementById('bottom-sheet').classList.remove('expanded');
-  sheetNav.reset();
-  sfx('close');
-}
-
-/* ── Sheet navigation: a tiny stack over the existing renderers ──
-   A view = {id, title?, render}. Views with a title get a header row with a
-   back chevron (shown at depth ≥ 2). Map-selection views pass no title.
-   Rule: the stack owns sheet visibility; selection owns map state;
-   deselectAll clears both. Renderers never call openSheet themselves. */
-const sheetNav = {
-  stack: [],
-  push(view){ this.stack.push(view); this._show(view); },
-  replace(view){ this.stack = [view]; this._show(view); },
-  back(){
-    this.stack.pop();
-    const v = this.stack[this.stack.length-1];
-    if(v) this._show(v); else deselectAll();
-  },
-  reset(){ this.stack = []; },
-  rerender(){ const v = this.stack[this.stack.length-1]; if(v) this._show(v); },
-  _show(view){
-    const wasOpen = sheetWrap.classList.contains('open');
-    view.render();
-    if(view.title) renderSheetHeader(view);
-    if(!wasOpen) sfx('open');
-    sheetWrap.classList.add('open');
-    document.body.classList.add('sheet-open');
-  }
-};
-function renderSheetHeader(view){
-  const h = document.createElement('div');
-  h.className = 'sheet-header';
-  h.innerHTML = `<button class="sheet-back${sheetNav.stack.length<2?' hidden':''}" aria-label="Back">‹</button><div class="sheet-title">${view.title}</div>`;
-  sheetContent.prepend(h);
-  h.querySelector('.sheet-back').addEventListener('click', ()=>sheetNav.back());
-}
-
-// Real drag-to-expand: two detents (46vh / 85vh) toggled from the grabber
-// zone only — the sheet body scrolls, so body-drag disambiguation is avoided.
-(function(){
-  const zone = document.getElementById('grabber-zone');
-  const sheet = document.getElementById('bottom-sheet');
-  let startY = null;
-  zone.addEventListener('touchstart', (e)=>{ startY = e.touches[0].clientY; }, {passive:true});
-  zone.addEventListener('touchmove', (e)=>{
-    if(startY===null) return;
-    const dy = e.touches[0].clientY - startY;
-    if(dy < -24){ sheet.classList.add('expanded'); startY = null; }
-    else if(dy > 24){
-      if(sheet.classList.contains('expanded')) sheet.classList.remove('expanded');
-      else deselectAll();
-      startY = null;
-    }
-    e.preventDefault();
-  }, {passive:false});
-  zone.addEventListener('touchend', (e)=>{
-    if(startY!==null && Math.abs(e.changedTouches[0].clientY - startY) < 8){
-      sheet.classList.toggle('expanded'); // tap the grabber = toggle
-    }
-    startY = null;
-  });
-  zone.addEventListener('click', ()=>{ if(!('ontouchstart' in window)) sheet.classList.toggle('expanded'); });
-})();
-
-// Inline gauge helper — replaces hand-rolled inline-styled span pairs
-function miniBar(pct, color){
-  return `<span class="mini-bar"><i style="width:${pct}%;background:${color};"></i></span>`;
-}
 
 /* ── Research panel: extracted from the Town Center sheet so the hub's
    Research tab and the building sheet share one implementation ── */
@@ -2030,11 +1958,6 @@ function selectTile(t){
   ensureSelectionVisible();
 }
 function exitBuildModeIfActive(){ if(buildMode.active) exitBuildMode(); }
-
-function statBar(label, val, color){
-  return `<div class="stat-bar-label"><span>${label}</span><span>${Math.round(val)}%</span></div>
-  <div class="stat-bar"><div class="stat-bar-fill" style="width:${val}%;background:${color}"></div></div>`;
-}
 
 function renderVillagerSheet(v){
   const roles = Object.keys(ROLE_DEFS).map(key=>{
