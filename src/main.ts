@@ -70,6 +70,8 @@ import { initWork, roleNeedScores, seekWork, maybeSwitchTrade } from './work';
 import { chron, chronicleAdd } from './chronicle';
 import { initSheet, initSheetDrag, sheetWrap, sheetContent, sheetNav, openSheet, closeSheet,
          isSheetOpen, sheetContains, miniBar, statBar } from './sheet';
+import { initEvents, rollRandomEvent, eventTick, startEvent, clearEvent, isFestivalOn,
+         isMerchantHere, eventTradeBonus, eventSpeedBonus } from './events';
 import { QUESTS, checkQuests, questsDoneCount, DEED_DEFS, rewardText, grantReward, checkDeeds } from './goals';
 import { initHud, toast, eventLog, updateHud, updateDayTint, updateHudReserve } from './hud';
 import { initBackdrop, voidBackdrop, drawSea, drawIslandSkirt } from './backdrop';
@@ -650,8 +652,8 @@ function buyShopItem(id){
   if(!it) return;
   if(G.coins < it.cost){ toast('Not enough coins — complete bounties and goals to earn more.', true); return; }
   const _coinsBefore = G.coins;
-  if(id==='festival'){ if(activeEvent){ toast('An event is already underway.', true); return; } G.coins-=it.cost; activeEvent={type:'festival',endsAt:G.worldTime+55}; toast('🎉 A feast day begins!'); sfx('festival'); }
-  else if(id==='merchant'){ if(activeEvent){ toast('An event is already underway.', true); return; } G.coins-=it.cost; activeEvent={type:'merchant',endsAt:G.worldTime+70}; toast('🧳 A merchant arrives at your call!'); }
+  if(id==='festival'){ if(!startEvent('festival',55)){ toast('An event is already underway.', true); return; } G.coins-=it.cost; toast('🎉 A feast day begins!'); }
+  else if(id==='merchant'){ if(!startEvent('merchant',70)){ toast('An event is already underway.', true); return; } G.coins-=it.cost; toast('🧳 A merchant arrives at your call!'); }
   else if(id==='healer'){ const n=G.villagers.filter(v=>v.sick).length; if(!n){ toast('No one is sick.', true); return; } G.coins-=it.cost; G.villagers.forEach(v=>{v.sick=false;v.sickTimer=0;}); toast('🌿 The healer cures '+n+' settler'+(n>1?'s':'')+'.'); }
   else if(id==='repairs'){ G.coins-=it.cost; let n=0; G.buildings.forEach(b=>{ if(b.condition!==undefined&&b.condition<100){b.condition=100;n++;} }); toast('🔧 '+n+' building'+(n!==1?'s':'')+' restored.'); }
   else if(id==='rations'){ G.coins-=it.cost; const got=gainResource('food',25); toast('🥖 +'+got+' food delivered.'); }
@@ -689,47 +691,6 @@ function renderShopSheet(){
 
 
 let journalTimer = 1;
-let activeEvent = null; // {type, endsAt, data}
-
-/* ── RANDOM EVENTS ──────────────────────────────────────────────────── */
-function rollRandomEvent(){
-  if(activeEvent) return; // one at a time
-  let roll = Math.random();
-  if(gameMode.merchantOften && roll>0.30) roll = Math.random()<0.45 ? 0.1 : roll;
-  if(roll < 0.30){
-    // Traveling merchant — better trade rates for a while
-    activeEvent = { type:'merchant', endsAt: G.worldTime + 70 };
-    toast('🧳 A traveling merchant arrives — trade rates improved for a while!');
-  } else if(roll < 0.50){
-    // Wandering healer — cures all illness for food
-    const sickCount = G.villagers.filter(v=>v.sick).length;
-    if(sickCount>0 && G.stockpile.food>=8){
-      G.stockpile.food -= 8;
-      G.villagers.forEach(v=>{ v.sick=false; v.sickTimer=0; });
-      toast('🌿 A wandering healer cures '+sickCount+' sick villager'+(sickCount>1?'s':'')+' for 8 food.');
-    } else if(sickCount>0){
-      toast('🌿 A healer passed by, but the stores couldn\'t afford their fee (8 food).');
-    }
-  } else if(roll < 0.70){
-    // Festival — everyone works faster briefly
-    activeEvent = { type:'festival', endsAt: G.worldTime + 55 };
-    toast('🎉 A festival lifts every heart — the hold works faster for a while!'); sfx('festival');
-  } else if(roll < 0.85){
-    // Resource vein — a random stone tile refills to double
-    const cand = G.stoneTiles.filter(t=>t.resourceAmount < t.maxResource);
-    if(cand.length){
-      const t = cand[Math.floor(Math.random()*cand.length)];
-      t.resourceAmount = t.maxResource*2;
-      toast('⛏️ Miners report a rich vein — a stone deposit has doubled!');
-    }
-  } else {
-    // Bumper forage — small instant food find
-    const got = gainResource('food', 6+Math.floor(Math.random()*8));
-    if(got>0) toast('🍄 Foragers return with '+got+' extra food from the woods.');
-  }
-}
-function eventTradeBonus(){ return (activeEvent && activeEvent.type==='merchant' ? 1.35 : 1) * (gameMode.tradeMul||1); }
-function eventSpeedBonus(){ return activeEvent && activeEvent.type==='festival' ? 1.25 : 1; }
 
 /* ── NAMED DISTRICTS ── clusters of 3+ buildings earn a name, shown on the map
    and announced to the Chronicle when they first form. Recomputed on a slow
@@ -981,11 +942,7 @@ function update(rawDt){
     if(b.procFlash) b.procFlash = Math.max(0, b.procFlash - dt*1.4);
   }
 
-  if(activeEvent && G.worldTime >= activeEvent.endsAt){
-    if(activeEvent.type==='merchant') toast('🧳 The merchant packs up and moves on.');
-    else if(activeEvent.type==='festival') toast('🎉 The festival winds down.');
-    activeEvent = null;
-  }
+  eventTick();
 
   // Research progress
   if(G.activeResearch){
@@ -1067,6 +1024,7 @@ const ctx = canvas.getContext('2d');
 initIsoKit(ctx);
 initSprites({ ctx });
 initFeedback({ gameModeId: ()=>gameModeId });
+initEvents({ merchantOften: ()=>!!gameMode.merchantOften, tradeMul: ()=>gameMode.tradeMul||1 });
 initSheet({ deselectAll: ()=>deselectAll() });
 initSheetDrag();
 initUnlocks({ saveIfRunning: ()=>{ if(started) saveGame(); } });
@@ -1098,7 +1056,7 @@ initFire({ toast, hazardsEnabled: ()=>gameMode.banditsEnabled!==false,
 initEconomy({ toast, decayMul: ()=>(gameMode && gameMode.decayMul!==undefined) ? gameMode.decayMul : 1 });
 initSteward({ toast, reassignRole, startResearch, demolishBuilding });
 initVillagers({ toast, decreeHungerMul, decreeWorkMul,
-  eventSpeedBonus, festivalOn: ()=>!!(activeEvent && activeEvent.type==='festival') });
+  eventSpeedBonus, festivalOn: isFestivalOn });
 /* Lives needs one thing back: when a settler passes, whatever the UI was
    holding them open for has to let go. */
 initLives({ toast, popCapacity, spawnVillager, buildingCenter,
@@ -1286,7 +1244,7 @@ function render(){
     list.push({depth:m.gx+m.gy+0.05, draw:()=>{ try{ drawMemorial(m); }catch(e){} }});
   }
   // Visiting merchant: their cart stands by the Town Center while the event runs
-  if(activeEvent && activeEvent.type==='merchant'){
+  if(isMerchantHere()){
     const mgx = G.TC_X-1.6, mgy = G.TC_Y+2.6;
     list.push({depth:mgx+mgy+0.2, draw:()=>{ try{ drawMerchantCart(mgx,mgy); }catch(e){} }});
   }
@@ -1818,7 +1776,7 @@ function openFestivalChoice(){
     sheetContent.querySelectorAll('[data-boon]').forEach(btn=>btn.addEventListener('click', ()=>{
       const b = FESTIVAL_BOONS.find(x=>x.id===btn.dataset.boon); if(!b) return;
       G.festivalBoon = b.id;
-      activeEvent = { type:'festival', endsAt: G.worldTime + 55 }; // a real feast to mark it
+      startEvent('festival', 55); // a real feast to mark it
       toast(b.ic+' '+b.name+' — the hold rejoices!'); if(typeof sfx==='function') sfx('festival');
       if(typeof chron==='function') chron('festival', b.name);
       try{ sfx('tap'); }catch(e){}
@@ -3013,7 +2971,7 @@ function resetHoldState(){
   spawnTimer=18; G.idleSlotCounter=0; G.usedNames=[];
   G.questsCompleted={}; lastSeenQuestCount=0;
   G.totals={wood:0,stone:0,food:0};
-  resetCapWarnings();
+  resetCapWarnings(); clearEvent();
   G.researched={}; G.activeResearch=null; resetTier(); setWeather('clear');
   G.coins=0; G.bannerIdx=G.crestChoice; G.onboardDone=false; G.decrees={curfew:false,tithe:false,openGates:false,rationing:false}; decisionTimer=3.2; _lastDecision=''; G.ledger={in:{bounties:0,deeds:0,routes:0,quests:0,tithe:0},out:{shop:0}}; rollDailyBounties();
   applyDifficulty(readDifficultyConfig());
