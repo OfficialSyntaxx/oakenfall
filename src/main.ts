@@ -68,6 +68,7 @@ import { initLives, familyTick, ambientIdle, hasTrait, relTo, remember, bumpRel,
   AGE_YEAR, ADULT_AGE, ELDER_BEFORE, LIFESPAN_BASE } from './lives';
 import { initWork, roleNeedScores, seekWork, maybeSwitchTrade } from './work';
 import { chron, chronicleAdd } from './chronicle';
+import { initBackdrop, voidBackdrop, drawSea, drawIslandSkirt } from './backdrop';
 import { initUnlocks, ADMIN_PROMO, hasUnlock, isPatron, redeemCode, saveUnlocks, loadUnlocks,
          applyPatronBanners, bannerPalette, BANNER_COLORS, bannerColor } from './unlocks';
 import { initSkills, SKILL_TIERS, skillTier, skillMul, gainSkill, hasNearbyMentor,
@@ -1143,6 +1144,7 @@ initSprites({ ctx });
 initFeedback({ sheetContent: ()=>sheetContent, gameModeId: ()=>gameModeId });
 initUnlocks({ saveIfRunning: ()=>{ if(started) saveGame(); } });
 initFX({ ctx });
+initBackdrop({ ctx });
 initScenery({ ctx, windAt });
 initLighting({ ctx, canvas });
 initVillagerRender({ ctx, isSelected: (v)=>!!(selection && selection.type==='villager' && selection.ref===v) });
@@ -1314,75 +1316,6 @@ function buildSpotReason(gx,gy){
 }
 function isValidBuildSpot(gx,gy){ return buildSpotReason(gx,gy)===null; }
 
-/* ── THE VOID BEYOND ── the hold used to sit on flat black, which read as an
-   unfinished cut-out. A cold, deep expanse (think far water under night sky)
-   gives the island somewhere to be. Cached per canvas size + time of day;
-   rebuilding a gradient every frame is one of this project's known cost traps. */
-let _voidGrad = null, _voidKey = '';
-function voidBackdrop(){
-  const dark = (typeof darknessFactor==='function') ? darknessFactor() : 0;
-  const band = Math.round(dark*4); // quantised so we rebuild rarely, not per frame
-  const key = view.w+'x'+view.h+':'+band;
-  if(_voidGrad && _voidKey===key) return _voidGrad;
-  const t = band/4;
-  // Day: slate-teal deep water. Night: near-black with a cold blue cast.
-  const mix = (a,b)=> a.map((v,i)=> Math.round(v + (b[i]-v)*t));
-  const inner = mix([34,54,64],[12,18,30]);
-  const outer = mix([13,21,28],[5,8,14]);
-  const g = ctx.createRadialGradient(view.w/2, view.h*0.46, Math.min(view.w,view.h)*0.12,
-                                     view.w/2, view.h*0.46, Math.max(view.w,view.h)*0.78);
-  g.addColorStop(0, `rgb(${inner[0]},${inner[1]},${inner[2]})`);
-  g.addColorStop(1, `rgb(${outer[0]},${outer[1]},${outer[2]})`);
-  _voidGrad = g; _voidKey = key;
-  return g;
-}
-/* The sea the hold sits in. Drawn in world space, so it pans and zooms with the
-   land — a backdrop pinned to the screen reads as a painted wall behind a
-   floating slab, which is exactly what the black void looked like. Nested flat
-   diamonds: deep water fading outward to the backdrop, and a bright rim of
-   shallows hugging the shore. No gradients, nine fills. */
-function drawSea(){
-  const c = [ project(0,0), project(G.MAP_SIZE,0), project(G.MAP_SIZE,G.MAP_SIZE), project(0,G.MAP_SIZE) ];
-  const cx = (c[0].x + c[2].x)/2, cy = (c[0].y + c[2].y)/2;
-  const dia = (grow)=>{
-    ctx.beginPath();
-    for(let k=0;k<4;k++){
-      const x = cx + (c[k].x-cx)*grow, y = cy + (c[k].y-cy)*grow;
-      k ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
-    }
-    ctx.closePath();
-  };
-  ctx.save();
-  // Open water, densest near the shore so the far distance stays dark.
-  const deep = [[3.6,0.06],[2.7,0.12],[2.1,0.20],[1.7,0.30],[1.42,0.42],[1.22,0.56],[1.09,0.70]];
-  for(const [grow,a] of deep){ ctx.fillStyle = 'rgba(31,54,66,'+a+')'; dia(grow); ctx.fill(); }
-  // Shallows: the giveaway that land meets water rather than simply stopping.
-  // The rim breathes with the swell — one sine, no extra fills.
-  const swell = 0.5 + Math.sin(windPhase*0.7)*0.5;
-  ctx.fillStyle = 'rgba(58,98,112,'+(0.48 + swell*0.12).toFixed(3)+')'; dia(1.040 + swell*0.010); ctx.fill();
-  ctx.fillStyle = 'rgba(92,138,150,'+(0.36 + swell*0.10).toFixed(3)+')'; dia(1.014 + swell*0.006); ctx.fill();
-  ctx.restore();
-}
-/* A soft skirt of haze hugging the map's edge. The land ends on a hard
-   geometric line, which is the thing that actually read as unfinished; fading
-   the dark outward from that line settles the hold into the distance instead of
-   cutting it out. Flat translucent fills, no per-frame gradient. */
-function drawIslandSkirt(){
-  const c = [ project(0,0), project(G.MAP_SIZE,0), project(G.MAP_SIZE,G.MAP_SIZE), project(0,G.MAP_SIZE) ];
-  const cx = (c[0].x + c[2].x)/2, cy = (c[0].y + c[2].y)/2;
-  ctx.save();
-  for(let i=6;i>=1;i--){
-    const grow = 1 + i*0.055;
-    ctx.fillStyle = 'rgba(6,10,16,'+(0.10 - i*0.013).toFixed(3)+')';
-    ctx.beginPath();
-    for(let k=0;k<4;k++){
-      const x = cx + (c[k].x-cx)*grow, y = cy + (c[k].y-cy)*grow;
-      k ? ctx.lineTo(x,y) : ctx.moveTo(x,y);
-    }
-    ctx.closePath(); ctx.fill();
-  }
-  ctx.restore();
-}
 function render(){
   // Always re-apply DPR scale cleanly — never rely on ctx.getTransform() across frames
   const dpr = canvasDPR;

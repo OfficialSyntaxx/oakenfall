@@ -10,8 +10,11 @@
  * short, human half of CHANGELOG.md — the "what's new" a player reads, not the
  * full record.
  */
-export const GAME_VERSION = '1.82.0';
+export const GAME_VERSION = '1.83.0';
 export const CHANGELOG: [string, string][] = [
+  ['1.83.0', 'The sea is back. The water the island sits in, and the pale rim of ' +
+    'shallows along its shore, had stopped drawing entirely — the hold has been ' +
+    'floating on the empty dark for several versions. Restored.'],
   ['1.45.0', 'Show off your hold. A new “Share Card” button in the Journal tab makes a handsome chronicle card — your hold\'s name and crest, its tier, days survived, winters endured, settlers, and deeds — as an image you can save or share with a tap.'],
   ['1.44.0', 'You can see the raids now. When bandits come, hooded raiders march in from the treeline (or pour across an unwatched bridge) with torches held high, making for the Town Center — and your Guards ride out to meet them and turn them back. A raid is no longer a line of text; it\'s a thing you watch your walls and warriors answer.'],
   ['1.43.0', 'The woods are no longer bottomless. Forest stands slowly tire as they\'re felled, yielding a little less each time, and a fully-worked stand goes barren. The new Forester\'s Grove (🌲) replants nearby forest — reviving barren ground and keeping your timber sustainable. Tend the land, or spread your camps, so you don\'t clear-cut your own valley.'],

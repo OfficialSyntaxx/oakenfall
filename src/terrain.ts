@@ -100,6 +100,10 @@ export function updateWind(dt){
   windGust += (target - windGust) * Math.min(1, dt*0.5);
   windPhase += dt * (0.6 + windGust*0.9);
 }
+/** The wind's own clock. Anything that should breathe in time with the grass —
+ *  the sea's swell, for one — reads this rather than keeping its own phase, so
+ *  the whole world moves together. */
+export function windTime(){ return windPhase; }
 /* Lean at this tile, roughly -1..1. Neighbouring tiles share a phase, so gusts
    travel across the map instead of every blade twitching on its own. */
 export function windAt(gx, gy){ return Math.sin(windPhase*1.6 + (gx+gy)*0.55) * windGust; }

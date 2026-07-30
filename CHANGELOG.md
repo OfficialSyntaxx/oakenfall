@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.83.0
+The sea is back. The deep water the island sits in and the pale rim of shallows
+along its shore had stopped drawing at all, so the hold was floating on the
+empty dark — the code that painted them had lost track of the wind it breathes
+with, and the error was being swallowed silently every frame. Both are restored
+and the swell moves in time with the grass again.
+
 ## 1.82.0
 Droughts are a hardship again. For the last five versions a drought has been
 multiplying your farm yield by twenty-two — the single most punishing weather
