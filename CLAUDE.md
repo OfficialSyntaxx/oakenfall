@@ -25,8 +25,8 @@ modules, (3) Capacitor wrap + native storage.
   Fifty-four modules now, and `main.ts` is down from 7,826 lines to under 1,800 —
   what is left is genuinely the entry point: boot, save and slots, the world
   tick, the render loop and the land editor that drives boot.
-  Everything except `critters.ts` and `main.ts` itself
-  typechecks WITHOUT `@ts-nocheck`, which is the property worth protecting: a
+  `main.ts` is now the ONLY file under `@ts-nocheck`; every other module
+  typechecks, which is the property worth protecting: a
   name that stops resolving in a typed module fails the build, where the same
   mistake in `main.ts` throws into a frame loop that swallows it. When moving
   code, remove `@ts-nocheck` and let `npx tsc --noEmit` name every unresolved

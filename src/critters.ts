@@ -1,4 +1,3 @@
-// @ts-nocheck  — hand-drawn canvas code; typing the critter shapes is its own step.
 /* The wilds — deer, boar, rabbits, foxes, ducks, fish, birds and butterflies.
  *
  * Ambient, but not decoration: a hunter hunts what is standing here, and the
@@ -24,6 +23,33 @@ import { tileAt } from './mapgen';
 import { tileWalkable } from './pathfind';
 import { seasonIndex, riverFrozen } from './time';
 
+export type CritterKind = 'deer' | 'boar' | 'rabbit' | 'fox' | 'duck' | 'fish' | 'bird' | 'flit';
+
+/** One animal in the wilds.
+ *
+ * Everything past the common four is optional because all eight kinds live in
+ * ONE flat array. That is deliberate: the tick walks them in a single pass, and
+ * the renderer needs them interleaved with settlers and buildings in the depth
+ * sort. Per-kind arrays would mean four loops and four lists to merge back
+ * together in y-order, which is the thing the flat array exists to avoid. */
+export type Critter = {
+  kind: CritterKind;
+  gx: number; gy: number;
+  /** Animation clock, advanced at a rate the kind chooses. */
+  phase: number;
+  /** Grazing beasts: where they are headed, which way they face, and how long
+   *  before they pick somewhere new. */
+  tx?: number; ty?: number; face?: number; rest?: number; moving?: boolean;
+  /** Birds and butterflies fly a heading rather than toward a point. */
+  dir?: number; spd?: number;
+  /** Ducks stay near where they settled. */
+  homeX?: number; homeY?: number;
+  /** Fish: seconds until the next surface break, and how far through one. */
+  next?: number; jump?: number;
+  /** A butterfly's wing colour, chosen once. */
+  hue?: string;
+};
+
 /** Per-species behaviour: how close a settler may come before it bolts, how
  *  fast it flees, how fast it grazes, and how far it drifts while calm. */
 const CRITTER_KINDS: Record<string, { flee: number; speed: number; graze: number; wander: number }> = {
@@ -42,13 +68,13 @@ export function initCritters(deps: { ctx: any }): void {
   ctx = deps.ctx;
 }
 
-export function spawnWildlife(){
+export function spawnWildlife(): void {
   G.critters = [];
-  const wild = (typeof G.wildsTiles!=='undefined' && G.wildsTiles.length) ? G.wildsTiles : [];
+  const wild = G.wildsTiles.length ? G.wildsTiles : [];
   const winter = seasonIndex()===3;
   const pickWild = ()=> wild.length ? wild[(Math.random()*wild.length)|0]
                                     : { gx:G.TC_CX+(Math.random()-0.5)*12, gy:G.TC_CY+(Math.random()-0.5)*12 };
-  const beast = (kind, t)=> G.critters.push({ kind, gx:t.gx, gy:t.gy, tx:t.gx, ty:t.gy,
+  const beast = (kind: CritterKind, t: { gx: number; gy: number })=> G.critters.push({ kind, gx:t.gx, gy:t.gy, tx:t.gx, ty:t.gy,
     phase:Math.random()*6, face:1, rest:Math.random()*4, moving:false });
 
   // Game thins out in winter — the wilds feel emptier when the snow is down.
@@ -58,7 +84,7 @@ export function spawnWildlife(){
   for(let i=0;i<(winter?1:2);i++) beast('fox', pickWild());
 
   // Rabbits keep to open grass rather than the deep wilds.
-  const grass = [];
+  const grass: any[] = [];
   for(let y=2;y<G.MAP_SIZE-2;y+=3) for(let x=2;x<G.MAP_SIZE-2;x+=3){
     const t = G.grid[y] && G.grid[y][x];
     if(t && t.type==='grass' && !t.building) grass.push(t);
@@ -71,7 +97,7 @@ export function spawnWildlife(){
       dir:Math.random()*6.28, phase:Math.random()*6, spd:0.5+Math.random()*0.5 });
   }
   // Fish break the surface of open water — none once the river freezes over.
-  if(typeof G.waterTiles!=='undefined' && G.waterTiles.length && !riverFrozen()){
+  if(G.waterTiles.length && !riverFrozen()){
     for(let i=0;i<4;i++){
       const t = G.waterTiles[(Math.random()*G.waterTiles.length)|0];
       G.critters.push({ kind:'fish', gx:t.gx, gy:t.gy, phase:Math.random()*6, next:Math.random()*6 });
@@ -93,7 +119,7 @@ export function spawnWildlife(){
     }
   }
 }
-export function updateWildlife(dt){
+export function updateWildlife(dt: number): void {
   if(!G.critters.length) return;
   for(const c of G.critters){
     if(c.kind==='duck'){
@@ -113,7 +139,7 @@ export function updateWildlife(dt){
     if(spec){
       // Grazing beasts: wander, watch for folk, bolt when one comes too close.
       c.phase += dt*4;
-      let fd=Infinity, fv=null;
+      let fd=Infinity, fv: any=null;
       for(const v of G.villagers){ const d=dist2(c.gx,c.gy,v.gx,v.gy); if(d<fd){ fd=d; fv=v; } }
       const spooked = fv && fd < spec.flee;
       if(spooked){
@@ -154,7 +180,7 @@ export function updateWildlife(dt){
 /* Sprite first, hand-drawn second. The procedural critters are NOT a
    placeholder: a sprite that hasn't decoded yet, or fails to, must still leave
    something alive in the wilds. Same rule as the buildings. */
-export function blitCritter(kind, c){
+export function blitCritter(kind: string, c: Critter): boolean {
   const img = SPRITES[kind];
   if(!img || !img.complete || img.naturalWidth===0) return false;
   const p = project(c.gx, c.gy);
@@ -170,7 +196,7 @@ export function blitCritter(kind, c){
   ctx.restore();
   return true;
 }
-export function drawDeer(c){
+export function drawDeer(c: Critter): void {
   if(blitCritter('deer', c)) return;
   const p = project(c.gx, c.gy);
   const bob = c.moving ? Math.abs(Math.sin(c.phase))*1.2 : 0;
@@ -187,7 +213,7 @@ export function drawDeer(c){
   ctx.beginPath(); ctx.moveTo(cx+5,cy-8); ctx.lineTo(cx+3.5,cy-11); ctx.moveTo(cx+6,cy-8); ctx.lineTo(cx+7.5,cy-11); ctx.stroke(); // antlers
   ctx.restore();
 }
-export function drawBoar(c){
+export function drawBoar(c: Critter): void {
   if(blitCritter('boar', c)) return;
   const p = project(c.gx, c.gy);
   const bob = c.moving ? Math.abs(Math.sin(c.phase))*0.9 : 0;
@@ -206,7 +232,7 @@ export function drawBoar(c){
   ctx.beginPath(); ctx.moveTo(cx+8,cy-2); ctx.lineTo(cx+10,cy-4); ctx.lineTo(cx+8.5,cy-1.5); ctx.closePath(); ctx.fill();
   ctx.restore();
 }
-export function drawRabbit(c){
+export function drawRabbit(c: Critter): void {
   if(blitCritter('rabbit', c)) return;
   const p = project(c.gx, c.gy);
   const hop = c.moving ? Math.abs(Math.sin(c.phase*1.6))*2.4 : 0;
@@ -222,7 +248,7 @@ export function drawRabbit(c){
   ctx.fillStyle='#efe9dc'; ctx.beginPath(); ctx.arc(cx-3.2,cy-2.2,1.2,0,7); ctx.fill(); // scut
   ctx.restore();
 }
-export function drawFish(c){
+export function drawFish(c: Critter): void {
   if(!(c.jump > 0)) return;                       // only visible mid-arc
   const p = project(c.gx, c.gy);
   const surf = p.y + WATER_DROP;                   // leaves from the water, not the bank
@@ -238,7 +264,7 @@ export function drawFish(c){
   if(t > 0.75){ ctx.beginPath(); ctx.ellipse(p.x+(t-0.5)*7, surf, 4*(t-0.75)*4, 1.6*(t-0.75)*4, 0, 0, 7); ctx.stroke(); }
   ctx.restore();
 }
-export function drawFox(c){
+export function drawFox(c: Critter): void {
   if(blitCritter('fox', c)) return;
   const p = project(c.gx, c.gy);
   const bob = c.moving ? Math.abs(Math.sin(c.phase))*1.1 : 0;
@@ -258,7 +284,7 @@ export function drawFox(c){
    the water surface is recessed by WATER_DROP, so drawing at land height left
    the bird hovering; the body below the waterline has to be clipped away; and
    a wake plus a faint reflection tell the eye the surface is liquid. */
-export function drawDuck(c){
+export function drawDuck(c: Critter): void {
   const p = project(c.gx, c.gy);
   const surf = p.y + WATER_DROP;                       // the recessed water top
   const y = surf + Math.sin(c.phase) * 0.7;            // riding the ripples
@@ -303,7 +329,7 @@ export function drawDuck(c){
   ctx.beginPath(); ctx.ellipse(p.x - 3.4, y - 6.2, 1.5, 1.7, 0, 0, 7); ctx.fill(); // head
   ctx.restore();
 }
-export function drawFlit(c){
+export function drawFlit(c: Critter): void {
   const p = project(c.gx, c.gy);
   const cy = p.y - 12 - Math.sin(c.phase*0.6)*3;
   const w = Math.abs(Math.sin(c.phase))*2.6 + 0.6;   // wingbeat
@@ -313,7 +339,7 @@ export function drawFlit(c){
   ctx.beginPath(); ctx.ellipse(p.x+w*0.5, cy, w, 1.9, -0.4, 0, 7); ctx.fill();
   ctx.restore();
 }
-export function drawBird(c){
+export function drawBird(c: Critter): void {
   const p = project(c.gx, c.gy);
   const cx=p.x, cy=p.y-48;                 // birds fly well above the ground
   const f = Math.sin(c.phase)*3;
