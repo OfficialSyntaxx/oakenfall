@@ -246,7 +246,12 @@
   .mini-bar{display:inline-block;width:64px;height:7px;border-radius:4px;background:#241c12;vertical-align:middle;overflow:hidden;}
   .mini-bar i{display:block;height:100%;border-radius:4px;}
   .roster-sort{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--parchment-dim);margin:8px 0 6px;}
-  .roster-sort .chip{background:#241c12;border:1px solid var(--panel-edge);color:var(--parchment-dim);border-radius:12px;padding:4px 10px;font-size:12px;min-height:28px;}
+  .roster-sort .chip{background:#241c12;border:1px solid var(--panel-edge);color:var(--parchment-dim);
+    border-radius:12px;padding:4px 10px;font-size:12px;min-height:32px;position:relative;}
+  /* A pill this size reads right beside the text it filters, and a 44px-tall
+     chip would dominate the panel. It keeps its chrome and grows only its hit
+     area — the same bargain #hud-more strikes. */
+  .roster-sort .chip::before{ content:''; position:absolute; inset:-6px; }
   .roster-sort .chip.sel{background:linear-gradient(180deg,#7a5220,#3a2710);color:#fff3d8;border-color:var(--amber-dim);}
   .roster-list{display:flex;flex-direction:column;gap:5px;}
   .roster-row{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:#1c150d;border:1px solid var(--panel-edge);border-radius:8px;padding:8px 10px;min-height:44px;color:var(--parchment);}
@@ -275,7 +280,9 @@
   .route-row{display:flex;align-items:center;gap:10px;width:100%;background:#1c150d;border:1px solid var(--panel-edge);border-radius:8px;padding:8px 10px;min-height:44px;}
   .route-row .rr-main{flex:1 1 auto;font-size:13.5px;line-height:1.25;}
   .route-row .rr-sub{font-size:11.5px;color:var(--parchment-dim);}
-  .route-row .chip{flex:0 0 auto;background:#3a2118;border:1px solid #6a3a2a;color:#e8b2a4;border-radius:12px;padding:4px 10px;font-size:12px;min-height:32px;}
+  .route-row .chip{flex:0 0 auto;background:#3a2118;border:1px solid #6a3a2a;color:#e8b2a4;
+    border-radius:12px;padding:4px 10px;font-size:12px;min-height:32px;position:relative;}
+  .route-row .chip::before{ content:''; position:absolute; inset:-6px; }
   .ledger-row{display:flex;align-items:center;gap:8px;padding:5px 2px;font-size:13px;}
   .ledger-row .lg-ic{flex:0 0 auto;font-size:16px;}
   .ledger-row .lg-label{flex:1 1 auto;color:var(--parchment);}
@@ -298,7 +305,10 @@
   .stat-bar{height:9px;border-radius:5px;background:#15100a;border:1px solid #000;overflow:hidden;margin-bottom:8px;box-shadow:inset 0 1px 2px rgba(0,0,0,0.6);}
   .stat-bar-fill{height:100%;border-radius:5px;}
   .role-btn, .build-card, .action-btn{
-    flex:1 1 auto;min-width:84px;
+    /* 44px is the floor for anything a thumb has to hit — a hard rule of this
+       project, enforced by tools/touch-audit.mjs. Padding alone left these at
+       37px in portrait and 33px in landscape, where the padding shrinks. */
+    flex:1 1 auto;min-width:84px;min-height:44px;
     background:linear-gradient(180deg,#4a3a26,#241b10);
     border:1px solid var(--panel-edge);border-radius:9px;
     padding:9px 8px;text-align:center;color:var(--parchment-text);
@@ -458,7 +468,7 @@
     color:var(--parchment-dim);font-family:'EB Garamond',serif;
   }
   .diff-opts button.sel{background:linear-gradient(180deg,#7a5220,#3a2710);color:#fff3d8;border-color:var(--amber-dim);}
-  .hold-name-input{width:100%;box-sizing:border-box;padding:9px 11px;min-height:42px;border-radius:7px;background:#15100a;border:1px solid var(--panel-edge,#3a3223);color:var(--parchment,#d8c9a3);font-size:15px;font-family:'Cinzel',serif;letter-spacing:0.02em;}
+  .hold-name-input{width:100%;box-sizing:border-box;padding:9px 11px;min-height:44px;border-radius:7px;background:#15100a;border:1px solid var(--panel-edge,#3a3223);color:var(--parchment,#d8c9a3);font-size:15px;font-family:'Cinzel',serif;letter-spacing:0.02em;}
   .hold-name-input:focus{outline:none;border-color:var(--amber-dim);box-shadow:0 0 0 2px rgba(232,161,60,0.22);}
   .crest-swatch{width:44px;height:44px;min-width:44px;border-radius:50%;border:2px solid #241c12;cursor:pointer;padding:0;}
   .crest-swatch.sel{border-color:#fff3d8;box-shadow:0 0 0 2px var(--amber-dim,#7a5220);}
@@ -488,7 +498,8 @@
        single building came into view. */
     .sheet-title{ font-size:15.5px; margin-bottom:1px; }
     .sheet-sub{ font-size:12px; margin-bottom:6px; }
-    .action-btn{ padding:7px 10px; }
+    /* Tighter padding in landscape, but never below the 44px floor. */
+    .action-btn{ padding:7px 10px; min-height:44px; }
     .build-cat{ margin-top:6px; }
     #toast-container{ top:calc(env(safe-area-inset-top,0px) + 44px); }
   }
@@ -649,7 +660,7 @@
 .slot-name{
   background:transparent; border:none; padding:0; width:100%;
   color:var(--parchment-text); font-family:'Cinzel',Georgia,serif; font-size:14.5px;
-  border-bottom:1px dashed transparent; min-height:22px;
+  border-bottom:1px dashed transparent; min-height:44px;
 }
 .slot-name:hover, .slot-name:focus{ border-bottom-color:#6a5a3a; outline:none; }
 .slot-meta{ font-size:11.5px; color:var(--parchment-dim); }

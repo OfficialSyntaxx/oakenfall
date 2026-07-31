@@ -88,6 +88,14 @@ check('need scoring responds to who is already working',
   'needs: ' + JSON.stringify(s.needs.map((n) => `${n.role}:${n.score.toFixed(2)}`)));
 
 const lumberBefore = s.roles.lumberjack || 0, dayBefore = s.day;
+/* Who is in which trade, BY NAME. The counts alone cannot tell a settler
+   changing trade from one arriving into it, which is why this test used to ask
+   whether the lumberjack count had FALLEN — true only when the run happened to
+   start lumberjack-heavy, so it passed about one time in three. Names answer
+   the actual question. */
+const tradeOf = async () => Object.fromEntries((await page.evaluate(() => window.__oakProbe()))
+  .map((v) => [v.name, v.role]));
+const tradesBefore = await tradeOf();
 // Job switching: raise a farm, jump the clock past the (deliberately staggered)
 // reconsider cooldown, and confirm hands move to the more urgent trade as the
 // granary runs down. Uses the admin day-skip so this is not a 60s real wait.
@@ -111,15 +119,32 @@ for (let i = 0; i < 2; i++) {
   await page.waitForTimeout(2500);
 }
 const after = await snap();
-// Distinguish a real switch from new arrivals simply hiring in: a lumberjack
-// count that FELL can only mean existing hands moved trade.
-const movedTrade = (after.roles.lumberjack || 0) < lumberBefore;
+const tradesAfter = await tradeOf();
+/* A settler who was here before and is in a DIFFERENT TRADE now has moved.
+   Neither end may be 'idle' — an idle settler taking their first job is hiring,
+   not reallocation.
+
+   What this proves, and what it does not: THREE things can move a settler
+   between trades — maybeSwitchTrade reconsidering, seekWork catching an
+   employed settler whose trade has run out of work, and stewardStaff pulling
+   from the most over-staffed trade to fill an order. This run issues steward
+   orders, so it asserts the OUTCOME (the hold reallocates labour as needs
+   shift) and not which mechanism did it. Isolating the autonomous AI would need
+   a run that gives no orders at all. Verified by stubbing: with all three
+   disabled nobody moves. */
+const switchers = Object.keys(tradesBefore)
+  .filter((n) => n in tradesAfter
+    && tradesAfter[n] !== tradesBefore[n]
+    && tradesBefore[n] !== 'idle' && tradesAfter[n] !== 'idle')
+  .map((n) => `${n}: ${tradesBefore[n]}→${tradesAfter[n]}`);
+const movedTrade = switchers.length > 0;
 check('admin day-skip actually advances the day', after.day > dayBefore,
   `day ${dayBefore} -> ${after.day}`);
-check('settlers move trades as needs shift', movedTrade,
-  `lumberjacks ${lumberBefore} -> ${after.roles.lumberjack || 0}, roles: ` + JSON.stringify(after.roles) +
-  ', stores: ' + JSON.stringify({wood: Math.floor(after.stockpile.wood||0), food: Math.floor(after.stockpile.food||0)}) +
-  ', needs: ' + JSON.stringify(after.needs.map(n=>`${n.role}:${n.score.toFixed(2)}`)));
+const detail = (switchers.length ? switchers.join(', ') : 'nobody changed trade')
+  + ` · roles ` + JSON.stringify(after.roles)
+  + ', stores ' + JSON.stringify({ wood: Math.floor(after.stockpile.wood || 0), food: Math.floor(after.stockpile.food || 0) })
+  + ', needs ' + JSON.stringify(after.needs.map((n) => `${n.role}:${n.score.toFixed(2)}`));
+check('settlers move trades as needs shift', movedTrade, detail);
 s = after;
 
 check('no uncaught errors', errors.length === 0, errors[0] || '');

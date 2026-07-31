@@ -10,8 +10,11 @@
  * short, human half of CHANGELOG.md — the "what's new" a player reads, not the
  * full record.
  */
-export const GAME_VERSION = '1.86.0';
+export const GAME_VERSION = '1.87.0';
 export const CHANGELOG: [string, string][] = [
+  ['1.87.0', 'Every button in the game is now big enough for a thumb. A hundred ' +
+    'and fifteen controls sat under the 44-pixel minimum — the buttons in every ' +
+    'panel, the filter chips, and the slot-rename field on the title screen.'],
   ['1.86.0', 'Your hold can no longer be lost to a damaged save. If a record ' +
     'cannot be read, the game says so and leaves it alone instead of quietly ' +
     'founding a new settlement over it — and every slot now keeps a spare copy ' +

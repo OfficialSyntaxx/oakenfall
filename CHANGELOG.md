@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.87.0
+Every button in the game is now big enough to hit with a thumb. A count found
+115 controls under the 44-pixel minimum this game is supposed to hold itself to
+— the main button used by every panel (37 pixels tall in portrait, and only 33
+in landscape, where the padding was tightened), the sort and filter chips, the
+steward's example phrases, the field for naming a hold, and the slot-rename
+field on the title screen, which was the worst at 22. Nothing moved or changed
+shape; the controls simply grew into the space they should always have had.
+
 ## 1.86.0
 Your hold can no longer be lost to a damaged save. Until now, if a hold's record
 could not be read for any reason, pressing Continue quietly founded a brand-new

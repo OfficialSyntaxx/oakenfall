@@ -67,7 +67,7 @@ export function renderTradeRoutesSheet(){
       ${G.tradeRoutes.length ? G.tradeRoutes.map(r=>`<div class="route-row">
         <span style="font-size:20px;">${r.ic}</span>
         <span class="rr-main"><b>${r.name}</b><br><span class="rr-sub">${r.giveAmt} ${routeGoodLabel(r.giveType)} every ${r.everyDays}d → 💰${r.coins} · next day ${r.nextDay}${r.missed?` · <span style="color:#e8b2a4;">missed once</span>`:''}</span></span>
-        <button class="chip" data-cancel="${r.id}">End</button>
+        <button class="chip" data-hitslop="6" data-cancel="${r.id}">End</button>
       </div>`).join('') : '<div class="sheet-sub" style="opacity:.7;">No active routes yet.</div>'}
     </div>
     <div class="sheet-sub" style="margin-top:10px;"><b>Caravans seeking contracts</b></div>

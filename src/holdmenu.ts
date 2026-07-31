@@ -135,7 +135,7 @@ export function renderRosterSheet(){
   sheetContent.innerHTML = `
     <div class="sheet-sub">${G.villagers.length} settler${G.villagers.length!==1?'s':''}${idle?` · <span style="color:var(--amber)">${idle} idle</span>`:''}. Tap one to open their sheet.</div>
     <div class="roster-sort">Sort:
-      ${['role','morale','name'].map(s=>`<button class="chip${s===rosterSort?' sel':''}" data-sort="${s}">${s[0].toUpperCase()+s.slice(1)}</button>`).join('')}
+      ${['role','morale','name'].map(s=>`<button class="chip${s===rosterSort?' sel':''}" data-hitslop="6" data-sort="${s}">${s[0].toUpperCase()+s.slice(1)}</button>`).join('')}
     </div>
     <div class="roster-list">
       ${list.map((v,i)=>{
@@ -282,7 +282,7 @@ export function renderInboxSheet(){
   sheetContent.innerHTML = `
     <div class="sheet-sub">The hold's recent tidings — newest first.</div>
     <div class="roster-sort">
-      ${Object.keys(CATS).map(c=>`<button class="chip${c===inboxFilter?' sel':''}" data-cat="${c}">${CATS[c]}</button>`).join('')}
+      ${Object.keys(CATS).map(c=>`<button class="chip${c===inboxFilter?' sel':''}" data-hitslop="6" data-cat="${c}">${CATS[c]}</button>`).join('')}
     </div>
     <div class="roster-list">
       ${shown.length ? shown.map(e=>`<div class="inbox-row${e.warn?' warn':''}">

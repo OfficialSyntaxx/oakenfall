@@ -145,6 +145,13 @@ modules, (3) Capacitor wrap + native storage.
   pinch needs two). Gestures change nothing in the world, so every other suite
   passes with the input layer dead — this one asserts against the camera state
   `__oakDebug` reports. Part of `verify:sim`.
+- `node tools/touch-audit.mjs` — walks 36 screens across both orientations,
+  opening each panel, and measures every control against the project's own 44px
+  floor. Nothing enforced that rule inside the GAME until this existed, and the
+  first run found 115 controls under it — including `.action-btn`, which every
+  panel is built from, at 37px in portrait and 33px in landscape. Shares
+  site-audit's `data-hitslop="N"` convention for chrome that stays small on
+  purpose and extends its touch area instead. Part of `verify:sim`.
 - `node tools/save-test.mjs` — plants damaged saves (truncated, empty map, a
   building off the map, a version from the future) and presses Continue. The
   assertions are mostly about what must NOT happen: every load failure used to

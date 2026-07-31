@@ -894,7 +894,7 @@ function renderStewardSheet(){
     <div id="steward-msg" class="sheet-sub" style="margin-top:6px;min-height:1.2em;"></div>
     <div class="sheet-sub" style="margin-top:8px;"><b>Try saying</b></div>
     <div class="row" style="flex-wrap:wrap;gap:6px;margin-top:4px;">
-      ${examples.map(e=>`<button class="action-btn" data-ex="${e}" style="flex:0 0 auto;font-size:12px;padding:6px 9px;">${e}</button>`).join('')}
+      ${examples.map(e=>`<button class="action-btn" data-ex="${e}" style="flex:0 0 auto;font-size:12px;padding:6px 9px;min-height:44px;">${e}</button>`).join('')}
     </div>
     <div class="sheet-sub" style="margin-top:10px;"><b>Standing orders</b></div>
     <div class="roster-list" id="steward-orders">
