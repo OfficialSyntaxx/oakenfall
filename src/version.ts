@@ -10,8 +10,12 @@
  * short, human half of CHANGELOG.md — the "what's new" a player reads, not the
  * full record.
  */
-export const GAME_VERSION = '1.85.0';
+export const GAME_VERSION = '1.86.0';
 export const CHANGELOG: [string, string][] = [
+  ['1.86.0', 'Your hold can no longer be lost to a damaged save. If a record ' +
+    'cannot be read, the game says so and leaves it alone instead of quietly ' +
+    'founding a new settlement over it — and every slot now keeps a spare copy ' +
+    'to fall back on.'],
   ['1.85.0', 'The build menu and the deeds board lay out in neat columns again — ' +
     'both had lost their grid and were stacking one item per row.'],
   ['1.84.0', 'A festival or a merchant no longer follows you into a new hold — ' +

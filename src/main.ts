@@ -71,6 +71,7 @@ import { chron, chronicleAdd } from './chronicle';
 import { initSheet, initSheetDrag, sheetWrap, sheetContent, sheetNav, openSheet, closeSheet,
          isSheetOpen, sheetContains, miniBar, statBar } from './sheet';
 import { initInput } from './input';
+import { SAVE_VERSION, loadSlot, writeSlot, describeFailure } from './savegame';
 import { initScenarios, SCENARIOS, checkScenario } from './scenarios';
 import { initAdminPanel, renderRedeemSheet } from './adminpanel';
 import { initDecisions, rollDecision, decisionCountdown, resetDecisionTimer, resetDecisions,
@@ -1189,7 +1190,7 @@ function serializeState(){
      see assertSaveCoverage. Only the three structures that need rebuilding on
      load, and the handful of things that are not G's, are written by hand. */
   return Object.assign(saveFields(), {
-    v:2, savedAt: Date.now(), gameModeId,
+    v: SAVE_VERSION, savedAt: Date.now(), gameModeId,
     tcX: G.TC_X, tcY: G.TC_Y,
     grid: G.grid.map(row=>row.map(t=>({type:t.type,wilds:t.wilds,ford:t.ford||undefined,resourceAmount:t.resourceAmount,maxResource:t.maxResource,baseMax:t.baseMax,regrowAt:t.regrowAt}))),
     buildings: G.buildings.map(b=>({type:b.type,gx:b.gx,gy:b.gy,condition:Math.round(b.condition===undefined?100:b.condition),herd:b.herd})),
@@ -1254,7 +1255,8 @@ async function deleteSlot(n){
 async function saveGame(){
   try{
     const data = serializeState();
-    const res = await window.storage.set(slotKey(currentSlot), JSON.stringify(data), false);
+    // writeSlot copies the previous known-good save aside before overwriting it.
+    const res = await writeSlot(window.storage, slotKey(currentSlot), JSON.stringify(data));
     if(res){ noteSlotSaved(); await saveSlotIndex(); }
     toast(res ? 'Hold saved.' : 'Save failed.', !res);
   } catch(e){ toast('Save failed.', true); }
@@ -1284,15 +1286,24 @@ if(isNative()){
 }
 
 let _loadedSavedAt = 0;
+/* Returns the OUTCOME, not a boolean. Every caller has to say what it did about
+   a failure, because the one that treated them all alike is what made a damaged
+   save indistinguishable from an empty slot — and answered both by founding a
+   new hold over the top. */
 async function loadGame(){
+  const out = await loadSlot(window.storage, slotKey(currentSlot));
+  if(!out.ok) return out;
   try{
-    const res = await window.storage.get(slotKey(currentSlot), false);
-    if(!res || !res.value) return false;
-    const data = JSON.parse(res.value);
-    _loadedSavedAt = data.savedAt || 0;
-    restoreState(data);
-    return true;
-  } catch(e){ return false; }
+    _loadedSavedAt = out.data.savedAt || 0;
+    restoreState(out.data);
+    return out;
+  } catch(e){
+    /* Validation passed but restoring threw anyway, so G is now half-written —
+       neither the old world nor the new one. There is nothing safe to continue
+       into, and the stored save is NOT at fault in a way we can name. */
+    logError('restore', e);
+    return { ok:false, kind:'invalid', detail:'the hold could not be rebuilt' };
+  }
 }
 
 /* =========================================================================
@@ -1706,11 +1717,23 @@ function startNewGame(){
 async function continueGame(){
   resizeCanvas();
   const loaded = await loadGame();
-  if(!loaded){ startNewGame(); return; }
+  if(!loaded.ok){
+    /* NEVER start a new hold here. An empty slot means the player pressed
+       Continue on nothing, and anything else means their hold is in trouble —
+       founding over it is precisely the outcome this path exists to prevent.
+       They stay on the title screen, where every other choice is still open. */
+    toast(describeFailure(loaded.kind, loaded.detail), true);
+    return;
+  }
   const offSum = applyOfflineProgress();
   if(!G.dailyBounties.length) rollDailyBounties();
   finishBoot();
-  if(offSum) showOfflineSummary(offSum);
+  if(loaded.fromBackup){
+    // Say so plainly: they may have lost a few minutes, and noticing that on
+    // their own without being told would be far worse.
+    toast('⚠️ The latest record of this hold was damaged — an earlier one was restored.', true);
+  }
+  else if(offSum) showOfflineSummary(offSum);
   else toast('Welcome back to Oakenfall.');
 }
 

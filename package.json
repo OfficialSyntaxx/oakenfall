@@ -22,7 +22,7 @@
     "site": "npm run build:site && node tools/site-audit.mjs",
     "freevars": "node tools/free-vars.mjs",
     "verify:sim": "npm run freevars && npm run build && node tools/smoke-test.mjs && node tools/gameplay-test.mjs && node tools/scenario-test.mjs && node tools/editor-test.mjs && node tools/gesture-test.mjs",
-    "verify:hold": "node tools/slots-test.mjs && node tools/steward-test.mjs && node tools/health-check.mjs && node tools/systems-audit.mjs && node tools/site-audit.mjs"
+    "verify:hold": "node tools/save-test.mjs && node tools/slots-test.mjs && node tools/steward-test.mjs && node tools/health-check.mjs && node tools/systems-audit.mjs && node tools/site-audit.mjs"
   },
   "devDependencies": {
     "@capacitor/android": "^8.4.2",

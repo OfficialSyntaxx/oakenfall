@@ -145,6 +145,12 @@ modules, (3) Capacitor wrap + native storage.
   pinch needs two). Gestures change nothing in the world, so every other suite
   passes with the input layer dead — this one asserts against the camera state
   `__oakDebug` reports. Part of `verify:sim`.
+- `node tools/save-test.mjs` — plants damaged saves (truncated, empty map, a
+  building off the map, a version from the future) and presses Continue. The
+  assertions are mostly about what must NOT happen: every load failure used to
+  return the same bare false, and the caller answered all of them by founding a
+  new hold over the top. Part of `verify:hold`. Verified against the old
+  behaviour — eight of its sixteen checks go red.
 - `npm run smoke` — builds, serves `_site`, boots the real game in Chromium at
   phone/landscape/desktop and asserts the world renders, assets load, the canvas
   is sized, the HUD does not collide, and no console/request errors occur.
@@ -190,9 +196,13 @@ modules, (3) Capacitor wrap + native storage.
   bandits+defense, offline progress, 4 game modes (GAME_MODES — check
   gameMode multipliers before balancing).
 - FX: DECOR sprites (dust/boom/splash/fire/clouds/oak), flyFX (resource→HUD).
-- Save: `serializeState`/`restoreState`, key 'oakenfall-save', versioned,
-  derives MAP_SIZE from saved grid. Uses window.storage (host KV), NOT
-  localStorage.
+- Save: `serializeState`/`restoreState`, four slots, `src/savegame.ts` owns
+  reading and writing them. Three rules there, each from a real failure: a load
+  failure returns a REASON and never founds a hold over the top; every slot
+  keeps one known-good previous save (`key:prev`) to roll back to; and a save is
+  validated BEFORE any of it is applied, because restoring is a long series of
+  writes into `G` and a throw halfway leaves a world that is neither. Derives
+  MAP_SIZE from the saved grid. Uses window.storage (host KV), NOT localStorage.
 - Feedback: GAME_VERSION + CHANGELOG + errorLog ring buffer +
   `buildDiagnostics`; report/suggest buttons POST to FEEDBACK_ENDPOINT
   (`/.netlify/functions/submit-feedback`), a Netlify Function that files the

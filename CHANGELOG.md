@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.86.0
+Your hold can no longer be lost to a damaged save. Until now, if a hold's record
+could not be read for any reason, pressing Continue quietly founded a brand-new
+settlement over the top of it — and the next autosave, ninety seconds later,
+made that permanent. Now the game tells you what went wrong, leaves the record
+untouched, and keeps you on the title screen where every other choice is still
+open. Every slot also keeps one spare copy of its previous save: if the newest
+record is damaged, the hold is restored from that instead, and you are told it
+happened rather than left to notice on your own. A hold saved by a newer version
+of the game is recognised and refused rather than half-read.
+
 ## 1.85.0
 The build menu and the deeds board are laid out properly again. Both had quietly
 lost the grid that arranges them in columns, so every building card and every
