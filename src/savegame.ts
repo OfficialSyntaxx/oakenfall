@@ -34,9 +34,9 @@ const MIN_MAP = 8;
 
 export type LoadFailure = 'empty' | 'unreadable' | 'invalid' | 'future';
 
-export type LoadOutcome =
-  | { ok: true; data: any; fromBackup: boolean }
-  | { ok: false; kind: LoadFailure; detail: string };
+export type LoadOk = { ok: true; data: any; fromBackup: boolean };
+export type LoadBad = { ok: false; kind: LoadFailure; detail: string };
+export type LoadOutcome = LoadOk | LoadBad;
 
 /** Where a slot's previous known-good save lives. One deep, per slot. */
 export function backupKey(key: string): string { return key + ':prev'; }
@@ -109,14 +109,18 @@ export async function loadSlot(kv: any, key: string): Promise<LoadOutcome> {
   const live = await safeGet(kv, key);
   const first = readSaveText(live);
   if (first.ok) return first;
+  /* The project does not run with strictNullChecks, so a `ok: true | false`
+     union does not narrow reliably on the flag alone. Naming the failure branch
+     costs one line and keeps the compiler honest about the rest. */
+  const bad = first as LoadBad;
   // Nothing stored at all means an empty slot, not a damaged one — do not go
   // looking for a backup of a hold that never existed.
-  if (first.kind === 'empty') return first;
+  if (bad.kind === 'empty') return bad;
 
   const prev = await safeGet(kv, backupKey(key));
   const second = readSaveText(prev);
   if (second.ok) return { ...second, fromBackup: true };
-  return first;      // report the ORIGINAL failure, not the backup's
+  return bad;        // report the ORIGINAL failure, not the backup's
 }
 
 /** Write a slot, keeping the previous known-good save aside first.

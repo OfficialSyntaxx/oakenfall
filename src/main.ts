@@ -71,6 +71,7 @@ import { chron, chronicleAdd } from './chronicle';
 import { initSheet, initSheetDrag, sheetWrap, sheetContent, sheetNav, openSheet, closeSheet,
          isSheetOpen, sheetContains, miniBar, statBar } from './sheet';
 import { initInput } from './input';
+import { span, setPerfOn, perfReport } from './perf';
 import { SAVE_VERSION, loadSlot, writeSlot, describeFailure } from './savegame';
 import { initScenarios, SCENARIOS, checkScenario } from './scenarios';
 import { initAdminPanel, renderRedeemSheet } from './adminpanel';
@@ -230,6 +231,7 @@ window.__oakDebug = function(){
     /* Where the player is looking and what they have tapped. The gesture suite
        has nothing else to assert against — a pan or a pinch leaves no trace in
        the world, only in the camera. */
+    perf: perfReport(),
     zoom: Math.round(camera.scale*1000)/1000,
     pan: { x: Math.round(camera.panX), y: Math.round(camera.panY) },
     selected: selection.type,
@@ -246,6 +248,10 @@ window.__oakDebug = function(){
 };
 /* Terrain as one letter per tile ('w' = wilds), read-only like __oakDebug.
    Kept out of the snapshot itself so every other caller isn't paying for it. */
+/* Frame timing, off by default because measuring costs a little. Call with true
+   to start sampling, then read the report from __oakDebug().perf. */
+window.__oakPerf = function(on){ setPerfOn(on !== false); return perfReport(); };
+
 /* Every settler's working record, read-only. The counts in __oakDebug tell you
    the hold has stalled; this tells you why. */
 window.__oakProbe = function(){
@@ -751,7 +757,9 @@ function render(){
   try { drawIslandSkirt(); } catch(e){ /* guard */ }
 
   const range = visibleTileRange();
+  const endTerrain = span('r.terrain');
   try { drawTerrain(range); } catch(e){ /* guard */ }
+  endTerrain();
 
   // selected tile / building highlights
   if(selection.type==='tile' && selection.ref){
@@ -767,6 +775,7 @@ function render(){
   }
 
   // depth-sorted entity list
+  const endList = span('r.list');
   const list = [];
   for(let gy=range.y0; gy<=range.y1; gy++){
     for(let gx=range.x0; gx<=range.x1; gx++){
@@ -802,8 +811,13 @@ function render(){
     const mgx = G.TC_X-1.6, mgy = G.TC_Y+2.6;
     list.push({depth:mgx+mgy+0.2, draw:()=>{ try{ drawMerchantCart(mgx,mgy); }catch(e){} }});
   }
+  endList();
+  const endSort = span('r.sort');
   list.sort((a,b)=>a.depth-b.depth);
+  endSort();
+  const endEntities = span('r.entities');
   for(const item of list) item.draw();
+  endEntities();
 
   // Birds fly above the whole scene.
   // Birds and butterflies fly above the scene rather than sorting into it.
@@ -817,6 +831,7 @@ function render(){
   try { drawGhost(); } catch(e){}
 
   ctx.restore();
+  const endPost = span('r.post');
   try { drawDistrictLabels(); } catch(e){}
   try { renderLighting(); } catch(e){}
   try { renderWeather(); } catch(e){}
@@ -824,6 +839,7 @@ function render(){
   try { renderClouds(); } catch(e){}
   try { renderFlyFX(1/60); } catch(e){}
   try { renderVignette(); } catch(e){}
+  endPost();
 }
 /* ── DEBUG OVERLAY ── admin-only stats panel (top-left, screen space). */
 let _dbgLast = 0, _dbgFps = 0;
@@ -1139,6 +1155,7 @@ let _lastFrameErrorTime = 0;
 let _frameErrorCount = 0;
 function loop(now){
   requestAnimationFrame(loop); // schedule FIRST so an error can't break the chain
+  const endF = span('frame');
   try {
     const dt = Math.min((now-lastT)/1000, 0.1);
     lastT = now;
@@ -1159,14 +1176,19 @@ function loop(now){
         if(Math.hypot(camGlide.x - camera.panX, camGlide.y - camera.panY) < 0.5) camGlide.active = false;
       }
       if(!editorOn){
+        const endU = span('update');
         update(dt);
         updateHud();
         mmTimer -= dt;
         if(mmTimer<=0){ drawMinimap(); mmTimer=2; }
+        endU();
       }
     }
+    const endR = span('render');
     render();
+    endR();
     _frameErrorCount = 0; // reset streak on any successful frame
+    endF();
   } catch(e){
     _frameErrorCount++;
     // Throttle logging to once per second so a repeating error can't flood the console

@@ -118,7 +118,17 @@ export function updateGroundCover(dt){
   groundWet  += (wetTarget  - groundWet ) * Math.min(1, dt*0.30);  // dries slowly
   groundSnow += (snowTarget - groundSnow) * Math.min(1, dt*0.10);  // settles slower still
 }
+/* Zoomed out, a blade of grass is a fraction of a pixel and a ripple is a
+   smudge, but each one still costs a full stroked path. On a Large map at full
+   zoom-out that is ~4,500 stroke() calls a frame for detail nobody can see —
+   which measured as 62% of the whole render. Below this zoom the fine detail is
+   skipped; everything structural (the tile art, banks, snow, ice, scenery
+   sprites) is drawn at every zoom, so the world does not change shape as you
+   pull back, it just stops rendering things smaller than a pixel. */
+const DETAIL_ZOOM = 0.7;
+
 export function drawTerrain(range){
+  const fine = camera.scale >= DETAIL_ZOOM;
   for(let gy=range.y0; gy<=range.y1; gy++){
     for(let gx=range.x0; gx<=range.x1; gx++){
       const t = G.grid[gy] && G.grid[gy][gx];
@@ -166,7 +176,7 @@ export function drawTerrain(range){
           // phase so the river glitters rather than pulsing in unison.
           const ph = G.worldTime*1.3 + h2*6.283;
           const a = 0.09 + Math.sin(ph)*0.06;
-          if(a > 0.03){
+          if(fine && a > 0.03){
             dep.ctx.fillStyle = 'rgba(188,224,244,'+a.toFixed(3)+')';
             tileDiamond(p.x + Math.sin(ph)*6, yTop - 1, TILE_W*0.40, TILE_H*0.40); dep.ctx.fill();
           }
@@ -174,7 +184,7 @@ export function drawTerrain(range){
       } else {
         // Rain gathers in the hollows — only some tiles hold a puddle, and they
         // spread as the downpour goes on.
-        if(groundWet > 0.04 && h2 > 0.58 && (t.type==='grass' || t.type==='dirt')){
+        if(fine && groundWet > 0.04 && h2 > 0.58 && (t.type==='grass' || t.type==='dirt')){
           const g = groundWet * (0.55 + h2*0.45);
           dep.ctx.fillStyle = 'rgba(38,58,70,'+(g*0.40).toFixed(3)+')';
           tileDiamond(p.x + (h2-0.7)*12, yTop + 3, TILE_W*0.42*g, TILE_H*0.42*g); dep.ctx.fill();
@@ -184,7 +194,7 @@ export function drawTerrain(range){
         // Tall grass leans with the wind. Only the wilds get blades — they are
         // a few percent of the map, so this is three strokes on a handful of
         // visible tiles, not a per-tile cost.
-        if(t.wilds && groundSnow < 0.5){
+        if(fine && t.wilds && groundSnow < 0.5){
           const w = windAt(gx, gy);
           dep.ctx.strokeStyle = 'rgba(158,186,102,0.55)';
           dep.ctx.lineWidth = 1;
@@ -265,6 +275,9 @@ export function drawTerrain(range){
         if(!frozen){
         dep.ctx.fillStyle='rgba(10,20,35,0.18)';
         tileDiamond(p.x,wy,TILE_W,TILE_H); dep.ctx.fill();
+        // clip() is among the most expensive things on a canvas, and everything
+        // it holds in is sub-pixel when zoomed out.
+        if(fine){
         dep.ctx.save(); tileDiamond(p.x,wy,TILE_W,TILE_H); dep.ctx.clip();
         dep.ctx.strokeStyle='rgba(150,200,220,0.18)'; dep.ctx.lineWidth=1.2;
         for(let i=0;i<3;i++){
@@ -281,6 +294,7 @@ export function drawTerrain(range){
         if(nN && nN.type!=='water'){ dep.ctx.beginPath(); dep.ctx.moveTo(p.x, wy - TILE_H/2 + 1.5); dep.ctx.lineTo(p.x + TILE_W/2 - 3, wy - 0.5); dep.ctx.stroke(); }
         if(nW && nW.type!=='water'){ dep.ctx.beginPath(); dep.ctx.moveTo(p.x, wy - TILE_H/2 + 1.5); dep.ctx.lineTo(p.x - TILE_W/2 + 3, wy - 0.5); dep.ctx.stroke(); }
         dep.ctx.restore();
+        }
         }
         // ford: stepping stones breaking the surface (year-round marker)
         if(t.ford && !t.building){
@@ -303,6 +317,7 @@ export function drawTerrain(range){
         }
       } else if(t.wilds){
         dep.ctx.fillStyle='rgba(80,110,30,0.20)'; tileDiamond(p.x,p.y,TILE_W,TILE_H); dep.ctx.fill();
+        if(fine){
         dep.ctx.strokeStyle='rgba(130,160,60,0.40)'; dep.ctx.lineWidth=1.1;
         for(let i=0;i<5;i++){
           const ox=(hash2(gx*1.3+i,gy*2.1)-0.5)*28,oy=(hash2(gx*2.7+i,gy*1.1)-0.5)*9;
@@ -310,12 +325,13 @@ export function drawTerrain(range){
           dep.ctx.beginPath(); dep.ctx.moveTo(p.x+ox,p.y+oy+3); dep.ctx.lineTo(p.x+ox+1.5,p.y+oy-h); dep.ctx.stroke();
         }
         if(h2>0.6){ dep.ctx.fillStyle='rgba(90,80,55,0.35)'; dep.ctx.beginPath(); dep.ctx.arc(p.x+(h2-0.8)*20,p.y+hash2(gx,gy*4)*4-2,1.5,0,7); dep.ctx.fill(); }
-      } else if(t.type==='stone'){
+        }
+      } else if(fine && t.type==='stone'){
         dep.ctx.strokeStyle='rgba(0,0,0,0.28)'; dep.ctx.lineWidth=0.9;
         dep.ctx.beginPath(); dep.ctx.moveTo(p.x-12,p.y-2); dep.ctx.lineTo(p.x+2,p.y+3); dep.ctx.lineTo(p.x+10,p.y-1); dep.ctx.stroke();
         dep.ctx.beginPath(); dep.ctx.moveTo(p.x+6,p.y-3); dep.ctx.lineTo(p.x+14,p.y+2); dep.ctx.stroke();
         if(h2>0.72){ dep.ctx.fillStyle='rgba(160,130,50,0.40)'; dep.ctx.fillRect(p.x-3+h2*10,p.y-1,2,2); }
-      } else if(t.type==='dirt'){
+      } else if(fine && t.type==='dirt'){
         if(h2>0.55){ dep.ctx.fillStyle='rgba(0,0,0,0.18)'; dep.ctx.beginPath(); dep.ctx.arc(p.x+(h2-0.5)*20,p.y+(hash2(gx*2,gy*3)-0.5)*7,2,0,7); dep.ctx.fill(); }
       }
       /* ── SCENERY ── a scatter of standing props keyed to what the ground is:
@@ -351,7 +367,7 @@ export function drawTerrain(range){
           const bw = 34, bh = bw*(bimg.naturalHeight/bimg.naturalWidth);
           dep.ctx.drawImage(bimg, p.x - bw/2 + (hash2(gx*2,gy*9)-0.5)*16, yTop - bh + 6, bw, bh);
         }
-      } else if(t.type==='grass' && h2 > 0.82){
+      } else if(fine && t.type==='grass' && h2 > 0.82){
         // Rare wildflower clusters
         for(let i=0;i<2;i++){
           const fx = p.x+(hash2(gx*4+i,gy*6)-0.5)*26, fy = yTop+(hash2(gx*6,gy*4+i)-0.5)*9;
@@ -360,7 +376,7 @@ export function drawTerrain(range){
         }
         dep.ctx.strokeStyle='rgba(120,160,75,0.20)'; dep.ctx.lineWidth=1;
         dep.ctx.beginPath(); dep.ctx.moveTo(p.x-4, yTop+3); dep.ctx.lineTo(p.x-3, yTop-3); dep.ctx.stroke();
-      } else if(t.type==='grass'||t.type==='forest'){
+      } else if(fine && (t.type==='grass'||t.type==='forest')){
         dep.ctx.strokeStyle=t.type==='forest'?'rgba(80,130,60,0.22)':'rgba(120,160,75,0.20)'; dep.ctx.lineWidth=1;
         for(let i=0;i<3;i++){
           const ox=(hash2(gx*3.1+i,gy*5.3)-0.5)*20,oy=(hash2(gx*1.9+i,gy*4.7)-0.5)*7;

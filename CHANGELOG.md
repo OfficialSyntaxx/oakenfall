@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.88.0
+The map is smoother when you pull back to look at the whole hold. Zoomed out,
+the game was still drawing every blade of grass, every wildflower and every
+ripple on the river — thousands of them a frame, each a fraction of a pixel
+across and none of them visible. That detail is now skipped below the zoom where
+you could see it, which cut the cost of drawing a frame by about 40% on a large
+map. Nothing looks different at any zoom; there is simply less work behind it.
+
 ## 1.87.0
 Every button in the game is now big enough to hit with a thumb. A count found
 115 controls under the 44-pixel minimum this game is supposed to hold itself to

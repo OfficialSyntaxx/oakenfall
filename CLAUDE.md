@@ -145,6 +145,13 @@ modules, (3) Capacitor wrap + native storage.
   pinch needs two). Gestures change nothing in the world, so every other suite
   passes with the input layer dead — this one asserts against the camera state
   `__oakDebug` reports. Part of `verify:sim`.
+- `node tools/perf-test.mjs` — the frame budget, never measured before it
+  existed. Samples the time INSIDE update and render (`src/perf.ts`), not the
+  wall-clock frame delta, which is noise in a headless browser on shared CI.
+  Reports p50/p95 per phase for a fresh hold and for a grown one at full
+  zoom-out on a Large map. The finding: the game is render-bound — update is
+  ~0.5ms and render was ~8.7ms, of which **terrain was 62%**. Part of
+  `verify:sim`.
 - `node tools/touch-audit.mjs` — walks 36 screens across both orientations,
   opening each panel, and measures every control against the project's own 44px
   floor. Nothing enforced that rule inside the GAME until this existed, and the
@@ -237,6 +244,12 @@ modules, (3) Capacitor wrap + native storage.
   exceeded" from drawImage under memory pressure — keep drawImage calls in
   try/catch in hot paths; errors feed `errorLog`.
 - Per-frame gradient allocation is expensive — cache or use flat fills.
+- Fine per-tile detail is the renderer's real cost, not entity counts. Three
+  stroked blades of grass per grass tile is ~4,500 `stroke()` calls a frame on a
+  Large map at full zoom-out, all of them sub-pixel. `drawTerrain` skips fine
+  detail below `DETAIL_ZOOM` (0.7); that alone cut render time ~40%. Building
+  the depth-sorted entity list, which LOOKS like the expensive part (a closure
+  per entity per frame), measured 0.1ms — measure before optimising.
 - Sprite-sheet frames must be trimmed with a UNION bbox across frames, or
   animations jitter (fixed once already — don't reintroduce).
 - ~~`applyDifficulty` references GAME_MODES declared later in the file~~ —

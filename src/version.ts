@@ -10,8 +10,12 @@
  * short, human half of CHANGELOG.md — the "what's new" a player reads, not the
  * full record.
  */
-export const GAME_VERSION = '1.87.0';
+export const GAME_VERSION = '1.88.0';
 export const CHANGELOG: [string, string][] = [
+  ['1.88.0', 'The map is smoother when you pull back to see the whole hold. ' +
+    'Zoomed out, the game was still drawing every blade of grass and every ' +
+    'ripple at a fraction of a pixel each — that work is now skipped below the ' +
+    'zoom where it can be seen, cutting the cost of a frame by about 40%.'],
   ['1.87.0', 'Every button in the game is now big enough for a thumb. A hundred ' +
     'and fifteen controls sat under the 44-pixel minimum — the buttons in every ' +
     'panel, the filter chips, and the slot-rename field on the title screen.'],
