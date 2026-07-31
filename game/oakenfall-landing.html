@@ -106,6 +106,12 @@
   .eyebrow{
     font-family:"IBM Plex Mono",monospace;font-size:.7rem;letter-spacing:.38em;
     text-transform:uppercase;color:var(--amber-dim);
+    /* The hero sits over a living scene, and in landscape the island and the
+       clouds rise right behind this line — dark amber on a pale cloud is
+       unreadable. The h1 and the lede already carry a shadow for the same
+       reason; this one was missed because in portrait the line happens to fall
+       on empty sky. */
+    text-shadow:0 1px 14px rgba(6,10,8,.95), 0 0 3px rgba(6,10,8,.8);
   }
   #hero h1{
     font-family:"IM Fell English SC",serif;font-weight:400;
@@ -128,6 +134,7 @@
     position:absolute;bottom:5vh;left:50%;transform:translateX(-50%);
     font-family:"IBM Plex Mono",monospace;font-size:.66rem;letter-spacing:.32em;
     text-transform:uppercase;color:var(--parchment-dim);
+    text-shadow:0 1px 14px rgba(6,10,8,.95), 0 0 3px rgba(6,10,8,.8);
     display:flex;flex-direction:column;align-items:center;gap:.6rem;
     transition:opacity .6s;
   }

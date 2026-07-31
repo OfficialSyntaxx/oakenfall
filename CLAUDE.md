@@ -136,15 +136,28 @@ modules, (3) Capacitor wrap + native storage.
   an APK needs the Android SDK.
 
 ## Verification
-- `npm run verify` — everything, in two halves. It now takes over ten minutes,
-  so `npm run verify:sim` (build + smoke + gameplay + scenario + editor) and
-  `npm run verify:hold` (slots + steward + health + systems + site) can be run
-  separately when a tool or shell caps out at ten.
+- `npm run verify` — everything, in FOUR groups. The whole run is ~25 minutes
+  and any single group has to stay under the ten-minute cap a tool or shell
+  imposes, so the split is by measured duration, not by theme alone:
+  - `verify:sim` — freevars, tsc, build, smoke, gameplay, scenario, editor,
+    gesture, perf.
+  - `verify:ui` — touch-audit + layout-audit (~5½ min).
+  - `verify:hold` — save, slots, steward, site (~4 min).
+  - `verify:systems` — health-check + systems-audit (~7 min); these two are the
+    slowest single suites at 156s and 255s.
+  Re-measure before adding a suite to a group: verify:hold silently grew past
+  eleven minutes and only failed when a shell killed it mid-run.
 - `node tools/gesture-test.mjs` — pan, flick inertia, pinch, double-tap and
   tap-to-select, driven through CDP (Playwright's touchscreen is one finger; a
   pinch needs two). Gestures change nothing in the world, so every other suite
   passes with the input layer dead — this one asserts against the camera state
   `__oakDebug` reports. Part of `verify:sim`.
+- `node tools/layout-audit.mjs` — does anything spill off the side, in either
+  orientation? Site-audit only ever loaded the site at 390×844, so the website
+  in LANDSCAPE had never been checked at all. Eleven pages and five game screens
+  across portrait, landscape and a small 360×640 phone; reports the overflow AND
+  names the elements responsible, since a number with no culprit is not
+  actionable. Part of `verify:hold`.
 - `node tools/perf-test.mjs` — the frame budget, never measured before it
   existed. Samples the time INSIDE update and render (`src/perf.ts`), not the
   wall-clock frame delta, which is noise in a headless browser on shared CI.

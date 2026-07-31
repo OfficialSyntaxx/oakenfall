@@ -487,6 +487,12 @@
       right:calc(env(safe-area-inset-right,0px) + 106px) !important;
     }
     #minimap-wrap{ width:100px !important; height:100px !important; }
+    /* Landscape docks the sheet to the RIGHT, which is where the minimap lives:
+       measured, it sits 100×68px behind an open panel, invisible and unusable
+       while still being redrawn every couple of seconds. Hide it for as long as
+       the panel is up — the same bargain #build-fab already makes. Portrait
+       needs none of this: the sheet is at the bottom and the two never meet. */
+    body.sheet-open #minimap-wrap{ display:none !important; }
     /* A landscape phone is ~390px tall: full-size cards showed two rows of the
        palette. Tighten them so a category fits on screen. */
     .build-grid{ grid-template-columns:repeat(auto-fill,minmax(128px,1fr)); }

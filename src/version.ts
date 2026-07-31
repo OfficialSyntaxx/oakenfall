@@ -10,8 +10,11 @@
  * short, human half of CHANGELOG.md — the "what's new" a player reads, not the
  * full record.
  */
-export const GAME_VERSION = '1.88.0';
+export const GAME_VERSION = '1.89.0';
 export const CHANGELOG: [string, string][] = [
+  ['1.89.0', 'Two landscape fixes: the minimap no longer hides behind an open ' +
+    'panel on a sideways phone, and the line above the title on the website ' +
+    'now reads clearly wherever the valley happens to be behind it.'],
   ['1.88.0', 'The map is smoother when you pull back to see the whole hold. ' +
     'Zoomed out, the game was still drawing every blade of grass and every ' +
     'ripple at a fraction of a pixel each — that work is now skipped below the ' +

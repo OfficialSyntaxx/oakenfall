@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.89.0
+Two things that only went wrong with the phone turned sideways. In landscape the
+panel docks to the right-hand side of the screen — which is exactly where the
+minimap sits, so opening any menu buried it behind the panel while the game went
+on redrawing it. It now steps aside while a panel is up and returns when you
+close it, the same as the build button already did. On the website, the small
+line above the title was unreadable in landscape wherever the valley's greenery
+happened to rise behind it; it now carries the same shadow the title and the
+subtitle always had.
+
 ## 1.88.0
 The map is smoother when you pull back to look at the whole hold. Zoomed out,
 the game was still drawing every blade of grass, every wildflower and every
