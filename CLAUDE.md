@@ -52,7 +52,11 @@ modules, (3) Capacitor wrap + native storage.
     onboarding ribbon), `adminpanel`.
   - **Simulation** — `mapgen`, `pathfind`, `weather`, `skills`, `lives`
     (friendship/marriage/aging/death/idling), `work` (the utility-AI trade
-    scoring), `buildings`, `villager` (the state machine), `steward`, `economy`
+    scoring), `buildings`, `villager` (the state machine), `steward` (the
+    command console; standing orders are RULES kept in `G.standingOrders` and
+    checked at each dawn, distinct from the one-shot `stewardOrders` queue —
+    and `stewardStanding` must be parsed BEFORE the generic stop branch or
+    "stop keeping food" is swallowed by "stop"), `economy`
     (stores + ledger), `progress` (study + hold tiers), `fire`, `raiders`,
     `contracts`, `chronicle` (the hold's own history), `goals` (the goal list
     and the deeds), `decrees` (standing policy + its three multipliers),
