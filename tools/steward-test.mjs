@@ -158,6 +158,98 @@ const manors = await countOf('manor');
 check('a stalled order rotates and lets the next one run', wells > 0,
   `${wells} wells raised while ${manors} manors waited on stone`);
 
+/* --- Standing orders: a RULE, not a task.
+   The distinction is the whole feature — a one-shot gather finishes and is
+   forgotten, a standing order is finished only when repealed. */
+await order('stop');
+const keep = await order('always keep 40 food');
+check('a standing order is accepted', /standing order/i.test(keep.msg) && /40 food/.test(keep.msg), keep.msg);
+
+const keptState = await page.evaluate(() => window.__oakDebug().standing);
+check('the standing order is recorded in the hold',
+  Array.isArray(keptState) && keptState.some((r) => r.res === 'food' && r.target === 40),
+  JSON.stringify(keptState));
+
+// Re-stating it REPLACES rather than stacking.
+const keep2 = await order('always keep 60 food');
+const keptState2 = await page.evaluate(() => window.__oakDebug().standing);
+check('restating a standing order replaces it', keptState2.length === 1 && keptState2[0].target === 60,
+  JSON.stringify(keptState2) + ' — "' + keep2.msg + '"');
+
+// A number past 50 is a slip in "build 200 houses" and an ordinary granary here.
+await order('always keep 200 food');
+const bigTarget = await page.evaluate(() => window.__oakDebug().standing);
+check('a standing order accepts a number past the build ceiling',
+  bigTarget[0] && bigTarget[0].target > 50, JSON.stringify(bigTarget));
+
+// "stop" clears the queue but must NOT silently repeal the rules.
+await order('build 2 houses');
+const stopped = await order('stop');
+const afterStop = await page.evaluate(() => window.__oakDebug().standing);
+check('"stop" clears orders but keeps standing rules', afterStop.length === 1,
+  `${afterStop.length} rule(s) — "${stopped.msg}"`);
+check('and says the rules still hold', /still hold/i.test(stopped.msg), stopped.msg.slice(0, 80));
+
+/* The rule has to DO something. A rule can only act if there is somewhere to
+   work from, so raise the camp first — otherwise the steward correctly records
+   the rule as blocked and the assertion tests nothing. */
+await order('build 1 forestry camp');
+await page.waitForTimeout(2500);
+const hasCamp = (await snap()).buildings.includes('forestCamp');
+check('a forestry camp exists for the rule to work from', hasCamp, 'no forestCamp raised');
+await order('stop');
+// Aim just above what the hold actually holds, so a gather is genuinely due.
+const haveWood = Math.floor((await snap()).stockpile.wood || 0);
+await order(`always keep ${haveWood + 20} wood`);
+if (!(await page.locator('[data-admin="tDay"]').count())) {
+  await page.click('#more-btn').catch(() => {});
+  await page.click('#redeem-btn').catch(() => {});
+  await page.click('#admin-open').catch(() => {});
+}
+await page.click('[data-admin="tDay"]', { timeout: 2000 }).catch(() => {});
+await page.waitForTimeout(1600);
+await page.click('#sheet-close').catch(() => {});
+const selfQueued = await page.evaluate(() => window.__oakDebug().orders);
+check('a standing order re-supplies the hold without being asked again',
+  selfQueued.includes('gather'), `wood ${haveWood}, target ${haveWood + 20}, queue: ${JSON.stringify(selfQueued)}`);
+await order('stop keeping wood');
+await order('stop');
+
+const repealed = await order('stop keeping food');
+const afterRepeal = await page.evaluate(() => window.__oakDebug().standing);
+check('a standing order can be repealed by name', afterRepeal.length === 0, repealed.msg);
+
+// A rule the hold could never keep must be refused at the point of asking.
+const crafted = await order('always keep 40 planks');
+check('a standing order for a crafted good is refused with the reason',
+  /crafted at a workshop/i.test(crafted.msg), crafted.msg.slice(0, 90));
+
+// --- "Why is nothing happening?" — the queue always knew and never said.
+await order('stop');
+const why0 = await order('why');
+check('"why" with nothing ordered says so', /nothing is stuck/i.test(why0.msg), why0.msg.slice(0, 60));
+
+/* A GUARANTEED blockage: empty the crafted stores, then order a manor (which
+   wants planks). The order can neither proceed nor be dropped. */
+if (!(await page.locator('[data-admin="craftClear"]').count())) {
+  await page.click('#more-btn').catch(() => {});
+  await page.click('#redeem-btn').catch(() => {});
+  await page.click('#admin-open').catch(() => {});
+}
+await page.click('[data-admin="craftClear"]', { timeout: 2000 }).catch(() => {});
+await page.click('#sheet-close').catch(() => {});
+await page.waitForTimeout(200);
+await order('build 1 manor');
+await page.waitForTimeout(1500);
+const why1 = await order('why');
+check('"why" names what an order is waiting on',
+  /waiting on \d+ more planks|no room near the hold/i.test(why1.msg), why1.msg.slice(0, 110));
+await order('stop');
+
+// --- Who is standing about?
+const idle = await order('who is idle');
+check('the steward can name idle hands', /idle|at work/i.test(idle.msg), idle.msg.slice(0, 70));
+
 // --- Cancelling.
 const cancelled = await order('stop');
 check('cancelling clears the queue', cancelled.queue === 0, cancelled.msg);

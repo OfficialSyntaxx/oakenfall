@@ -126,6 +126,10 @@ export const G = {
   /** The written record — births, deaths, first winters, raids weathered. */
   chronicle: [] as any[],
   deeds: {} as Record<string, any>,
+  /** Standing orders — rules, not tasks. One row per resource:
+   *  {res, target, blocked}. A task finishes and is forgotten; a rule is
+   *  finished only when it is repealed, and is checked at every dawn. */
+  standingOrders: [] as any[],
   decrees: { curfew: false, tithe: false, openGates: false, rationing: false },
   onboardDone: false,
 
@@ -177,7 +181,7 @@ export const SAVED_FIELDS: Record<string, 'replace' | 'merge'> = {
   climate: 'replace', plague: 'replace',
   landId: 'replace', scenarioId: 'replace', scenarioWon: 'replace',
   questsCompleted: 'replace', statHistory: 'replace', chronicle: 'replace',
-  deeds: 'replace', onboardDone: 'replace',
+  deeds: 'replace', onboardDone: 'replace', standingOrders: 'replace',
   researched: 'replace', activeResearch: 'replace',
   coins: 'replace', dailyBounties: 'replace',
   tradeRoutes: 'replace', routeOffers: 'replace',
@@ -197,6 +201,7 @@ export const LOAD_DEFAULTS: Record<string, any> = {
   climate: null, plague: null,
   landId: 'valley', scenarioId: 'endless', scenarioWon: false,
   questsCompleted: {}, statHistory: [], chronicle: [], deeds: {}, onboardDone: false,
+  standingOrders: [],
   researched: {}, activeResearch: null,
   coins: 0, dailyBounties: [], tradeRoutes: [], routeOffers: [],
   festivalBoon: null, lastFestivalYear: 0,

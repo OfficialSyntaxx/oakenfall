@@ -56,7 +56,8 @@ import { techAvailable, startResearch, computeTierIdx, checkTierUp,
 import { initEconomy, BASE_CAP, capFor, foodSafeCap, foodSpoilTick, gainResource,
   harvestBoonMul, logCoinIn, logCoinOut, resetCapWarnings } from './economy';
 import { initSteward, stewardOrders, clearStewardOrders, stewardCommand,
-  processStewardOrders, updateStewardStatus, stewardOrderLine } from './steward';
+  processStewardOrders, updateStewardStatus, stewardOrderLine,
+  checkStandingOrders } from './steward';
 import { initBuildings, BUILD_NEEDS_ADJ, decayTick, computeDistricts, foresterTick, findTC, addBuilding, removeBuilding, buildingCenter, popCapacity,
   hasBuildingType, hasActiveBuilding, nearestBuildingOfTypes, recomputeLogistics } from './buildings';
 
@@ -216,6 +217,7 @@ window.__oakDebug = function(){
     errors: recentErrors().map(e=>e.kind+': '+e.msg.slice(0,90)),
     claimants: G.villagers.filter(v=>v.targetTile).length,
     buildings: G.buildings.filter(b=>b.type!=='road').map(b=>b.type),
+    standing: G.standingOrders.map(r=>({res:r.res, target:r.target, blocked:r.blocked})),
     placements: G.buildings.filter(b=>b.type!=='road').map(b=>({t:b.type, gx:b.gx, gy:b.gy})),
     worn: G.buildings.filter(b=>b.condition!==undefined && b.condition<70).length,
     fx: fxSpawned(),
@@ -453,7 +455,7 @@ function update(rawDt){
   const prevCycle = Math.floor(G.worldTime/CYCLE_LEN);
   G.worldTime += dt;
   const newCycle = Math.floor(G.worldTime/CYCLE_LEN);
-  if(newCycle>prevCycle){ G.dayCount++; rollWeather(); rollClimate(); rollPlague(); rollDailyBounties(); captureStatSnapshot(); processTradeRoutes();
+  if(newCycle>prevCycle){ G.dayCount++; rollWeather(); rollClimate(); rollPlague(); rollDailyBounties(); captureStatSnapshot(); processTradeRoutes(); checkStandingOrders();
     if(G.decrees.tithe){ const t = Math.max(1, Math.round(G.villagers.length*0.8)); G.coins += t; logCoinIn('tithe', t); }
     if(decisionCountdown(1) && G.dayCount>3){ resetDecisionTimer(); rollDecision(); }
   }

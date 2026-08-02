@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.90.0
+The Steward's Word keeps standing orders. "Always keep 40 food" is now a rule
+rather than a one-off errand: it is checked at every dawn for the life of the
+hold, sends folk to gather whenever the store falls below the mark, and ends
+only when you say "stop keeping food". Saying "stop" clears the queue and leaves
+the rules standing, which is what you meant.
+
+The steward also explains itself. Ask "why" and it names what each order is
+waiting on — twenty-five more planks, no room near the hold, no forestry camp to
+work from — instead of appearing to ignore you. "Who is idle" names the settlers
+with nothing to do. A rule it could never keep, such as a standing store of
+planks, is refused when you ask for it rather than accepted and quietly dropped.
+
 ## 1.89.0
 Two things that only went wrong with the phone turned sideways. In landscape the
 panel docks to the right-hand side of the screen — which is exactly where the

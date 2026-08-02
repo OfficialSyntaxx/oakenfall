@@ -10,8 +10,13 @@
  * short, human half of CHANGELOG.md — the "what's new" a player reads, not the
  * full record.
  */
-export const GAME_VERSION = '1.89.0';
+export const GAME_VERSION = '1.90.0';
 export const CHANGELOG: [string, string][] = [
+  ['1.90.0', 'The steward keeps standing orders. Say "always keep 40 food" and ' +
+    'it becomes a rule rather than a task — checked at every dawn for the life ' +
+    'of the hold, until you say "stop keeping food". Ask "why" and it will name ' +
+    'exactly what an order is waiting on instead of sitting there silent, and ' +
+    '"who is idle" names the hands with nothing to do.'],
   ['1.89.0', 'Two landscape fixes: the minimap no longer hides behind an open ' +
     'panel on a sideways phone, and the line above the title on the website ' +
     'now reads clearly wherever the valley happens to be behind it.'],

@@ -27,6 +27,7 @@ import { releaseClaims } from './lives';
 import { skillTier } from './skills';
 import { sfx } from './audio';
 import { spawnDust } from './fx';
+import { capFor } from './economy';
 
 type Deps = {
   /** Put a settler into a trade — handles the walk and the claim release. */
@@ -88,8 +89,11 @@ function stewardLookup(s, dict){
   }
   return null;
 }
-function stewardNum(s){
-  const m = s.match(/\b(\d{1,3})\b/); if(m) return Math.min(50, parseInt(m[1],10));
+/* `max` exists because 50 is the right ceiling for "build 200 houses" and the
+   wrong one for "always keep 200 food" — the first is a slip, the second is an
+   ordinary granary. A standing order passes its own cap. */
+function stewardNum(s, max = 50){
+  const m = s.match(/\b(\d{1,4})\b/); if(m) return Math.min(max, parseInt(m[1],10));
   for(const w of Object.keys(NUM_WORDS)){ if(new RegExp('\\b'+w+'\\b').test(s)) return NUM_WORDS[w]; }
   return null;
 }
@@ -209,6 +213,98 @@ export function updateStewardStatus(){
   el.textContent = txt;
   el.classList.remove('hidden');
 }
+/* Why is this order not moving? The queue always knew — it just never said,
+   and "the steward is ignoring me" was the single most common confusion.
+   Returns null when the order is simply under way. */
+export function stallReason(o){
+  if(!o) return null;
+  if(o.kind==='build'){
+    const def: any = BUILD_DEFS[o.bkey]; if(!def) return null;
+    for(const [k, amt] of Object.entries(def.cost) as [string, number][]){
+      const have = Math.floor(G.stockpile[k]||0);
+      if(amt>0 && have < amt) return 'waiting on '+(amt-have)+' more '+k;
+    }
+    if(!stewardFindSpot(o.bkey)) return 'no room near the hold';
+    return null;
+  }
+  if(o.kind==='gather'){
+    const st = stewardAssignGatherers(o.res);
+    if(st==='noplace')  return 'no '+(STEWARD_WORKPLACE[o.res]||'workplace')+' to work from';
+    if(st==='noidle')   return 'no hands free to send';
+    if(st==='unprocessable') return o.res+' is crafted, not gathered';
+    return null;
+  }
+  if(o.kind==='repair'){
+    const worn = G.buildings.filter(b=>b.condition!==undefined && b.condition<WORN_ENOUGH);
+    if(!worn.length) return null;
+    worn.sort((a,b)=>a.condition-b.condition);
+    const cost = Math.max(2, Math.ceil((100-worn[0].condition)/10));
+    if((G.stockpile.wood||0) < cost) return 'waiting on '+(cost-Math.floor(G.stockpile.wood||0))+' more wood';
+    return null;
+  }
+  if(o.kind==='research'){
+    if(G.activeResearch) return 'another study is under way';
+    const t = TECH_TREE.find(x=>x.id===o.id);
+    const short = t && Object.entries(t.cost).find(([k,amt]: [string, any])=>(G.stockpile[k]||0) < amt);
+    if(short) return 'waiting on '+short[0];
+    return null;
+  }
+  return null;
+}
+
+/* ── STANDING ORDERS ──
+   "always keep 40 food" is a RULE. It is checked at every dawn for the life of
+   the hold, and it ends only when it is repealed. That is the whole difference
+   from "gather 40 food", which finishes once and is forgotten. */
+export function standingLine(r){
+  const have = Math.floor(G.stockpile[r.res]||0);
+  return '♾️ keep '+r.target+' '+r.res+' — '+have+'/'+r.target + (r.blocked ? ' — '+r.blocked : '');
+}
+export function setStandingOrder(res: string, target: number): string {
+  // A rule the hold could never keep is refused at the point of asking rather
+  // than accepted and quietly never acted on.
+  if(stewardAssignGatherers(res)==='unprocessable')
+    return '📜 '+res+' is crafted at a workshop, not gathered — I cannot keep a standing store of it.';
+  const cap = capFor(res);
+  let msg = '';
+  if(target > cap){ target = cap; msg = ' (our stores hold no more than '+cap+')'; }
+  const cur = G.standingOrders.find(r=>r.res===res);
+  if(cur){ cur.target = target; cur.blocked = null; }
+  else G.standingOrders.push({ res, target, blocked: null });
+  return '📜 Standing order: keep '+target+' '+res+' in hand'+msg+'. I will see to it.';
+}
+export function clearStandingOrders(res?: string): string {
+  if(res){
+    const i = G.standingOrders.findIndex(r=>r.res===res);
+    if(i<0) return '📜 There is no standing order for '+res+'.';
+    G.standingOrders.splice(i,1);
+    return '📜 The standing order for '+res+' is repealed.';
+  }
+  const n = G.standingOrders.length;
+  G.standingOrders.length = 0;
+  return n ? ('📜 '+n+' standing rule'+(n!==1?'s':'')+' repealed.') : '📜 No standing rules were in force.';
+}
+/** Run at every dawn: any rule below its mark queues a gather, once. */
+export function checkStandingOrders(): void {
+  for(const r of G.standingOrders){
+    const have = Math.floor(G.stockpile[r.res]||0);
+    if(have >= r.target){ r.blocked = null; continue; }
+    if(stewardOrders.some(o=>o.kind==='gather' && o.res===r.res)) continue;
+    // Queue it only if it could actually be worked — an order dropped at the
+    // moment it is queued teaches the player the rule does nothing.
+    const st = stewardAssignGatherers(r.res);
+    if(st!=='ok'){
+      const why = st==='noplace' ? 'no '+(STEWARD_WORKPLACE[r.res]||'workplace')+' to work from'
+                : st==='noidle'  ? 'no hands free to send'
+                : r.res+' is crafted, not gathered';
+      if(r.blocked !== why){ r.blocked = why; toast('📜 Standing order for '+r.res+': '+why+'.', true); }
+      continue;
+    }
+    r.blocked = null;
+    stewardOrders.push({ kind:'gather', res:r.res, target:r.target, standing:true });
+  }
+}
+
 /* An order that cannot proceed goes to the back of the queue rather than
    blocking it. A hold waiting on stone shouldn't stop building with wood. */
 function stewardStall(o){
@@ -290,7 +386,7 @@ export function processStewardOrders(dt){
    "build 2 farms and put 3 to farming" is two orders, not one misread. */
 function stewardAnswer(s){
   if(/\b(help|what can you|what can i say|commands)\b/.test(s)){
-    return '📜 Try: "build 3 houses", "we need more wood", "put 2 to mining", "tear down a palisade", "mend the hold", "study irrigation", or "how much stone".';
+    return '📜 Try: "build 3 houses", "we need more wood", "put 2 to mining", "tear down a palisade", "mend the hold", "always keep 40 food", "study irrigation", "why", or "how much stone".';
   }
   if(/\b(how much|how many|do we have|what do we have)\b/.test(s)){
     const res = stewardLookup(s, STEWARD_RES);
@@ -300,9 +396,24 @@ function stewardAnswer(s){
       return '📜 '+G.villagers.length+' souls in the hold'+(idle?', '+idle+' of them idle.':', all at work.');
     }
   }
+  if(/\b(who is idle|who's idle|whos idle|anyone idle|idle hands|who is free)\b/.test(s)){
+    const idle = G.villagers.filter(v=>v.role==='idle' && v.stage!=='child');
+    if(!idle.length) return '📜 No one stands idle — every hand is at work.';
+    return '📜 Idle: '+idle.slice(0,6).map(v=>v.name).join(', ')+(idle.length>6?' and '+(idle.length-6)+' more':'')+'.';
+  }
+  if(/\b(why|stuck|blocked|what is wrong|whats wrong|hold up|holding up)\b/.test(s)){
+    const lines = stewardOrders.map(o=>{ const r = stallReason(o); return r ? stewardOrderLine(o)+' — '+r : null; }).filter(Boolean);
+    const blocked = G.standingOrders.filter(r=>r.blocked).map(standingLine);
+    if(!lines.length && !blocked.length){
+      return stewardOrders.length ? '📜 Nothing is stuck — the work is under way.'
+                                  : '📜 Nothing is stuck, because nothing is ordered.';
+    }
+    return '📜 '+lines.concat(blocked).join(' · ');
+  }
   if(/\b(what are you doing|status|report|progress)\b/.test(s)){
-    if(!stewardOrders.length) return '📜 Nothing stands ordered — the hold awaits your word.';
-    return '📜 '+stewardOrders.map(stewardOrderLine).join(' · ');
+    const rules = G.standingOrders.map(standingLine);
+    if(!stewardOrders.length && !rules.length) return '📜 Nothing stands ordered — the hold awaits your word.';
+    return '📜 '+stewardOrders.map(stewardOrderLine).concat(rules).join(' · ');
   }
   return null;
 }
@@ -365,13 +476,35 @@ function stewardClause(s, out){
   }
   return null;
 }
+/* "always keep 40 food" / "stop keeping food". Checked before the generic
+   stop branch, which would otherwise swallow the repeal and leave the rule in
+   force while telling the player it was cleared. */
+function stewardStanding(s){
+  const repeal = /\b(stop|cease|end|cancel|no longer|forget)\b/.test(s) &&
+                 /\b(keep|keeping|maintain|maintaining|stock|stocking)\b/.test(s);
+  const set    = /\b(always|standing order|standing|from now on|keep at least|at all times|forever)\b/.test(s) &&
+                 /\b(keep|maintain|hold|stock|have)\b/.test(s);
+  if(!repeal && !set) return null;
+  const res = stewardLookup(s, STEWARD_RES);
+  if(repeal) return clearStandingOrders(res || undefined);
+  if(!res) return '📜 Keep what? Name a store — wood, stone or food.';
+  const n = stewardNum(s, 999);
+  if(!n) return '📜 How much '+res+' should I keep in hand?';
+  return setStandingOrder(res, n);
+}
 export function stewardCommand(text){
   const clean = (t)=>' '+String(t||'').toLowerCase().replace(/[^a-z0-9\s]/g,' ').replace(/\s+/g,' ').trim()+' ';
   const s = clean(text);
   if(!s.trim()) return { ok:false, msg:'🤔 Say the word and it is done.' };
+  const standing = stewardStanding(s);
+  if(standing) return { ok:true, msg:standing, answered:true };
   if(/\b(stop|cancel|halt|nevermind|never mind|abort|clear orders|disregard|belay)\b/.test(s)){
-    const n = stewardOrders.length; stewardOrders = [];
-    return { ok:true, msg: n ? ('⛔ '+n+' standing order'+(n!==1?'s':'')+' cleared.') : '⛔ Nothing was ordered.' };
+    const n = stewardOrders.length; clearStewardOrders();
+    // A rule is not a task. "Stop" clears the queue; repealing a standing order
+    // takes saying so, or a player loses a rule they set days ago by accident.
+    const rules = G.standingOrders.length;
+    const tail = rules ? ' '+rules+' standing rule'+(rules!==1?'s':'')+' still hold'+(rules===1?'s':'')+'.' : '';
+    return { ok:true, msg: (n ? ('⛔ '+n+' order'+(n!==1?'s':'')+' cleared.') : '⛔ Nothing was ordered.') + tail };
   }
   const answer = stewardAnswer(s);
   if(answer) return { ok:true, msg:answer, answered:true };
